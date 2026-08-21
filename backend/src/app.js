@@ -20,7 +20,7 @@ export function createApp({ healthCheck, authRouter, masterRouter, reportRouter,
   app.use('/api', createHealthRouter({ healthCheck: resolvedHealthCheck }))
 
   if (authRouter) app.use('/api/auth', authRouter)
-  if (masterRouter) app.use('/api/master', masterRouter)
+  if (masterRouter) app.use('/api', masterRouter)
   if (reportRouter) app.use('/api/reports', reportRouter)
   if (dashboardRouter) app.use('/api/dashboard', dashboardRouter)
 

@@ -1,12 +1,14 @@
 import 'dotenv/config'
 import { createApp } from './app.js'
 import { runtimeConfig } from './config/env.js'
-import { createProductionAuthRouter } from './modules/auth/auth.routes.js'
+import { createProductionAuthRouter, createProductionAuthService } from './modules/auth/auth.routes.js'
+import { createProductionMasterRouter } from './modules/master-data/master.routes.js'
 
-const authRouter = process.env.DATABASE_URL && process.env.JWT_SECRET
-  ? await createProductionAuthRouter()
-  : undefined
-const app = createApp({ authRouter })
+const hasDatabase = process.env.DATABASE_URL && process.env.JWT_SECRET
+const authService = hasDatabase ? await createProductionAuthService() : undefined
+const authRouter = authService ? await createProductionAuthRouter() : undefined
+const masterRouter = authService ? await createProductionMasterRouter({ authService }) : undefined
+const app = createApp({ authRouter, masterRouter })
 
 app.listen(runtimeConfig.port, () => {
   console.log(`Backend berjalan di http://localhost:${runtimeConfig.port}`)

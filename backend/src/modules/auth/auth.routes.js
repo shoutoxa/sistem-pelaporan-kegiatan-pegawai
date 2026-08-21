@@ -40,7 +40,7 @@ export function createAuthRouter({ authService }) {
   return router
 }
 
-export async function createProductionAuthRouter() {
+export async function createProductionAuthService() {
   const [{ prisma }, bcrypt, jwt] = await Promise.all([
     import('../../config/prisma.js'),
     import('bcryptjs'),
@@ -61,5 +61,9 @@ export async function createProductionAuthRouter() {
     },
   })
 
-  return createAuthRouter({ authService })
+  return authService
+}
+
+export async function createProductionAuthRouter() {
+  return createAuthRouter({ authService: await createProductionAuthService() })
 }
