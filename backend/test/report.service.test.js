@@ -50,4 +50,15 @@ describe('report service', () => {
     expect(detail.dokumentasi[0].signedUrl).toBe('signed')
     expect(storage.createSignedUrl).toHaveBeenCalledWith('reports/report-1/1.jpg', 600)
   })
+
+  it('accepts owner edits within 24 hours and rejects older reports', async () => {
+    const prisma = makePrisma()
+    prisma.laporan.findFirst = vi.fn().mockResolvedValue({ id: 'report-1', userId: 'user-1', createdAt: new Date('2026-08-21T12:00:00Z') })
+    prisma.laporan.update = vi.fn().mockResolvedValue({ id: 'report-1', keterangan: 'Updated' })
+    const service = createReportService({ prisma, storage: {}, clock: () => new Date('2026-08-22T01:00:00Z') })
+
+    await expect(service.updateReport({ actor: { id: 'user-1', role: 'PEGAWAI' }, reportId: 'report-1', fields: { keterangan: 'Updated description' } })).resolves.toMatchObject({ id: 'report-1' })
+    prisma.laporan.findFirst.mockResolvedValue({ id: 'report-1', userId: 'user-1', createdAt: new Date('2026-08-20T12:00:00Z') })
+    await expect(service.updateReport({ actor: { id: 'user-1', role: 'PEGAWAI' }, reportId: 'report-1', fields: { keterangan: 'Too late' } })).rejects.toMatchObject({ code: 'EDIT_EXPIRED' })
+  })
 })

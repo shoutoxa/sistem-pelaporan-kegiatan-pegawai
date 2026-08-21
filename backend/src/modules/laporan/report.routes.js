@@ -5,7 +5,7 @@ import { fileTypeFromBuffer } from 'file-type'
 const upload = multer({ storage: multer.memoryStorage(), limits: { files: 5, fileSize: 10_000_000 } })
 
 function sendError(error, response) {
-  const statuses = { VALIDATION: 400, FILE_VALIDATION: 400, FILE_LIMIT: 413, DATE_VALIDATION: 422, REFERENCE_INVALID: 422, NOT_FOUND: 404, STORAGE_ERROR: 500, DATABASE_ERROR: 500 }
+  const statuses = { VALIDATION: 400, FILE_VALIDATION: 400, FILE_LIMIT: 413, DATE_VALIDATION: 422, EDIT_EXPIRED: 422, REFERENCE_INVALID: 422, NOT_FOUND: 404, STORAGE_ERROR: 500, DATABASE_ERROR: 500 }
   return response.status(statuses[error.code] || 500).json({ error: error.message || 'Terjadi kesalahan pada server.' })
 }
 
@@ -30,6 +30,10 @@ export function createReportRouter({ reportService, requirePegawai, requireAuth 
 
   router.get('/laporan/:id', ...detailGuard, async (request, response) => {
     try { return response.json({ data: await reportService.getReportDetail({ actor: request.user, reportId: request.params.id }) }) } catch (error) { return sendError(error, response) }
+  })
+
+  router.put('/laporan/:id', ...createGuard, async (request, response) => {
+    try { return response.json({ data: await reportService.updateReport({ actor: request.user, reportId: request.params.id, fields: request.body }) }) } catch (error) { return sendError(error, response) }
   })
 
   return router

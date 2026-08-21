@@ -88,5 +88,29 @@ export function createReportService({ prisma, storage, clock = () => new Date() 
     return { ...report, dokumentasi }
   }
 
-  return { createReport, getReportDetail }
+  async function updateReport({ actor, reportId, fields }) {
+    const report = await prisma.laporan.findFirst({ where: { id: reportId, userId: actor.id } })
+    if (!report) throw reportError('NOT_FOUND', 'Laporan tidak ditemukan.')
+    if (clock().getTime() - new Date(report.createdAt).getTime() > 24 * 60 * 60 * 1000) throw reportError('EDIT_EXPIRED', 'Batas edit laporan sudah lewat 24 jam.')
+    const data = {}
+    if (fields.keterangan !== undefined) {
+      if (typeof fields.keterangan !== 'string' || fields.keterangan.trim().length < 5 || fields.keterangan.trim().length > 2000) throw reportError('VALIDATION', 'Keterangan harus 5 sampai 2.000 karakter.')
+      data.keterangan = fields.keterangan.trim()
+    }
+    if (fields.tanggalKegiatan !== undefined) data.tanggalKegiatan = new Date(`${fields.tanggalKegiatan}T00:00:00.000Z`)
+    if (fields.rwId !== undefined) {
+      if (!await prisma.rw.findFirst({ where: { id: fields.rwId, isActive: true } })) throw reportError('REFERENCE_INVALID', 'RW tidak aktif atau tidak ditemukan.')
+      data.rwId = fields.rwId
+    }
+    if (fields.tahapanId !== undefined) {
+      const tahapan = await prisma.tahapan.findFirst({ where: { id: fields.tahapanId, isActive: true } })
+      if (!tahapan) throw reportError('REFERENCE_INVALID', 'Tahapan tidak aktif atau tidak ditemukan.')
+      if (tahapan.requiresNomorPerangkat && !fields.nomorPerangkat) throw reportError('VALIDATION', 'Nomor Perangkat wajib diisi untuk Tahapan ini.')
+      data.tahapanId = fields.tahapanId
+    }
+    if (fields.nomorPerangkat !== undefined) data.nomorPerangkat = fields.nomorPerangkat.trim() || null
+    return prisma.laporan.update({ where: { id: reportId }, data })
+  }
+
+  return { createReport, getReportDetail, updateReport }
 }

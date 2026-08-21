@@ -5,6 +5,8 @@ import { createProductionAuthRouter, createProductionAuthService } from './modul
 import { createProductionMasterRouter } from './modules/master-data/master.routes.js'
 import { createProductionReportRouter } from './modules/laporan/report.routes.js'
 import { createProductionDashboardRouter } from './modules/dashboard/dashboard.routes.js'
+import { createProductionPegawaiRouter } from './modules/pegawai/pegawai.routes.js'
+import { createProductionExportRouter } from './modules/export/export.routes.js'
 
 const hasDatabase = process.env.DATABASE_URL && process.env.JWT_SECRET
 const authService = hasDatabase ? await createProductionAuthService() : undefined
@@ -14,7 +16,9 @@ const reportRouter = authService && process.env.SUPABASE_URL && process.env.SUPA
   ? await createProductionReportRouter({ authService })
   : undefined
 const dashboardRouter = authService ? await createProductionDashboardRouter({ authService }) : undefined
-const app = createApp({ authRouter, masterRouter, reportRouter, dashboardRouter })
+const pegawaiRouter = authService ? await createProductionPegawaiRouter({ authService }) : undefined
+const exportRouter = authService ? await createProductionExportRouter({ authService }) : undefined
+const app = createApp({ authRouter, masterRouter, reportRouter, dashboardRouter: [dashboardRouter, pegawaiRouter, exportRouter].filter(Boolean) })
 
 app.listen(runtimeConfig.port, () => {
   console.log(`Backend berjalan di http://localhost:${runtimeConfig.port}`)

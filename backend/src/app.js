@@ -21,7 +21,7 @@ export function createApp({ healthCheck, authRouter, masterRouter, reportRouter,
 
   if (authRouter) app.use('/api/auth', authRouter)
   if (masterRouter) app.use('/api', masterRouter)
-  if (dashboardRouter) app.use('/api', dashboardRouter)
+  for (const router of (Array.isArray(dashboardRouter) ? dashboardRouter : [dashboardRouter]).filter(Boolean)) app.use('/api', router)
   if (reportRouter) app.use('/api', reportRouter)
 
   app.use((error, _request, response, _next) => {

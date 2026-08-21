@@ -14,6 +14,7 @@ import HistoryPage from './features/laporan/HistoryPage.jsx'
 import ReportDetailPage from './features/laporan/ReportDetailPage.jsx'
 import DashboardPage from './features/dashboard/DashboardPage.jsx'
 import AdminReportsPage from './features/dashboard/AdminReportsPage.jsx'
+import AdminEmployeesPage from './features/pegawai/AdminEmployeesPage.jsx'
 
 export default function App() {
   return (
@@ -35,6 +36,7 @@ export default function App() {
               <Route index element={<AdminHomePage />} />
               <Route path="dashboard" element={<DashboardPage />} />
               <Route path="laporan" element={<AdminReportsPage />} />
+              <Route path="pegawai" element={<AdminEmployeesPage />} />
               <Route path="master" element={<AdminMasterPage />} />
             </Route>
           </Route>
