@@ -1,0 +1,3 @@
+export default function MasterTable({ title, columns, rows, onCreate, onEdit, onToggleActive }) {
+  return <section className="master-table"><div className="table-heading"><h2>{title}</h2><button onClick={onCreate}>Tambah</button></div><table><thead><tr>{columns.map((column) => <th key={column.key}>{column.label}</th>)}<th>Status</th><th>Aksi</th></tr></thead><tbody>{rows.map((row) => <tr key={row.id}>{columns.map((column) => <td key={column.key}>{row[column.key]}</td>)}<td>{row.isActive ? 'Aktif' : 'Nonaktif'}</td><td><button onClick={() => onEdit(row)}>Edit</button><button onClick={() => onToggleActive(row)}>{row.isActive ? 'Nonaktifkan' : 'Aktifkan'}</button></td></tr>)}</tbody></table></section>
+}

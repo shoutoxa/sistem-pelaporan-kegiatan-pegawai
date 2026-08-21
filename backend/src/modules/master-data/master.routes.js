@@ -8,11 +8,12 @@ function sendError(error, response) {
 
 export function createMasterRouter({ service, requireAuth, requireSuperadmin } = {}) {
   const router = Router()
+  const readGuard = [requireAuth].filter(Boolean)
   const adminGuard = [requireAuth, requireSuperadmin].filter(Boolean)
 
-  router.get('/master/desa', async (_request, response) => response.json(await service.listActiveDesa()))
-  router.get('/master/desa/:desaId/rw', async (request, response) => response.json(await service.listActiveRwByDesa(request.params.desaId)))
-  router.get('/master/tahapan', async (_request, response) => response.json(await service.listActiveTahapan()))
+  router.get('/master/desa', ...readGuard, async (_request, response) => response.json(await service.listActiveDesa()))
+  router.get('/master/desa/:desaId/rw', ...readGuard, async (request, response) => response.json(await service.listActiveRwByDesa(request.params.desaId)))
+  router.get('/master/tahapan', ...readGuard, async (_request, response) => response.json(await service.listActiveTahapan()))
 
   for (const resource of ['desa', 'rw', 'tahapan']) {
     router.get(`/admin/${resource}`, ...adminGuard, async (_request, response) => response.json(await service.listAdmin(resource)))

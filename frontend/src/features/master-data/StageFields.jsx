@@ -1,0 +1,3 @@
+export default function StageFields({ value, onChange, errors = {} }) {
+  return <div className="field-grid"><label>Nama Tahapan<input value={value.namaTahapan || ''} onChange={(event) => onChange({ ...value, namaTahapan: event.target.value })} /></label><label><input type="checkbox" checked={Boolean(value.requiresNomorPerangkat)} onChange={(event) => onChange({ ...value, requiresNomorPerangkat: event.target.checked })} /> Nomor Perangkat wajib</label><label>Instruksi dokumentasi<textarea value={value.instruksiDokumentasi || ''} onChange={(event) => onChange({ ...value, instruksiDokumentasi: event.target.value })} /></label>{errors.namaTahapan && <small role="alert">{errors.namaTahapan}</small>}</div>
+}

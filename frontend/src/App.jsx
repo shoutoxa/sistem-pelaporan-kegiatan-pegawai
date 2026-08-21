@@ -7,6 +7,7 @@ import EmployeeLayout from './layouts/EmployeeLayout.jsx'
 import AdminHomePage from './pages/AdminHomePage.jsx'
 import EmployeeHomePage from './pages/EmployeeHomePage.jsx'
 import ForbiddenPage from './pages/ForbiddenPage.jsx'
+import AdminMasterPage from './features/master-data/AdminMasterPage.jsx'
 
 export default function App() {
   return (
@@ -23,6 +24,7 @@ export default function App() {
           <Route element={<ProtectedRoute role="SUPERADMIN" />}>
             <Route path="/admin" element={<AdminLayout />}>
               <Route index element={<AdminHomePage />} />
+              <Route path="master" element={<AdminMasterPage />} />
             </Route>
           </Route>
           <Route path="*" element={<LoginPage />} />
