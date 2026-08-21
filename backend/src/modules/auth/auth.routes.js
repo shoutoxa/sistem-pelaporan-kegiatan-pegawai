@@ -46,6 +46,7 @@ export async function createProductionAuthService() {
     import('bcryptjs'),
     import('jsonwebtoken'),
   ])
+  const jwtApi = jwt.default || jwt
   const secret = process.env.JWT_SECRET
   if (!secret) throw new Error('JWT_SECRET belum dikonfigurasi.')
 
@@ -56,8 +57,8 @@ export async function createProductionAuthService() {
     },
     passwordHasher: { compare: bcrypt.default.compare },
     tokenSigner: {
-      sign: (payload) => jwt.sign({ ...payload, sub: payload.userId }, secret, { expiresIn: '8h' }),
-      verify: (token) => jwt.verify(token, secret),
+      sign: (payload) => jwtApi.sign({ ...payload, sub: payload.userId }, secret, { expiresIn: '8h' }),
+      verify: (token) => jwtApi.verify(token, secret),
     },
   })
 
