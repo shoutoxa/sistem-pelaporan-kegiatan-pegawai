@@ -1,38 +1,33 @@
-import { useEffect, useState } from 'react'
-import './styles.css'
+import { BrowserRouter, Route, Routes } from 'react-router-dom'
+import { AuthProvider } from './features/auth/AuthProvider.jsx'
+import ProtectedRoute from './features/auth/ProtectedRoute.jsx'
+import LoginPage from './features/auth/LoginPage.jsx'
+import AdminLayout from './layouts/AdminLayout.jsx'
+import EmployeeLayout from './layouts/EmployeeLayout.jsx'
+import AdminHomePage from './pages/AdminHomePage.jsx'
+import EmployeeHomePage from './pages/EmployeeHomePage.jsx'
+import ForbiddenPage from './pages/ForbiddenPage.jsx'
 
-function App() {
-  const [state, setState] = useState({ status: 'loading', message: 'Memeriksa koneksi backend...' })
-
-  useEffect(() => {
-    let active = true
-
-    fetch('http://localhost:3000/api/health', { credentials: 'include' })
-      .then(async (response) => {
-        if (!response.ok) throw new Error('Backend tidak sehat')
-        return response.json()
-      })
-      .then((body) => {
-        if (active) setState({ status: 'connected', message: `Backend terhubung (${body.database})` })
-      })
-      .catch(() => {
-        if (active) setState({ status: 'offline', message: 'Backend tidak dapat dihubungi' })
-      })
-
-    return () => {
-      active = false
-    }
-  }, [])
-
-  if (state.status === 'loading') return <main><p role="status">{state.message}</p></main>
-
+export default function App() {
   return (
-    <main>
-      <h1>Sistem Pelaporan Kegiatan Pegawai</h1>
-      <p role="status">{state.message}</p>
-      {state.status === 'offline' && <p>Pastikan backend berjalan di port 3000, lalu muat ulang halaman ini.</p>}
-    </main>
+    <BrowserRouter>
+      <AuthProvider>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/403" element={<ForbiddenPage />} />
+          <Route element={<ProtectedRoute role="PEGAWAI" />}>
+            <Route path="/pegawai" element={<EmployeeLayout />}>
+              <Route index element={<EmployeeHomePage />} />
+            </Route>
+          </Route>
+          <Route element={<ProtectedRoute role="SUPERADMIN" />}>
+            <Route path="/admin" element={<AdminLayout />}>
+              <Route index element={<AdminHomePage />} />
+            </Route>
+          </Route>
+          <Route path="*" element={<LoginPage />} />
+        </Routes>
+      </AuthProvider>
+    </BrowserRouter>
   )
 }
-
-export default App
