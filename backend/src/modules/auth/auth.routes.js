@@ -56,7 +56,7 @@ export async function createProductionAuthService() {
     },
     passwordHasher: { compare: bcrypt.default.compare },
     tokenSigner: {
-      sign: (payload) => jwt.sign(payload, secret, { expiresIn: '8h' }),
+      sign: (payload) => jwt.sign({ ...payload, sub: payload.userId }, secret, { expiresIn: '8h' }),
       verify: (token) => jwt.verify(token, secret),
     },
   })

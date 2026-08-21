@@ -1,20 +1,49 @@
 # Sistem Pelaporan Kegiatan Pegawai
 
-Prototype lokal untuk pelaporan kegiatan harian pegawai dan pemantauan Superadmin.
+Prototipe fungsional lokal untuk pelaporan kegiatan harian pegawai, dokumentasi foto, master Desa/RW/Tahapan, histori, dan dashboard Superadmin. Arsitektur dipisah menjadi Vite/React frontend, Express backend, Prisma PostgreSQL, dan Supabase Storage privat.
 
-## Status implementasi
+## Prasyarat
 
-Task 1 selesai: workspace npm, frontend Vite/React, backend Express, dan health slice sudah tersedia. Fitur berikutnya mengikuti rencana di `docs/superpowers/plans/2026-08-22-sistem-pelaporan-mvp-implementation.md`.
+- Node.js 22 atau lebih baru.
+- Project Supabase dengan PostgreSQL dan bucket Storage privat bernama `dokumentasi-laporan`.
+- Service key Supabase hanya disimpan di backend `.env`.
 
-## Menjalankan health slice
-
-Gunakan Node.js 22 atau lebih baru.
+## Konfigurasi lokal
 
 ```powershell
 npm install
+Copy-Item .env.example .env
+```
+
+Isi `.env` dengan `DATABASE_URL`, `JWT_SECRET`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `STORAGE_BUCKET`, dan password seed. Untuk memaksa konfigurasi lengkap sebelum backend start, set `REQUIRE_FULL_CONFIG=true`.
+
+```powershell
+$env:REQUIRE_FULL_CONFIG='true'
+npm run prisma:generate -w backend
+npm run prisma:migrate -w backend
+npm run prisma:seed -w backend
+```
+
+Password demo tidak disimpan di repository; gunakan nilai `SEED_ADMIN_PASSWORD` dan `SEED_EMPLOYEE_PASSWORD` dari `.env` saat seed, lalu login menggunakan username `superadmin` atau salah satu username pegawai yang tercantum di `backend/prisma/seed-data.js`.
+
+## Menjalankan
+
+```powershell
 npm run dev
 ```
 
-Frontend tersedia di `http://localhost:5173` dan backend di `http://localhost:3000`.
+Frontend: `http://localhost:5173`
+Backend: `http://localhost:3000`
 
-Salin `.env.example` menjadi `.env` sebelum mengaktifkan fitur database dan Supabase. Jangan menaruh service key di frontend atau meng-commit `.env`.
+Mode tanpa `.env` masih dapat menjalankan health slice untuk pengembangan UI. Fitur login, database, dan Storage membutuhkan konfigurasi Supabase lengkap.
+
+## Verifikasi
+
+```powershell
+npm test
+npm run build
+npx prisma validate --config backend/prisma.config.ts
+git diff --check
+```
+
+Checklist manual dan kontrak endpoint tersedia di `docs/testing/p1-smoke.md` dan `docs/testing/p1-api-contract.md`.

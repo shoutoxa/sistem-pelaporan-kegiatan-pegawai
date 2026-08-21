@@ -24,7 +24,7 @@ export function createAuthService({ userRepository, passwordHasher, tokenSigner 
       if (!token) throw authError('INVALID_SESSION')
       try {
         const payload = tokenSigner.verify(token)
-        const user = await userRepository.findActiveById(payload.userId)
+        const user = await userRepository.findActiveById(payload.userId || payload.sub)
         if (!user || !user.isActive) throw new Error('inactive')
         return { id: user.id, nama: user.nama, username: user.username, role: user.role }
       } catch {
