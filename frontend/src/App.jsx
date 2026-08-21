@@ -1,5 +1,5 @@
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
-import { AuthProvider } from './features/auth/AuthProvider.jsx'
+import { AuthProvider, useAuth } from './features/auth/AuthProvider.jsx'
 import ProtectedRoute from './features/auth/ProtectedRoute.jsx'
 import LoginPage from './features/auth/LoginPage.jsx'
 import AdminLayout from './layouts/AdminLayout.jsx'
@@ -8,6 +8,8 @@ import AdminHomePage from './pages/AdminHomePage.jsx'
 import EmployeeHomePage from './pages/EmployeeHomePage.jsx'
 import ForbiddenPage from './pages/ForbiddenPage.jsx'
 import AdminMasterPage from './features/master-data/AdminMasterPage.jsx'
+import ReportForm from './features/laporan/ReportForm.jsx'
+import ReportSuccess from './features/laporan/ReportSuccess.jsx'
 
 export default function App() {
   return (
@@ -19,6 +21,8 @@ export default function App() {
           <Route element={<ProtectedRoute role="PEGAWAI" />}>
             <Route path="/pegawai" element={<EmployeeLayout />}>
               <Route index element={<EmployeeHomePage />} />
+              <Route path="laporan/new" element={<EmployeeReportRoute />} />
+              <Route path="laporan/:id" element={<ReportSuccess />} />
             </Route>
           </Route>
           <Route element={<ProtectedRoute role="SUPERADMIN" />}>
@@ -32,4 +36,9 @@ export default function App() {
       </AuthProvider>
     </BrowserRouter>
   )
+}
+
+function EmployeeReportRoute() {
+  const { user } = useAuth()
+  return <ReportForm user={user} />
 }

@@ -1,15 +1,16 @@
 import { useEffect, useState } from 'react'
 import { masterApi } from '../../api/master.js'
 
-export default function LocationFields({ value, onChange, errors = {} }) {
+export default function LocationFields({ value, onChange, errors = {}, desaOptions: desaProp }) {
   const [desaOptions, setDesaOptions] = useState([])
   const [rwOptions, setRwOptions] = useState([])
   const [selectedDesa, setSelectedDesa] = useState(value.desaId || '')
   const [loadingRw, setLoadingRw] = useState(false)
 
   useEffect(() => {
+    if (desaProp) { setDesaOptions(desaProp); return }
     masterApi.fetchDesa().then(setDesaOptions).catch(() => setDesaOptions([]))
-  }, [])
+  }, [desaProp])
 
   async function loadRw(desaId) {
     if (!desaId) { setRwOptions([]); return }
