@@ -15,7 +15,7 @@ npm install
 Copy-Item .env.example .env
 ```
 
-Isi `.env` dengan `DATABASE_URL`, `JWT_SECRET`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `STORAGE_BUCKET`, dan password seed. Untuk memaksa konfigurasi lengkap sebelum backend start, set `REQUIRE_FULL_CONFIG=true`.
+Isi `.env` dengan `DATABASE_URL`, `JWT_SECRET`, `SUPABASE_URL`, salah satu `SUPABASE_SECRET_KEY` atau `SUPABASE_SERVICE_ROLE_KEY`, `STORAGE_BUCKET`, dan password seed. Untuk memaksa konfigurasi lengkap sebelum backend start, set `REQUIRE_FULL_CONFIG=true`.
 
 ```powershell
 $env:REQUIRE_FULL_CONFIG='true'

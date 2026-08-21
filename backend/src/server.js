@@ -14,7 +14,8 @@ if (process.env.REQUIRE_FULL_CONFIG === 'true') assertFullConfig()
 const authService = hasDatabase ? await createProductionAuthService() : undefined
 const authRouter = authService ? await createProductionAuthRouter() : undefined
 const masterRouter = authService ? await createProductionMasterRouter({ authService }) : undefined
-const reportRouter = authService && process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
+const hasStorageKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY
+const reportRouter = authService && process.env.SUPABASE_URL && hasStorageKey
   ? await createProductionReportRouter({ authService })
   : undefined
 const dashboardRouter = authService ? await createProductionDashboardRouter({ authService }) : undefined

@@ -4,7 +4,9 @@ export const runtimeConfig = {
 };
 
 export function missingFullConfig(env = process.env) {
-  return ['DATABASE_URL', 'JWT_SECRET', 'SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY'].filter((name) => !env[name])
+  const missing = ['DATABASE_URL', 'JWT_SECRET', 'SUPABASE_URL'].filter((name) => !env[name])
+  if (!env.SUPABASE_SECRET_KEY && !env.SUPABASE_SERVICE_ROLE_KEY) missing.push('SUPABASE_SECRET_KEY atau SUPABASE_SERVICE_ROLE_KEY')
+  return missing
 }
 
 export function assertFullConfig(env = process.env) {
