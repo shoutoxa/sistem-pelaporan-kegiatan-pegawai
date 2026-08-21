@@ -138,7 +138,8 @@ sistem-pelaporan/
 ### 4.3 Teknologi
 
 - Frontend: Vite + React dengan JavaScript.
-- Backend: Node.js 20+ dan Express.
+- Runtime: Node.js 22+; versi lokal terverifikasi `v22.23.1`.
+- Backend: Express pada Node.js 22+.
 - Database: Supabase PostgreSQL.
 - Akses database dan migrasi: Prisma ORM.
 - File storage: Supabase Storage.
