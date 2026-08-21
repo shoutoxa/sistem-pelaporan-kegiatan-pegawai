@@ -10,6 +10,10 @@ import ForbiddenPage from './pages/ForbiddenPage.jsx'
 import AdminMasterPage from './features/master-data/AdminMasterPage.jsx'
 import ReportForm from './features/laporan/ReportForm.jsx'
 import ReportSuccess from './features/laporan/ReportSuccess.jsx'
+import HistoryPage from './features/laporan/HistoryPage.jsx'
+import ReportDetailPage from './features/laporan/ReportDetailPage.jsx'
+import DashboardPage from './features/dashboard/DashboardPage.jsx'
+import AdminReportsPage from './features/dashboard/AdminReportsPage.jsx'
 
 export default function App() {
   return (
@@ -22,12 +26,15 @@ export default function App() {
             <Route path="/pegawai" element={<EmployeeLayout />}>
               <Route index element={<EmployeeHomePage />} />
               <Route path="laporan/new" element={<EmployeeReportRoute />} />
-              <Route path="laporan/:id" element={<ReportSuccess />} />
+              <Route path="histori" element={<HistoryPage />} />
+              <Route path="laporan/:id" element={<ReportDetailPage />} />
             </Route>
           </Route>
           <Route element={<ProtectedRoute role="SUPERADMIN" />}>
             <Route path="/admin" element={<AdminLayout />}>
               <Route index element={<AdminHomePage />} />
+              <Route path="dashboard" element={<DashboardPage />} />
+              <Route path="laporan" element={<AdminReportsPage />} />
               <Route path="master" element={<AdminMasterPage />} />
             </Route>
           </Route>
