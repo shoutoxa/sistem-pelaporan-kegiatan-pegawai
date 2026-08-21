@@ -1,4 +1,4 @@
-import 'dotenv/config'
+import '../load-env.js'
 import { createApp } from './app.js'
 import { runtimeConfig } from './config/env.js'
 import { assertFullConfig } from './config/env.js'

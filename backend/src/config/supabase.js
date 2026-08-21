@@ -1,4 +1,4 @@
-import 'dotenv/config'
+import '../../load-env.js'
 import { createClient } from '@supabase/supabase-js'
 import { createStorage } from '../modules/laporan/report.storage.js'
 

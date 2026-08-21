@@ -1,4 +1,4 @@
-import 'dotenv/config'
+import '../load-env.js'
 import bcrypt from 'bcryptjs'
 import { prisma } from '../src/config/prisma.js'
 import { DEMO_STAGES, DEMO_USERS, DEMO_VILLAGES } from './seed-data.js'
