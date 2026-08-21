@@ -21,8 +21,8 @@ export function createApp({ healthCheck, authRouter, masterRouter, reportRouter,
 
   if (authRouter) app.use('/api/auth', authRouter)
   if (masterRouter) app.use('/api', masterRouter)
-  if (reportRouter) app.use('/api', reportRouter)
   if (dashboardRouter) app.use('/api', dashboardRouter)
+  if (reportRouter) app.use('/api', reportRouter)
 
   app.use((error, _request, response, _next) => {
     console.error(error)
