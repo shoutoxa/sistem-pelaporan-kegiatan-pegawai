@@ -1,0 +1,104 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  SUPERADMIN
+  PEGAWAI
+}
+
+model User {
+  id           String    @id @default(uuid()) @db.Uuid
+  nama         String
+  username     String    @unique
+  passwordHash String    @map("password_hash")
+  role         Role
+  isActive     Boolean   @default(true) @map("is_active")
+  wajibLapor   Boolean   @default(false) @map("wajib_lapor")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  laporan      Laporan[]
+
+  @@map("users")
+}
+
+model Desa {
+  id        String   @id @default(uuid()) @db.Uuid
+  namaDesa  String   @unique @map("nama_desa")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  rw        Rw[]
+
+  @@map("desa")
+}
+
+model Rw {
+  id        String    @id @default(uuid()) @db.Uuid
+  desaId    String    @map("desa_id") @db.Uuid
+  nomorRw   String    @map("nomor_rw")
+  isActive  Boolean   @default(true) @map("is_active")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  desa      Desa      @relation(fields: [desaId], references: [id], onDelete: Restrict)
+  laporan   Laporan[]
+
+  @@unique([desaId, nomorRw])
+  @@index([desaId, isActive])
+  @@map("rw")
+}
+
+model Tahapan {
+  id                     String    @id @default(uuid()) @db.Uuid
+  namaTahapan            String    @unique @map("nama_tahapan")
+  requiresNomorPerangkat Boolean   @map("requires_nomor_perangkat")
+  instruksiDokumentasi   String?   @map("instruksi_dokumentasi")
+  isActive               Boolean   @default(true) @map("is_active")
+  createdAt              DateTime  @default(now()) @map("created_at")
+  updatedAt              DateTime  @updatedAt @map("updated_at")
+  laporan                Laporan[]
+
+  @@index([isActive])
+  @@map("tahapan")
+}
+
+model Laporan {
+  id              String        @id @default(uuid()) @db.Uuid
+  userId          String        @map("user_id") @db.Uuid
+  rwId            String        @map("rw_id") @db.Uuid
+  tahapanId       String        @map("tahapan_id") @db.Uuid
+  tanggalKegiatan DateTime      @map("tanggal_kegiatan") @db.Date
+  keterangan      String
+  nomorPerangkat  String?       @map("nomor_perangkat")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+  user            User          @relation(fields: [userId], references: [id], onDelete: Restrict)
+  rw              Rw            @relation(fields: [rwId], references: [id], onDelete: Restrict)
+  tahapan         Tahapan       @relation(fields: [tahapanId], references: [id], onDelete: Restrict)
+  dokumentasi     Dokumentasi[]
+
+  @@index([userId, tanggalKegiatan])
+  @@index([tanggalKegiatan])
+  @@index([rwId])
+  @@index([tahapanId])
+  @@map("laporan")
+}
+
+model Dokumentasi {
+  id           String   @id @default(uuid()) @db.Uuid
+  laporanId    String   @map("laporan_id") @db.Uuid
+  storagePath  String   @unique @map("storage_path")
+  originalName String   @map("original_name")
+  mimeType     String   @map("mime_type")
+  fileSize     Int      @map("file_size")
+  createdAt    DateTime @default(now()) @map("created_at")
+  laporan      Laporan  @relation(fields: [laporanId], references: [id], onDelete: Restrict)
+
+  @@index([laporanId])
+  @@map("dokumentasi")
+}
