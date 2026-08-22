@@ -1,6 +1,6 @@
 function historyError(code, message) { const error = new Error(message); error.code = code; return error }
 
-export function createHistoryService({ prisma, storage }) {
+export function createHistoryService({ prisma, storage, clock = () => new Date() }) {
   async function listOwnReports({ actor, page = 1, limit = 20, tanggal, tahapanId }) {
     const safePage = Math.max(1, Number(page) || 1)
     const safeLimit = Math.min(100, Math.max(1, Number(limit) || 20))
@@ -11,7 +11,11 @@ export function createHistoryService({ prisma, storage }) {
       prisma.laporan.findMany({ where, include: { rw: { include: { desa: true } }, tahapan: true, dokumentasi: true }, orderBy: { createdAt: 'desc' }, skip: (safePage - 1) * safeLimit, take: safeLimit }),
       prisma.laporan.count({ where }),
     ])
-    return { items, total, page: safePage, limit: safeLimit }
+    const now = clock().getTime()
+    return { items: items.map((item) => {
+      const editableUntil = new Date(new Date(item.createdAt).getTime() + 24 * 60 * 60 * 1000)
+      return { ...item, editableUntil: editableUntil.toISOString(), canEdit: now <= editableUntil.getTime() }
+    }), total, page: safePage, limit: safeLimit }
   }
 
   async function getReportDetail({ actor, reportId }) {

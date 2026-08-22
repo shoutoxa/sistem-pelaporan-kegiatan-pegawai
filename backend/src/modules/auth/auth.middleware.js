@@ -4,7 +4,7 @@ export function requireAuth({ authService }) {
       request.user = await authService.readSession(request.cookies.session)
       return next()
     } catch {
-      return response.status(401).json({ error: 'Sesi tidak valid atau sudah berakhir.' })
+      return response.status(401).json({ message: 'Sesi tidak valid atau sudah berakhir.' })
     }
   }
 }
@@ -12,7 +12,7 @@ export function requireAuth({ authService }) {
 export function requireRole(...roles) {
   return (request, response, next) => {
     if (!request.user || !roles.includes(request.user.role)) {
-      return response.status(403).json({ error: 'Anda tidak memiliki akses.' })
+      return response.status(403).json({ message: 'Anda tidak memiliki akses.' })
     }
     return next()
   }

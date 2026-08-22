@@ -17,15 +17,15 @@ export function createAuthRouter({ authService }) {
 
   router.post('/login', loginLimiter, async (request, response) => {
     const parsed = loginSchema.safeParse(request.body)
-    if (!parsed.success) return response.status(400).json({ error: 'Username dan password wajib diisi.' })
+    if (!parsed.success) return response.status(400).json({ message: 'Username dan password wajib diisi.' })
 
     try {
       const result = await authService.login(parsed.data)
       response.cookie(SESSION_COOKIE, result.token, sessionCookieOptions)
       return response.json({ user: result.user })
     } catch (error) {
-      if (error.code === 'INVALID_CREDENTIALS') return response.status(401).json({ error: 'Username atau password tidak valid.' })
-      return response.status(500).json({ error: 'Terjadi kesalahan pada server.' })
+      if (error.code === 'INVALID_CREDENTIALS') return response.status(401).json({ message: 'Username atau password tidak valid.' })
+      return response.status(500).json({ message: 'Terjadi kesalahan pada server.' })
     }
   })
 

@@ -1,36 +1,138 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from "react";
 
-export default function FilePicker({ files, onChange, maxFiles = 5, maxBytes = 10_000_000 }) {
-  const [error, setError] = useState('')
-  const [urls, setUrls] = useState(() => new Map())
-  const urlsRef = useRef(urls)
+export default function FilePicker({
+  files,
+  onChange,
+  maxFiles = 5,
+  maxBytes = 10_000_000,
+}) {
+  const [error, setError] = useState("");
+  const [dragging, setDragging] = useState(false);
+  const [urls, setUrls] = useState(() => new Map());
+  const urlsRef = useRef(urls);
 
-  useEffect(() => { urlsRef.current = urls }, [urls])
-  useEffect(() => () => { urlsRef.current.forEach((url) => URL.revokeObjectURL(url)); urlsRef.current.clear() }, [])
+  useEffect(() => {
+    urlsRef.current = urls;
+  }, [urls]);
+  useEffect(
+    () => () => {
+      urlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+      urlsRef.current.clear();
+    },
+    [],
+  );
+
+  function addFiles(fileList) {
+    const selected = Array.from(fileList || []);
+    if (selected.length + files.length > maxFiles) {
+      setError(`Maksimal ${maxFiles} foto.`);
+      return;
+    }
+    const invalid = selected.find(
+      (file) => !["image/jpeg", "image/png", "image/webp"].includes(file.type),
+    );
+    if (invalid) {
+      setError("Format foto harus JPG, PNG, atau WEBP.");
+      return;
+    }
+    const oversized = selected.find((file) => file.size > maxBytes);
+    if (oversized) {
+      setError("Ukuran setiap foto maksimal 10 MB.");
+      return;
+    }
+    setError("");
+    setUrls((current) => {
+      const next = new Map(current);
+      selected.forEach((file) => next.set(file, URL.createObjectURL(file)));
+      return next;
+    });
+    onChange([...files, ...selected]);
+  }
 
   function handleChange(event) {
-    const selected = Array.from(event.target.files || [])
-    if (selected.length + files.length > maxFiles) { setError(`Maksimal ${maxFiles} foto.`); return }
-    const invalid = selected.find((file) => !['image/jpeg', 'image/png', 'image/webp'].includes(file.type))
-    if (invalid) { setError('Format foto harus JPG, PNG, atau WEBP.'); return }
-    const oversized = selected.find((file) => file.size > maxBytes)
-    if (oversized) { setError('Ukuran setiap foto maksimal 10 MB.'); return }
-    setError('')
-    setUrls((current) => {
-      const next = new Map(current)
-      selected.forEach((file) => next.set(file, URL.createObjectURL(file)))
-      return next
-    })
-    onChange([...files, ...selected])
-    event.target.value = ''
+    addFiles(event.target.files);
+    event.target.value = "";
+  }
+
+  function handleDrop(event) {
+    event.preventDefault();
+    setDragging(false);
+    addFiles(event.dataTransfer.files);
   }
 
   function removeFile(file) {
-    const url = urls.get(file)
-    if (url) URL.revokeObjectURL(url)
-    setUrls((current) => { const next = new Map(current); next.delete(file); return next })
-    onChange(files.filter((item) => item !== file))
+    const url = urls.get(file);
+    if (url) URL.revokeObjectURL(url);
+    setUrls((current) => {
+      const next = new Map(current);
+      next.delete(file);
+      return next;
+    });
+    onChange(files.filter((item) => item !== file));
   }
 
-  return <div className="file-picker"><label>Dokumentasi<input aria-label="Dokumentasi" type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={handleChange} /></label><p>{files.length} dari maksimal {maxFiles} foto</p>{error && <p role="alert">{error}</p>}<div className="preview-grid">{files.map((file) => <figure key={`${file.name}-${file.lastModified}`}><img src={urls.get(file)} alt={file.name} /><figcaption><span>{file.name}</span><button type="button" onClick={() => removeFile(file)}>Hapus</button></figcaption></figure>)}</div></div>
+  return (
+    <div className="file-picker">
+      <label
+        className={`upload-zone ${dragging ? "dragging" : ""}`}
+        onDragOver={(event) => {
+          event.preventDefault();
+          setDragging(true);
+        }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={handleDrop}
+      >
+        <span className="upload-icon" aria-hidden="true">
+          ↑
+        </span>
+        <span>
+          <strong>
+            Seret dan lepas foto di sini, atau <u>pilih dari perangkat</u>
+          </strong>
+          <small>
+            JPG, PNG, atau WEBP · Maks. 10 MB per foto · 1–{maxFiles} foto
+          </small>
+        </span>
+        <input
+          aria-label="Dokumentasi"
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          multiple
+          onChange={handleChange}
+        />
+      </label>
+      <div className="file-picker-meta">
+        <span>
+          {files.length} dari {maxFiles} foto dipilih
+        </span>
+      </div>
+      {error && (
+        <p className="field-error" role="alert">
+          {error}
+        </p>
+      )}
+      <div className="preview-list">
+        {files.map((file) => (
+          <figure key={`${file.name}-${file.lastModified}`}>
+            <img src={urls.get(file)} alt={`Pratinjau ${file.name}`} />
+            <figcaption>
+              <strong>{file.name}</strong>
+              <small>
+                {(file.size / 1_000_000).toFixed(2)} MB ·{" "}
+                {file.type.replace("image/", "").toUpperCase()}
+              </small>
+            </figcaption>
+            <button
+              className="danger-outline"
+              type="button"
+              aria-label={`Hapus ${file.name}`}
+              onClick={() => removeFile(file)}
+            >
+              Hapus
+            </button>
+          </figure>
+        ))}
+      </div>
+    </div>
+  );
 }

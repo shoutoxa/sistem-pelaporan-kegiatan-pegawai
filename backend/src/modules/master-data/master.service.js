@@ -19,7 +19,7 @@ export function createMasterService({ prisma }) {
   }
 
   async function listActiveRwByDesa(desaId) {
-    return prisma.rw.findMany({ where: { desaId, isActive: true }, orderBy: { nomorRw: 'asc' } })
+    return prisma.rw.findMany({ where: { desaId, isActive: true, desa: { isActive: true } }, orderBy: { nomorRw: 'asc' } })
   }
 
   async function listActiveTahapan() {

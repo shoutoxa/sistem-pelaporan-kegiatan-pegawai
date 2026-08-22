@@ -1,6 +1,6 @@
 import { Router } from 'express'
 
-function sendError(error, response) { return response.status(error.code === 'NOT_FOUND' ? 404 : 500).json({ error: error.message || 'Terjadi kesalahan pada server.' }) }
+function sendError(error, response) { return response.status(error.code === 'NOT_FOUND' ? 404 : 500).json({ message: error.message || 'Terjadi kesalahan pada server.' }) }
 
 export function createDashboardRouter({ dashboardService, historyService, requireAuth, requireSuperadmin } = {}) {
   const router = Router()

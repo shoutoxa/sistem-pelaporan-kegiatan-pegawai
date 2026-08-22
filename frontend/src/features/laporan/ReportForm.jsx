@@ -1,34 +1,332 @@
-import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { masterApi } from '../../api/master.js'
-import { createReport } from '../../api/reports.js'
-import LocationFields from '../master-data/LocationFields.jsx'
-import FilePicker from './FilePicker.jsx'
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { masterApi } from "../../api/master.js";
+import { createReport } from "../../api/reports.js";
+import LocationFields from "../master-data/LocationFields.jsx";
+import FilePicker from "./FilePicker.jsx";
+import PageHeader from "../../components/PageHeader.jsx";
+import Notice from "../../components/Notice.jsx";
+import Icon from "../../components/Icon.jsx";
 
-function jakartaToday() { return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()) }
+function jakartaToday() {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Jakarta",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
 
 export default function ReportForm({ user, villages, stages: stageProp }) {
-  const navigate = useNavigate()
-  const [stages, setStages] = useState(stageProp || [])
-  const [form, setForm] = useState({ tanggalKegiatan: jakartaToday(), desaId: '', rwId: '', tahapanId: '', keterangan: '', nomorPerangkat: '' })
-  const [files, setFiles] = useState([])
-  const [error, setError] = useState('')
-  const [submitting, setSubmitting] = useState(false)
+  const navigate = useNavigate();
+  const [stages, setStages] = useState(stageProp || []);
+  const [form, setForm] = useState({
+    tanggalKegiatan: jakartaToday(),
+    desaId: "",
+    rwId: "",
+    tahapanId: "",
+    keterangan: "",
+    nomorPerangkat: "",
+  });
+  const [files, setFiles] = useState([]);
+  const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({});
+  const [submitting, setSubmitting] = useState(false);
 
-  useEffect(() => { if (!stageProp) masterApi.fetchTahapan().then(setStages).catch(() => setStages([])) }, [stageProp])
-  const selectedStage = useMemo(() => stages.find((stage) => stage.id === form.tahapanId), [stages, form.tahapanId])
-  const setField = (key, value) => setForm((current) => ({ ...current, [key]: value }))
+  useEffect(() => {
+    if (!stageProp)
+      masterApi
+        .fetchTahapan()
+        .then(setStages)
+        .catch(() => setStages([]));
+  }, [stageProp]);
+  const selectedStage = useMemo(
+    () => stages.find((stage) => stage.id === form.tahapanId),
+    [stages, form.tahapanId],
+  );
+  const clearFieldError = (key) =>
+    setFieldErrors((current) => {
+      if (!current[key]) return current;
+      const next = { ...current };
+      delete next[key];
+      return next;
+    });
+  const setField = (key, value) => {
+    clearFieldError(key);
+    setForm((current) => ({ ...current, [key]: value }));
+  };
 
   async function handleSubmit(event) {
-    event.preventDefault()
-    setError('')
-    if (!form.rwId || !form.tahapanId || form.keterangan.trim().length < 5 || files.length < 1 || (selectedStage?.requiresNomorPerangkat && !form.nomorPerangkat.trim())) { setError('Lengkapi semua field wajib dan minimal satu foto.'); return }
-    setSubmitting(true)
+    event.preventDefault();
+    setError("");
+    const validationErrors = {};
+    if (!form.desaId) validationErrors.desaId = "Desa wajib dipilih.";
+    if (!form.rwId) validationErrors.rwId = "RW wajib dipilih.";
+    if (!form.tahapanId) validationErrors.tahapanId = "Tahapan wajib dipilih.";
+    if (form.keterangan.trim().length < 5)
+      validationErrors.keterangan = "Keterangan minimal 5 karakter.";
+    if (files.length < 1)
+      validationErrors.dokumentasi = "Minimal satu foto wajib dipilih.";
+    if (selectedStage?.requiresNomorPerangkat && !form.nomorPerangkat.trim())
+      validationErrors.nomorPerangkat = "Nomor perangkat wajib diisi.";
+    if (Object.keys(validationErrors).length) {
+      setFieldErrors(validationErrors);
+      setError("Lengkapi field yang masih bermasalah.");
+      return;
+    }
+    setFieldErrors({});
+    setSubmitting(true);
     try {
-      const result = await createReport({ ...form, files })
-      navigate(`/pegawai/laporan/${result.data.id}`)
-    } catch (requestError) { setError(requestError.message || 'Laporan gagal dikirim.') } finally { setSubmitting(false) }
+      const result = await createReport({ ...form, files });
+      navigate(`/pegawai/laporan/${result.data.id}`);
+    } catch (requestError) {
+      setFieldErrors(requestError.errors || {});
+      setError(requestError.message || "Laporan gagal dikirim.");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
-  return <section className="page report-page"><div className="page-heading"><div><p className="eyebrow">Pelaporan harian</p><h1>Buat Laporan Kegiatan</h1><p>Lengkapi detail kegiatan dan sertakan minimal satu foto dokumentasi.</p></div></div><form className="report-form panel" onSubmit={handleSubmit}><div className="form-section"><h2>Informasi kegiatan</h2><div className="field-grid"><label>PIC<input aria-label="PIC" value={user?.nama || ''} readOnly /></label><label>Tanggal Kegiatan<input aria-label="Tanggal Kegiatan" type="date" value={form.tanggalKegiatan} onChange={(event) => setField('tanggalKegiatan', event.target.value)} required /></label></div><LocationFields value={form} onChange={(location) => setForm((current) => ({ ...current, ...location }))} desaOptions={villages} errors={{}} /><div className="field-grid"><label>Tahapan<select aria-label="Tahapan" value={form.tahapanId} onChange={(event) => setForm((current) => ({ ...current, tahapanId: event.target.value, nomorPerangkat: '' }))} required><option value="">Pilih Tahapan</option>{stages.filter((stage) => stage.isActive !== false).map((stage) => <option key={stage.id} value={stage.id}>{stage.namaTahapan}</option>)}</select></label>{selectedStage?.requiresNomorPerangkat && <label>Nomor Perangkat<input aria-label="Nomor Perangkat" value={form.nomorPerangkat} onChange={(event) => setField('nomorPerangkat', event.target.value)} required /></label>}</div><label>Keterangan<textarea aria-label="Keterangan" placeholder="Jelaskan kegiatan yang sudah dilakukan..." value={form.keterangan} onChange={(event) => setField('keterangan', event.target.value)} required /></label></div><div className="form-section"><h2>Dokumentasi</h2><FilePicker files={files} onChange={setFiles} /></div>{error && <p className="notice error" role="alert">{error}</p>}<div className="form-actions"><button className="primary-button" type="submit" disabled={submitting}>{submitting ? 'Mengirim...' : 'Kirim Laporan'}</button></div></form></section>
+  return (
+    <section className="page report-page">
+      <PageHeader
+        title="Buat laporan harian"
+        description="Lengkapi informasi kegiatan dan dokumentasi pekerjaan Anda di lapangan."
+      />
+      <div className="report-layout">
+        <form className="report-form" onSubmit={handleSubmit} noValidate>
+          <div className="form-progress" aria-hidden="true">
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+          <section className="form-section">
+            <div className="form-section-title">
+              <span>1</span>
+              <div>
+                <h2>Kegiatan</h2>
+                <p>Identitas, tanggal, lokasi, dan tahapan pekerjaan.</p>
+              </div>
+            </div>
+            <div className="field-grid">
+              <label htmlFor="report-pic">
+                PIC (Penanggung jawab)
+                <input
+                  id="report-pic"
+                  aria-label="PIC"
+                  value={user?.nama || ""}
+                  readOnly
+                />
+              </label>
+              <label htmlFor="report-date">
+                Tanggal kegiatan <b aria-hidden="true">*</b>
+                <input
+                  id="report-date"
+                  aria-label="Tanggal Kegiatan"
+                  type="date"
+                  value={form.tanggalKegiatan}
+                  onChange={(event) =>
+                    setField("tanggalKegiatan", event.target.value)
+                  }
+                  required
+                  aria-invalid={Boolean(fieldErrors.tanggalKegiatan)}
+                  aria-describedby={
+                    fieldErrors.tanggalKegiatan
+                      ? "report-date-error"
+                      : undefined
+                  }
+                />
+                {fieldErrors.tanggalKegiatan && (
+                  <small
+                    id="report-date-error"
+                    className="field-error"
+                    role="alert"
+                  >
+                    {fieldErrors.tanggalKegiatan}
+                  </small>
+                )}
+              </label>
+            </div>
+            <LocationFields
+              value={form}
+              onChange={(location) => {
+                Object.keys(location).forEach(clearFieldError);
+                setForm((current) => ({ ...current, ...location }));
+              }}
+              desaOptions={villages}
+              errors={fieldErrors}
+            />
+            <div className="field-grid">
+              <label htmlFor="report-stage">
+                Tahapan pekerjaan <b aria-hidden="true">*</b>
+                <select
+                  id="report-stage"
+                  aria-label="Tahapan"
+                  value={form.tahapanId}
+                  onChange={(event) => {
+                    clearFieldError("tahapanId");
+                    clearFieldError("nomorPerangkat");
+                    setForm((current) => ({
+                      ...current,
+                      tahapanId: event.target.value,
+                      nomorPerangkat: "",
+                    }));
+                  }}
+                  required
+                  aria-invalid={Boolean(fieldErrors.tahapanId)}
+                  aria-describedby={
+                    fieldErrors.tahapanId ? "report-stage-error" : undefined
+                  }
+                >
+                  <option value="">Pilih Tahapan</option>
+                  {stages
+                    .filter((stage) => stage.isActive !== false)
+                    .map((stage) => (
+                      <option key={stage.id} value={stage.id}>
+                        {stage.namaTahapan}
+                      </option>
+                    ))}
+                </select>
+                {fieldErrors.tahapanId && (
+                  <small
+                    id="report-stage-error"
+                    className="field-error"
+                    role="alert"
+                  >
+                    {fieldErrors.tahapanId}
+                  </small>
+                )}
+              </label>
+              {selectedStage?.requiresNomorPerangkat ? (
+                <label htmlFor="report-device">
+                  Nomor perangkat <b aria-hidden="true">*</b>
+                  <input
+                    id="report-device"
+                    aria-label="Nomor Perangkat"
+                    value={form.nomorPerangkat}
+                    onChange={(event) =>
+                      setField("nomorPerangkat", event.target.value)
+                    }
+                    required
+                    aria-invalid={Boolean(fieldErrors.nomorPerangkat)}
+                    aria-describedby={
+                      fieldErrors.nomorPerangkat
+                        ? "report-device-error"
+                        : undefined
+                    }
+                  />
+                  {fieldErrors.nomorPerangkat && (
+                    <small
+                      id="report-device-error"
+                      className="field-error"
+                      role="alert"
+                    >
+                      {fieldErrors.nomorPerangkat}
+                    </small>
+                  )}
+                </label>
+              ) : (
+                <div className="field-placeholder">
+                  <Icon name="info" />
+                  <span>
+                    Nomor perangkat akan muncul jika diwajibkan pada tahapan
+                    terpilih.
+                  </span>
+                </div>
+              )}
+            </div>
+          </section>
+          <section className="form-section">
+            <div className="form-section-title">
+              <span>2</span>
+              <div>
+                <h2>Catatan pekerjaan</h2>
+                <p>Jelaskan hasil pekerjaan secara ringkas dan jelas.</p>
+              </div>
+            </div>
+            <label htmlFor="report-description">
+              Keterangan <b aria-hidden="true">*</b>
+              <textarea
+                className="resize-none"
+                id="report-description"
+                aria-label="Keterangan"
+                placeholder="Contoh: Penanaman tiang di RW 01 sebanyak 12 titik. Kondisi lokasi aman."
+                value={form.keterangan}
+                onChange={(event) => setField("keterangan", event.target.value)}
+                maxLength="2000"
+                required
+                aria-invalid={Boolean(fieldErrors.keterangan)}
+                aria-describedby={
+                  fieldErrors.keterangan
+                    ? "report-description-error"
+                    : undefined
+                }
+              />
+              {fieldErrors.keterangan && (
+                <small
+                  id="report-description-error"
+                  className="field-error"
+                  role="alert"
+                >
+                  {fieldErrors.keterangan}
+                </small>
+              )}
+            </label>
+            <div className="character-count">
+              {form.keterangan.length} / 2.000
+            </div>
+          </section>
+          <section className="form-section">
+            <div className="form-section-title">
+              <span>3</span>
+              <div>
+                <h2>Dokumentasi</h2>
+                <p>Unggah 1–5 foto yang menunjukkan kegiatan dan lokasi.</p>
+              </div>
+            </div>
+            <FilePicker
+              files={files}
+              onChange={(nextFiles) => {
+                clearFieldError("dokumentasi");
+                setFiles(nextFiles);
+              }}
+            />
+            {fieldErrors.dokumentasi && (
+              <p className="field-error" role="alert">
+                {fieldErrors.dokumentasi}
+              </p>
+            )}
+          </section>
+          {error && <Notice tone="error">{error}</Notice>}
+          <div className="form-actions">
+            <button
+              className="primary-button icon-label"
+              type="submit"
+              disabled={submitting}
+            >
+              <span>{submitting ? "Mengirim..." : "Kirim laporan"}</span>
+              <Icon name="report" />
+            </button>
+          </div>
+        </form>
+        <aside className="submission-checklist">
+          <h2>Sebelum mengirim</h2>
+          <ul>
+            <li>
+              <Icon name="check" />
+              <span>Pastikan tanggal dan lokasi kegiatan sudah benar.</span>
+            </li>
+            <li>
+              <Icon name="check" />
+              <span>Tulis hasil pekerjaan yang dapat dipahami tim.</span>
+            </li>
+            <li>
+              <Icon name="check" />
+              <span>Pilih foto yang jelas dan sesuai kegiatan.</span>
+            </li>
+          </ul>
+        </aside>
+      </div>
+    </section>
+  );
 }

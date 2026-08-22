@@ -29,7 +29,7 @@ export function createReportService({ prisma, storage, clock = () => new Date() 
     if (![today, yesterday].includes(parsed.data.tanggalKegiatan)) throw reportError('DATE_VALIDATION', 'Tanggal kegiatan hanya boleh hari ini atau kemarin.')
 
     const [rw, tahapan] = await Promise.all([
-      prisma.rw.findFirst({ where: { id: parsed.data.rwId, isActive: true } }),
+      prisma.rw.findFirst({ where: { id: parsed.data.rwId, isActive: true, desa: { isActive: true } } }),
       prisma.tahapan.findFirst({ where: { id: parsed.data.tahapanId, isActive: true } }),
     ])
     if (!rw) throw reportError('REFERENCE_INVALID', 'RW tidak aktif atau tidak ditemukan.')
@@ -38,8 +38,8 @@ export function createReportService({ prisma, storage, clock = () => new Date() 
 
     const reportId = randomUUID()
     const uploadedPaths = []
-    const documentation = files.map((file, index) => ({
-      path: `reports/${actor.id}/${reportId}/${index + 1}.${extensionFor(file.mimetype, file.originalname)}`,
+    const documentation = files.map((file) => ({
+      path: `laporan/${actor.id}/${parsed.data.tanggalKegiatan}/${reportId}/${randomUUID()}.${extensionFor(file.mimetype, file.originalname)}`,
       file,
     }))
 
@@ -82,10 +82,19 @@ export function createReportService({ prisma, storage, clock = () => new Date() 
 
   async function getReportDetail({ actor, reportId }) {
     const where = actor.role === 'SUPERADMIN' ? { id: reportId } : { id: reportId, userId: actor.id }
-    const report = await prisma.laporan.findFirst({ where, include: { dokumentasi: true } })
+    const report = await prisma.laporan.findFirst({
+      where,
+      include: {
+        user: { select: { id: true, nama: true, username: true } },
+        rw: { include: { desa: true } },
+        tahapan: true,
+        dokumentasi: true,
+      },
+    })
     if (!report) throw reportError('NOT_FOUND', 'Laporan tidak ditemukan.')
     const dokumentasi = await Promise.all(report.dokumentasi.map(async (item) => ({ ...item, signedUrl: await storage.createSignedUrl(item.storagePath, 600) })))
-    return { ...report, dokumentasi }
+    const editableUntilDate = new Date(new Date(report.createdAt).getTime() + 24 * 60 * 60 * 1000)
+    return { ...report, dokumentasi, editableUntil: editableUntilDate.toISOString(), canEdit: actor.role === 'PEGAWAI' && clock().getTime() <= editableUntilDate.getTime() }
   }
 
   async function updateReport({ actor, reportId, fields }) {
@@ -97,18 +106,26 @@ export function createReportService({ prisma, storage, clock = () => new Date() 
       if (typeof fields.keterangan !== 'string' || fields.keterangan.trim().length < 5 || fields.keterangan.trim().length > 2000) throw reportError('VALIDATION', 'Keterangan harus 5 sampai 2.000 karakter.')
       data.keterangan = fields.keterangan.trim()
     }
-    if (fields.tanggalKegiatan !== undefined) data.tanggalKegiatan = new Date(`${fields.tanggalKegiatan}T00:00:00.000Z`)
+    if (fields.tanggalKegiatan !== undefined) {
+      const today = jakartaDate(clock())
+      const yesterday = jakartaDate(new Date(clock().getTime() - 86_400_000))
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(fields.tanggalKegiatan) || ![today, yesterday].includes(fields.tanggalKegiatan)) throw reportError('DATE_VALIDATION', 'Tanggal kegiatan hanya boleh hari ini atau kemarin.')
+      data.tanggalKegiatan = new Date(`${fields.tanggalKegiatan}T00:00:00.000Z`)
+    }
     if (fields.rwId !== undefined) {
-      if (!await prisma.rw.findFirst({ where: { id: fields.rwId, isActive: true } })) throw reportError('REFERENCE_INVALID', 'RW tidak aktif atau tidak ditemukan.')
+      if (!await prisma.rw.findFirst({ where: { id: fields.rwId, isActive: true, desa: { isActive: true } } })) throw reportError('REFERENCE_INVALID', 'RW tidak aktif atau tidak ditemukan.')
       data.rwId = fields.rwId
     }
-    if (fields.tahapanId !== undefined) {
-      const tahapan = await prisma.tahapan.findFirst({ where: { id: fields.tahapanId, isActive: true } })
+    if (fields.tahapanId !== undefined || fields.nomorPerangkat !== undefined) {
+      const targetTahapanId = fields.tahapanId || report.tahapanId
+      const tahapan = await prisma.tahapan.findFirst({ where: { id: targetTahapanId, isActive: true } })
       if (!tahapan) throw reportError('REFERENCE_INVALID', 'Tahapan tidak aktif atau tidak ditemukan.')
-      if (tahapan.requiresNomorPerangkat && !fields.nomorPerangkat) throw reportError('VALIDATION', 'Nomor Perangkat wajib diisi untuk Tahapan ini.')
-      data.tahapanId = fields.tahapanId
+      const stageChanged = fields.tahapanId !== undefined && fields.tahapanId !== report.tahapanId
+      const nomorPerangkat = fields.nomorPerangkat !== undefined ? String(fields.nomorPerangkat).trim() : (stageChanged ? '' : report.nomorPerangkat)
+      if (tahapan.requiresNomorPerangkat && !nomorPerangkat) throw reportError('VALIDATION', 'Nomor Perangkat wajib diisi untuk Tahapan ini.')
+      if (fields.tahapanId !== undefined) data.tahapanId = fields.tahapanId
+      data.nomorPerangkat = tahapan.requiresNomorPerangkat ? nomorPerangkat : null
     }
-    if (fields.nomorPerangkat !== undefined) data.nomorPerangkat = fields.nomorPerangkat.trim() || null
     return prisma.laporan.update({ where: { id: reportId }, data })
   }
 

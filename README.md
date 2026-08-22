@@ -26,6 +26,16 @@ npm run prisma:seed -w backend
 
 Password demo tidak disimpan di repository; gunakan nilai `SEED_ADMIN_PASSWORD` dan `SEED_EMPLOYEE_PASSWORD` dari `.env` saat seed, lalu login menggunakan username `superadmin` atau salah satu username pegawai yang tercantum di `backend/prisma/seed-data.js`.
 
+## Akun demo
+
+- `superadmin`
+- `pegawai.dewasari`
+- `pegawai.kertasari`
+- `pegawai.pamalayan`
+- `pegawai.handapherang`
+
+Superadmin dapat memantau dashboard, memfilter/mengekspor laporan, mengelola akun pegawai, dan mengelola master Desa, RW, serta Tahapan. Pegawai dapat membuat laporan, melihat histori/detail, dan mengedit data laporan miliknya selama 24 jam tanpa mengganti dokumentasi.
+
 ## Menjalankan
 
 ```powershell
@@ -42,6 +52,7 @@ Mode tanpa `.env` masih dapat menjalankan health slice untuk pengembangan UI. Fi
 ```powershell
 npm test
 npm run build
+npm run lint -w frontend
 npx prisma validate --config backend/prisma.config.ts
 git diff --check
 ```

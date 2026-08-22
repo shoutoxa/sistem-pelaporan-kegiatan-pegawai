@@ -9,5 +9,7 @@ describe('AdminReportsPage', () => {
     render(<AdminReportsPage />)
     fireEvent.change(screen.getByLabelText(/dari tanggal/i), { target: { value: '2026-08-22' } })
     await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => String(url).includes('from=2026-08-22'))).toBe(true))
+    expect(screen.getByLabelText(/pegawai/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/tahapan/i)).toBeInTheDocument()
   })
 })

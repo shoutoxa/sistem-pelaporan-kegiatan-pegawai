@@ -33,4 +33,25 @@ describe('ReportForm', () => {
     expect(body.get('desaId')).toBeNull()
     expect(body.get('nomorPerangkat')).toBe('ODN-01')
   })
+
+  it('associates canonical server validation errors with their fields without clearing the form', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => [{ id: 'r1', nomorRw: 'RW 01' }] })
+      .mockResolvedValueOnce({ ok: false, status: 400, json: async () => ({ message: 'Data laporan tidak valid', errors: { rwId: 'RW tidak tersedia', keterangan: 'Keterangan perlu diperjelas' } }) })
+    vi.stubGlobal('fetch', fetchMock)
+    render(<MemoryRouter><ReportForm user={user} villages={villages} stages={stages} /></MemoryRouter>)
+
+    fireEvent.change(screen.getByLabelText(/desa/i), { target: { value: 'd1' } })
+    await waitFor(() => expect(screen.getByRole('option', { name: 'RW 01' })).toBeInTheDocument())
+    fireEvent.change(screen.getByLabelText(/rw/i), { target: { value: 'r1' } })
+    fireEvent.change(screen.getByLabelText(/tahapan/i), { target: { value: 't2' } })
+    fireEvent.change(screen.getByLabelText(/keterangan/i), { target: { value: 'Kegiatan lapangan selesai' } })
+    fireEvent.change(screen.getByLabelText(/dokumentasi/i), { target: { files: [new File(['photo'], 'photo.jpg', { type: 'image/jpeg' })] } })
+    fireEvent.click(screen.getByRole('button', { name: /kirim laporan/i }))
+
+    expect(await screen.findByText('RW tidak tersedia')).toBeInTheDocument()
+    expect(screen.getByText('Keterangan perlu diperjelas')).toBeInTheDocument()
+    expect(screen.getByLabelText(/rw/i)).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByLabelText(/keterangan/i)).toHaveValue('Kegiatan lapangan selesai')
+  })
 })

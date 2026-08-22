@@ -10,3 +10,7 @@ export function createReport(formState) {
   formState.files.forEach((file) => body.append('dokumentasi', file))
   return http.request('/api/laporan', { method: 'POST', body })
 }
+
+export function updateReport(id, fields) {
+  return http.request(`/api/laporan/${id}`, { method: 'PUT', body: JSON.stringify(fields) })
+}

@@ -26,7 +26,7 @@ export function createApp({ healthCheck, authRouter, masterRouter, reportRouter,
 
   app.use((error, _request, response, _next) => {
     console.error(error)
-    return response.status(500).json({ error: 'Terjadi kesalahan pada server.' })
+    return response.status(500).json({ message: 'Terjadi kesalahan pada server.' })
   })
 
   return app

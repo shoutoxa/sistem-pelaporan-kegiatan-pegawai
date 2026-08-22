@@ -18,4 +18,6 @@ Tanggal checklist: 2026-08-22. Status remote Supabase: migration, seed, bucket p
 
 Smoke tambahan: ekspor Excel Superadmin berhasil (HTTP 200, workbook 6.626 byte). Data bukti remote memakai keterangan `Smoke test laporan end-to-end`.
 
-Automated verification terakhir: backend 14 suite/26 test dan frontend 13 suite/14 test lulus; lint tanpa error; `npm run build` lulus.
+Automated verification terakhir (2026-08-22): backend 16 suite/39 test dan frontend 15 suite/18 test lulus; lint tanpa error; `npm run build` dan validasi skema Prisma lulus. Smoke browser remote belum diulang setelah penambahan fitur edit laporan dan CRUD Pegawai.
+
+Smoke UI lokal terakhir: halaman login lolos pada desktop dan viewport 390×844 tanpa error konsol atau overflow horizontal. Area terautentikasi belum diulang melalui browser agar kredensial tidak dimasukkan tanpa konfirmasi khusus.

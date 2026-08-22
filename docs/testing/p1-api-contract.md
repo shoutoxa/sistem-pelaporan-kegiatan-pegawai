@@ -1,6 +1,6 @@
 # P1 API contract
 
-Semua endpoint berada di prefix `/api` dan memakai cookie session HttpOnly, kecuali health. Error memakai `{ "error": "..." }`.
+Semua endpoint berada di prefix `/api` dan memakai cookie session HttpOnly, kecuali health. Error memakai `{ "message": "...", "errors": { ... } }`; `errors` hanya disertakan untuk kesalahan field.
 
 | Method | Path | Auth | Ringkasan |
 |---|---|---|---|
@@ -18,6 +18,8 @@ Semua endpoint berada di prefix `/api` dan memakai cookie session HttpOnly, kecu
 | GET | `/api/admin/dashboard` | Superadmin | Metrik dashboard |
 | GET | `/api/admin/laporan` | Superadmin | Daftar laporan dengan filter/pagination |
 | GET | `/api/admin/laporan/export` | Superadmin | File XLSX dengan filter yang sama |
-| GET/PATCH | `/api/admin/pegawai`, `/api/admin/pegawai/:id/status` | Superadmin | Daftar dan soft-disable Pegawai |
+| GET/POST | `/api/admin/pegawai` | Superadmin | Daftar dan membuat Pegawai |
+| PUT | `/api/admin/pegawai/:id` | Superadmin | Memperbarui profil, kewajiban laporan, status, dan password opsional |
+| PATCH | `/api/admin/pegawai/:id/status` | Superadmin | Soft-disable atau mengaktifkan Pegawai |
 
 Endpoint CRUD master admin tersedia pada `/api/admin/desa`, `/api/admin/rw`, dan `/api/admin/tahapan` dengan pola POST/PUT/PATCH status.

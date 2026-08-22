@@ -28,6 +28,6 @@ describe('auth routes', () => {
       .send({ username: 'ayu', password: 'bad' })
 
     expect(response.status).toBe(401)
-    expect(response.body).toEqual({ error: 'Username atau password tidak valid.' })
+    expect(response.body).toEqual({ message: 'Username atau password tidak valid.' })
   })
 })

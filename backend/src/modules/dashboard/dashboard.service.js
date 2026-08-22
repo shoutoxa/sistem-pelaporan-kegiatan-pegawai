@@ -8,7 +8,8 @@ export function createDashboardService({ prisma, clock = () => new Date() }) {
         prisma.user.findMany({ where: { role: 'PEGAWAI', isActive: true, wajibLapor: true }, select: { id: true, nama: true } }),
         prisma.laporan.findMany({ where: { tanggalKegiatan: dateValue(selectedDate) }, include: { rw: { include: { desa: true } }, tahapan: true }, orderBy: { createdAt: 'desc' } }),
       ])
-      const reportedIds = new Set(reports.map((report) => report.userId))
+      const wajibLaporIds = new Set(users.map((user) => user.id))
+      const reportedIds = new Set(reports.filter((report) => wajibLaporIds.has(report.userId)).map((report) => report.userId))
       const byDesa = new Map()
       const byTahapan = new Map()
       for (const report of reports) {

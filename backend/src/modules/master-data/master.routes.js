@@ -3,7 +3,11 @@ import { statusSchema } from './master.schemas.js'
 
 function sendError(error, response) {
   const statuses = { VALIDATION: 400, DUPLICATE: 409, INACTIVE_PARENT: 422, NOT_FOUND: 404 }
-  return response.status(statuses[error.code] || 500).json({ error: error.message || 'Terjadi kesalahan pada server.' })
+  const message = error.message || 'Terjadi kesalahan pada server.'
+  const fieldByResource = { desa: 'namaDesa', rw: 'nomorRw', tahapan: 'namaTahapan' }
+  const field = error.field || (error.code === 'DUPLICATE' ? fieldByResource[error.resource] : undefined)
+  const errors = error.errors || (field ? { [field]: message } : undefined)
+  return response.status(statuses[error.code] || 500).json({ message, ...(errors ? { errors } : {}) })
 }
 
 export function createMasterRouter({ service, requireAuth, requireSuperadmin } = {}) {
@@ -29,7 +33,7 @@ export function createMasterRouter({ service, requireAuth, requireSuperadmin } =
     router.patch(`/admin/${resource}/:id/status`, ...adminGuard, async (request, response) => {
       try {
         const parsed = statusSchema.safeParse(request.body)
-        if (!parsed.success) return response.status(400).json({ error: 'Status aktif harus boolean.' })
+        if (!parsed.success) return response.status(400).json({ message: 'Status aktif harus boolean.', errors: { isActive: 'Status aktif harus boolean.' } })
         return response.json(await service.setActive(resource, request.params.id, parsed.data.isActive))
       } catch (error) { return sendError(error, response) }
     })

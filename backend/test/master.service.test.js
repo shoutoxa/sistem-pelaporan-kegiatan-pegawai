@@ -34,6 +34,17 @@ describe('master data service', () => {
     await expect(service.listActiveTahapan()).resolves.toEqual([{ id: 't1', namaTahapan: 'Penggalian Lubang', isActive: true }])
   })
 
+  it('requires an active parent Desa when listing RW for a new report', async () => {
+    const prisma = createFakePrisma()
+    let receivedWhere
+    prisma.rw.findMany = async ({ where }) => { receivedWhere = where; return [] }
+    const service = createMasterService({ prisma })
+
+    await service.listActiveRwByDesa('d1')
+
+    expect(receivedWhere).toEqual({ desaId: 'd1', isActive: true, desa: { isActive: true } })
+  })
+
   it('normalizes names and rejects duplicate or inactive parent data', async () => {
     const prisma = createFakePrisma()
     prisma.desa.findFirst = async ({ where }) => where.namaDesa === 'Dewasari' ? { id: 'd1', isActive: true } : null

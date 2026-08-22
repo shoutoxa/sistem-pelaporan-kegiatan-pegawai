@@ -6,7 +6,8 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { files: 5, fil
 
 function sendError(error, response) {
   const statuses = { VALIDATION: 400, FILE_VALIDATION: 400, FILE_LIMIT: 413, DATE_VALIDATION: 422, EDIT_EXPIRED: 422, REFERENCE_INVALID: 422, NOT_FOUND: 404, STORAGE_ERROR: 500, DATABASE_ERROR: 500 }
-  return response.status(statuses[error.code] || 500).json({ error: error.message || 'Terjadi kesalahan pada server.' })
+  const message = error.message || 'Terjadi kesalahan pada server.'
+  return response.status(statuses[error.code] || 500).json({ message, ...(error.errors ? { errors: error.errors } : {}) })
 }
 
 export function createReportRouter({ reportService, requirePegawai, requireAuth } = {}) {
@@ -21,7 +22,13 @@ export function createReportRouter({ reportService, requirePegawai, requireAuth 
     try {
       const files = await Promise.all((request.files || []).map(async (file) => {
         const detected = await fileTypeFromBuffer(file.buffer)
-        return { ...file, mimetype: detected?.mime || file.mimetype }
+        if (!detected || !['image/jpeg', 'image/png', 'image/webp'].includes(detected.mime)) {
+          const error = new Error('Format foto harus JPG, PNG, atau WEBP.')
+          error.code = 'FILE_VALIDATION'
+          error.errors = { dokumentasi: error.message }
+          throw error
+        }
+        return { ...file, mimetype: detected.mime }
       }))
       const result = await reportService.createReport({ actor: request.user, fields: request.body, files })
       return response.status(201).json({ message: 'Laporan berhasil disimpan.', data: { id: result.id, createdAt: result.createdAt } })

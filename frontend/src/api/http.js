@@ -11,9 +11,9 @@ export const http = {
     let body = null
     try { body = await response.json() } catch { /* 204 responses have no body */ }
     if (!response.ok) {
-      const error = new Error(body?.error || 'Permintaan gagal.')
+      const message = body?.message || body?.error || 'Permintaan gagal.'
+      const error = new Error(message)
       error.status = response.status
-      error.message = body?.error || 'Permintaan gagal.'
       error.errors = body?.errors
       throw error
     }
