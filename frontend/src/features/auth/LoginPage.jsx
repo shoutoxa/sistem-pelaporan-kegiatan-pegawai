@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Navigate, useNavigate } from 'react-router-dom'
 import { useAuth } from './AuthProvider.jsx'
 
 export default function LoginPage() {
@@ -10,7 +10,7 @@ export default function LoginPage() {
   const [submitting, setSubmitting] = useState(false)
 
   if (!loading && user) {
-    navigate(user.role === 'SUPERADMIN' ? '/admin' : '/pegawai', { replace: true })
+    return <Navigate to={user.role === 'SUPERADMIN' ? '/admin/dashboard' : '/pegawai/laporan/new'} replace />
   }
 
   async function handleSubmit(event) {
@@ -19,7 +19,7 @@ export default function LoginPage() {
     setSubmitting(true)
     try {
       const signedInUser = await login(form)
-      navigate(signedInUser.role === 'SUPERADMIN' ? '/admin' : '/pegawai', { replace: true })
+      navigate(signedInUser.role === 'SUPERADMIN' ? '/admin/dashboard' : '/pegawai/laporan/new', { replace: true })
     } catch (requestError) {
       setError(requestError.message || 'Username atau password tidak valid.')
     } finally {

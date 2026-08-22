@@ -2,9 +2,11 @@ import { useEffect, useRef, useState } from 'react'
 
 export default function FilePicker({ files, onChange, maxFiles = 5, maxBytes = 10_000_000 }) {
   const [error, setError] = useState('')
-  const urls = useRef(new Map())
+  const [urls, setUrls] = useState(() => new Map())
+  const urlsRef = useRef(urls)
 
-  useEffect(() => () => { urls.current.forEach((url) => URL.revokeObjectURL(url)); urls.current.clear() }, [])
+  useEffect(() => { urlsRef.current = urls }, [urls])
+  useEffect(() => () => { urlsRef.current.forEach((url) => URL.revokeObjectURL(url)); urlsRef.current.clear() }, [])
 
   function handleChange(event) {
     const selected = Array.from(event.target.files || [])
@@ -14,17 +16,21 @@ export default function FilePicker({ files, onChange, maxFiles = 5, maxBytes = 1
     const oversized = selected.find((file) => file.size > maxBytes)
     if (oversized) { setError('Ukuran setiap foto maksimal 10 MB.'); return }
     setError('')
-    selected.forEach((file) => urls.current.set(file, URL.createObjectURL(file)))
+    setUrls((current) => {
+      const next = new Map(current)
+      selected.forEach((file) => next.set(file, URL.createObjectURL(file)))
+      return next
+    })
     onChange([...files, ...selected])
     event.target.value = ''
   }
 
   function removeFile(file) {
-    const url = urls.current.get(file)
+    const url = urls.get(file)
     if (url) URL.revokeObjectURL(url)
-    urls.current.delete(file)
+    setUrls((current) => { const next = new Map(current); next.delete(file); return next })
     onChange(files.filter((item) => item !== file))
   }
 
-  return <div className="file-picker"><label>Dokumentasi<input aria-label="Dokumentasi" type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={handleChange} /></label><p>{files.length} dari maksimal {maxFiles} foto</p>{error && <p role="alert">{error}</p>}<div className="preview-grid">{files.map((file) => <figure key={`${file.name}-${file.lastModified}`}><img src={urls.current.get(file) || URL.createObjectURL(file)} alt={file.name} /><figcaption><span>{file.name}</span><button type="button" onClick={() => removeFile(file)}>Hapus</button></figcaption></figure>)}</div></div>
+  return <div className="file-picker"><label>Dokumentasi<input aria-label="Dokumentasi" type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={handleChange} /></label><p>{files.length} dari maksimal {maxFiles} foto</p>{error && <p role="alert">{error}</p>}<div className="preview-grid">{files.map((file) => <figure key={`${file.name}-${file.lastModified}`}><img src={urls.get(file)} alt={file.name} /><figcaption><span>{file.name}</span><button type="button" onClick={() => removeFile(file)}>Hapus</button></figcaption></figure>)}</div></div>
 }

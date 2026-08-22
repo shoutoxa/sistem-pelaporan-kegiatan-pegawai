@@ -11,7 +11,7 @@ function renderLogin(fetchMock) {
       <AuthProvider>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
-          <Route path="/pegawai" element={<p>pegawai-home</p>} />
+          <Route path="/pegawai/laporan/new" element={<p>pegawai-report-form</p>} />
         </Routes>
       </AuthProvider>
     </MemoryRouter>,
@@ -30,7 +30,7 @@ describe('LoginPage', () => {
     fireEvent.change(screen.getByLabelText(/password/i), { target: { value: 'secret' } })
     fireEvent.click(screen.getByRole('button', { name: /masuk/i }))
 
-    await waitFor(() => expect(screen.getByText('pegawai-home')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('pegawai-report-form')).toBeInTheDocument())
   })
 
   it('shows the public invalid credential message', async () => {

@@ -1,19 +1,21 @@
 # P1 smoke checklist
 
-Tanggal checklist: 2026-08-22. Status remote Supabase: belum dijalankan karena kredensial `.env` belum tersedia di workspace ini.
+Tanggal checklist: 2026-08-22. Status remote Supabase: migration, seed, bucket privat, dan vertical slice laporan sudah diverifikasi pada project Supabase lokal-demo.
 
-- [ ] `GET /api/health` mengembalikan status API/database.
-- [ ] Login Superadmin berhasil dan cookie session bersifat HttpOnly.
-- [ ] Login Pegawai berhasil; kredensial salah memakai pesan umum.
-- [ ] Pegawai tidak dapat membuka route Superadmin.
+- [x] `GET /api/health` mengembalikan status API/database (`database: up`).
+- [x] Login Superadmin berhasil dan cookie session bersifat HttpOnly.
+- [x] Login Pegawai berhasil; kredensial salah memakai pesan umum dan status 401.
+- [x] Pegawai tidak dapat membuka route Superadmin (status 403).
 - [ ] Superadmin dapat membaca dan soft-disable Desa, RW, dan Tahapan.
-- [ ] Dropdown RW tetap disabled sebelum Desa dipilih dan reset saat Desa berubah.
-- [ ] Tahapan yang memerlukan perangkat menampilkan field Nomor Perangkat.
-- [ ] Pegawai mengirim satu laporan dengan 1–5 foto yang valid.
-- [ ] Foto tersimpan di bucket privat dan detail memakai signed URL 600 detik.
-- [ ] Upload atau transaksi gagal membersihkan object Storage yang sudah ter-upload.
-- [ ] Histori Pegawai hanya menampilkan laporan miliknya.
-- [ ] Dashboard memisahkan sudah/belum melapor dari jumlah baris laporan.
-- [ ] Submit ulang tidak membuat laporan kedua ketika tombol sedang disabled.
+- [x] Dropdown RW tetap disabled sebelum Desa dipilih dan reset saat Desa berubah (automated UI test).
+- [x] Tahapan yang memerlukan perangkat menampilkan field Nomor Perangkat (automated UI test).
+- [x] Pegawai mengirim satu laporan dengan satu foto valid ke remote Supabase.
+- [x] Foto tersimpan di bucket privat dan detail memakai signed URL 600 detik.
+- [x] Upload atau transaksi gagal membersihkan object Storage yang sudah ter-upload (automated service test).
+- [x] Histori Pegawai hanya menampilkan laporan miliknya.
+- [x] Dashboard memisahkan sudah/belum melapor dari jumlah baris laporan.
+- [x] Submit ulang tidak membuat laporan kedua ketika tombol sedang disabled (automated UI test).
 
-Automated verification terakhir: backend 14 suite/26 test dan frontend 12 suite/13 test lulus; `npm run build` lulus.
+Smoke tambahan: ekspor Excel Superadmin berhasil (HTTP 200, workbook 6.626 byte). Data bukti remote memakai keterangan `Smoke test laporan end-to-end`.
+
+Automated verification terakhir: backend 14 suite/26 test dan frontend 13 suite/14 test lulus; lint tanpa error; `npm run build` lulus.

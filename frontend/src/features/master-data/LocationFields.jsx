@@ -2,14 +2,15 @@ import { useEffect, useState } from 'react'
 import { masterApi } from '../../api/master.js'
 
 export default function LocationFields({ value, onChange, errors = {}, desaOptions: desaProp }) {
-  const [desaOptions, setDesaOptions] = useState([])
+  const [fetchedDesaOptions, setFetchedDesaOptions] = useState([])
   const [rwOptions, setRwOptions] = useState([])
-  const [selectedDesa, setSelectedDesa] = useState(value.desaId || '')
   const [loadingRw, setLoadingRw] = useState(false)
+  const desaOptions = desaProp || fetchedDesaOptions
+  const selectedDesa = value.desaId || ''
 
   useEffect(() => {
-    if (desaProp) { setDesaOptions(desaProp); return }
-    masterApi.fetchDesa().then(setDesaOptions).catch(() => setDesaOptions([]))
+    if (desaProp) return
+    masterApi.fetchDesa().then(setFetchedDesaOptions).catch(() => setFetchedDesaOptions([]))
   }, [desaProp])
 
   async function loadRw(desaId) {
@@ -18,16 +19,8 @@ export default function LocationFields({ value, onChange, errors = {}, desaOptio
     try { setRwOptions(await masterApi.fetchRwByDesa(desaId)) } finally { setLoadingRw(false) }
   }
 
-  useEffect(() => {
-    if (value.desaId && value.desaId !== selectedDesa) {
-      setSelectedDesa(value.desaId)
-      loadRw(value.desaId)
-    }
-  }, [value.desaId])
-
   async function handleDesaChange(event) {
     const desaId = event.target.value
-    setSelectedDesa(desaId)
     setRwOptions([])
     onChange({ desaId, rwId: '' })
     await loadRw(desaId)

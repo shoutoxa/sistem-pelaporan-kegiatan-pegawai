@@ -21,7 +21,8 @@ export async function createProductionDashboardRouter({ authService } = {}) {
   ])
   const sessionService = authService || await (await import('../auth/auth.routes.js')).createProductionAuthService()
   let storage
-  if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) storage = (await import('../../config/supabase.js')).createSupabaseStorage()
+  const hasStorageKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (process.env.SUPABASE_URL && hasStorageKey) storage = (await import('../../config/supabase.js')).createSupabaseStorage()
   const authMiddleware = requireAuth({ authService: sessionService })
   return createDashboardRouter({ dashboardService: createDashboardService({ prisma }), historyService: createHistoryService({ prisma, storage }), requireAuth: authMiddleware, requireSuperadmin: requireRole('SUPERADMIN') })
 }
