@@ -11,6 +11,8 @@ describe('HistoryPage', () => {
     expect(screen.getByText(/Dewasari/)).toBeInTheDocument()
     expect(screen.getByText('ODP-01')).toBeInTheDocument()
     expect(screen.getByText('1 foto')).toBeInTheDocument()
+    expect(screen.getByText('Kegiatan selesai').closest('td')).toHaveAttribute('data-label', 'Keterangan')
+    expect(screen.getByRole('table')).toHaveClass('employee-history-table')
     expect(screen.getByRole('link', { name: /edit/i })).toHaveAttribute('href', '/pegawai/laporan/r1/edit')
   })
 })

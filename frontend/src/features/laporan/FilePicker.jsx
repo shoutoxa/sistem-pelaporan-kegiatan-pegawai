@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 export default function FilePicker({
   files,
@@ -10,6 +10,8 @@ export default function FilePicker({
   const [dragging, setDragging] = useState(false);
   const [urls, setUrls] = useState(() => new Map());
   const urlsRef = useRef(urls);
+  const cameraInputId = useId();
+  const galleryInputId = "report-gallery-input";
 
   useEffect(() => {
     urlsRef.current = urls;
@@ -73,7 +75,7 @@ export default function FilePicker({
 
   return (
     <div className="file-picker">
-      <label
+      <div
         className={`upload-zone ${dragging ? "dragging" : ""}`}
         onDragOver={(event) => {
           event.preventDefault();
@@ -82,25 +84,38 @@ export default function FilePicker({
         onDragLeave={() => setDragging(false)}
         onDrop={handleDrop}
       >
-        <span className="upload-icon" aria-hidden="true">
-          ↑
-        </span>
-        <span>
+        <span className="upload-icon" aria-hidden="true">↑</span>
+        <div className="upload-copy">
           <strong>
-            Seret dan lepas foto di sini, atau <u>pilih dari perangkat</u>
+            Tambahkan foto kegiatan dari kamera atau galeri
           </strong>
           <small>
             JPG, PNG, atau WEBP · Maks. 10 MB per foto · 1–{maxFiles} foto
           </small>
-        </span>
+        </div>
+        <div className="upload-actions">
+          <label className="secondary-button" htmlFor={cameraInputId}>Ambil foto</label>
+          <label className="primary-button" htmlFor={galleryInputId}>Pilih galeri</label>
+        </div>
         <input
+          className="sr-only"
+          id={cameraInputId}
+          aria-label="Ambil foto dengan kamera"
+          type="file"
+          accept="image/*"
+          capture="environment"
+          onChange={handleChange}
+        />
+        <input
+          className="sr-only"
+          id={galleryInputId}
           aria-label="Dokumentasi"
           type="file"
           accept="image/jpeg,image/png,image/webp"
           multiple
           onChange={handleChange}
         />
-      </label>
+      </div>
       <div className="file-picker-meta">
         <span>
           {files.length} dari {maxFiles} foto dipilih

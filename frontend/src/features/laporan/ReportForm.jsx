@@ -17,17 +17,53 @@ function jakartaToday() {
   }).format(new Date());
 }
 
-export default function ReportForm({ user, villages, stages: stageProp }) {
-  const navigate = useNavigate();
-  const [stages, setStages] = useState(stageProp || []);
-  const [form, setForm] = useState({
+const DRAFT_PREFIX = "sistem-pelaporan:report-draft:v1";
+
+function emptyReportForm() {
+  return {
     tanggalKegiatan: jakartaToday(),
     desaId: "",
     rwId: "",
     tahapanId: "",
     keterangan: "",
     nomorPerangkat: "",
-  });
+  };
+}
+
+function hasDraftContent(form) {
+  return form.tanggalKegiatan !== jakartaToday() || [
+    form.desaId,
+    form.rwId,
+    form.tahapanId,
+    form.keterangan,
+    form.nomorPerangkat,
+  ].some((value) => value.trim());
+}
+
+function readDraft(key) {
+  try {
+    const stored = JSON.parse(localStorage.getItem(key));
+    if (!stored || typeof stored !== "object") return null;
+    const fallback = emptyReportForm();
+    const normalized = Object.fromEntries(
+      Object.keys(fallback).map((field) => [
+        field,
+        typeof stored[field] === "string" ? stored[field] : fallback[field],
+      ]),
+    );
+    return hasDraftContent(normalized) ? normalized : null;
+  } catch {
+    return null;
+  }
+}
+
+export default function ReportForm({ user, villages, stages: stageProp }) {
+  const navigate = useNavigate();
+  const draftKey = `${DRAFT_PREFIX}:${user?.id || "pegawai"}`;
+  const [initialDraft] = useState(() => readDraft(draftKey));
+  const [stages, setStages] = useState(stageProp || []);
+  const [form, setForm] = useState(() => initialDraft || emptyReportForm());
+  const [draftRestored, setDraftRestored] = useState(Boolean(initialDraft));
   const [files, setFiles] = useState([]);
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState({});
@@ -40,6 +76,14 @@ export default function ReportForm({ user, villages, stages: stageProp }) {
         .then(setStages)
         .catch(() => setStages([]));
   }, [stageProp]);
+  useEffect(() => {
+    try {
+      if (hasDraftContent(form)) localStorage.setItem(draftKey, JSON.stringify(form));
+      else localStorage.removeItem(draftKey);
+    } catch {
+      // A failed local draft must never block the report workflow.
+    }
+  }, [draftKey, form]);
   const selectedStage = useMemo(
     () => stages.find((stage) => stage.id === form.tahapanId),
     [stages, form.tahapanId],
@@ -55,6 +99,37 @@ export default function ReportForm({ user, villages, stages: stageProp }) {
     clearFieldError(key);
     setForm((current) => ({ ...current, [key]: value }));
   };
+
+  function focusFirstInvalid(errors) {
+    const fieldByError = {
+      tanggalKegiatan: "report-date",
+      desaId: "report-village",
+      rwId: "report-rw",
+      tahapanId: "report-stage",
+      nomorPerangkat: "report-device",
+      keterangan: "report-description",
+      dokumentasi: "report-gallery-input",
+    };
+    const firstId = Object.keys(errors).map((key) => fieldByError[key]).find(Boolean);
+    requestAnimationFrame(() => {
+      const target = firstId ? document.getElementById(firstId) : null;
+      target?.focus();
+      target?.scrollIntoView?.({ behavior: "smooth", block: "center" });
+    });
+  }
+
+  function clearDraft() {
+    try {
+      localStorage.removeItem(draftKey);
+    } catch {
+      // Resetting the visible form remains useful even without storage access.
+    }
+    setForm(emptyReportForm());
+    setFiles([]);
+    setFieldErrors({});
+    setError("");
+    setDraftRestored(false);
+  }
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -72,16 +147,24 @@ export default function ReportForm({ user, villages, stages: stageProp }) {
     if (Object.keys(validationErrors).length) {
       setFieldErrors(validationErrors);
       setError("Lengkapi field yang masih bermasalah.");
+      focusFirstInvalid(validationErrors);
       return;
     }
     setFieldErrors({});
     setSubmitting(true);
     try {
       const result = await createReport({ ...form, files });
+      try {
+        localStorage.removeItem(draftKey);
+      } catch {
+        // Submission success must not depend on browser storage availability.
+      }
       navigate(`/pegawai/laporan/${result.data.id}`);
     } catch (requestError) {
-      setFieldErrors(requestError.errors || {});
+      const serverErrors = requestError.errors || {};
+      setFieldErrors(serverErrors);
       setError(requestError.message || "Laporan gagal dikirim.");
+      focusFirstInvalid(serverErrors);
     } finally {
       setSubmitting(false);
     }
@@ -93,6 +176,16 @@ export default function ReportForm({ user, villages, stages: stageProp }) {
         title="Buat laporan harian"
         description="Lengkapi informasi kegiatan dan dokumentasi pekerjaan Anda di lapangan."
       />
+      {draftRestored && (
+        <div className="draft-notice" role="status" aria-label="Draf laporan">
+          <Icon name="history" />
+          <div>
+            <strong>Draf sebelumnya dipulihkan</strong>
+            <small>Isian teks tersimpan di perangkat ini. Foto perlu dipilih kembali.</small>
+          </div>
+          <button className="text-button" type="button" onClick={clearDraft}>Hapus draf</button>
+        </div>
+      )}
       <div className="report-layout">
         <form className="report-form" onSubmit={handleSubmit} noValidate>
           <div className="form-progress" aria-hidden="true">
@@ -235,6 +328,15 @@ export default function ReportForm({ user, villages, stages: stageProp }) {
                 </div>
               )}
             </div>
+            {selectedStage?.instruksiDokumentasi && (
+              <div className="stage-guidance" role="status">
+                <Icon name="photo" />
+                <div>
+                  <strong>Panduan foto untuk tahapan ini</strong>
+                  <p>{selectedStage.instruksiDokumentasi}</p>
+                </div>
+              </div>
+            )}
           </section>
           <section className="form-section">
             <div className="form-section-title">

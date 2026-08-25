@@ -117,7 +117,7 @@ export default function EditReportPage() {
         description="Dokumentasi tetap tersimpan; Anda dapat memperbaiki data kegiatan selama batas 24 jam."
       />
       {error && <Notice tone="error">{error}</Notice>}
-      <form className="data-section report-form" onSubmit={save} noValidate>
+      <form className="data-section report-form edit-report-form" onSubmit={save} noValidate>
         <div className="field-grid">
           <label>
             Tanggal kegiatan
@@ -168,6 +168,14 @@ export default function EditReportPage() {
               }
             />
           </label>
+        )}
+        {selectedStage?.instruksiDokumentasi && (
+          <div className="stage-guidance" role="status">
+            <span>
+              <strong>Panduan foto tahapan</strong>
+              <p>{selectedStage.instruksiDokumentasi}</p>
+            </span>
+          </div>
         )}
         <label>
           Keterangan

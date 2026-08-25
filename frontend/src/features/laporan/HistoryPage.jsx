@@ -16,6 +16,7 @@ export default function HistoryPage() {
     limit: 20,
   });
   const [stages, setStages] = useState([]);
+  const [requestVersion, setRequestVersion] = useState(0);
   useEffect(() => {
     masterApi
       .fetchTahapan()
@@ -23,15 +24,22 @@ export default function HistoryPage() {
       .catch(() => setStages([]));
   }, []);
   useEffect(() => {
+    let active = true;
     setState("loading");
     historyApi
       .listMine(filters)
       .then((response) => {
+        if (!active) return;
         setResult(response.data);
         setState("ready");
       })
-      .catch(() => setState("error"));
-  }, [filters]);
+      .catch(() => {
+        if (active) setState("error");
+      });
+    return () => {
+      active = false;
+    };
+  }, [filters, requestVersion]);
   if (state === "loading")
     return (
       <section className="page">
@@ -48,6 +56,7 @@ export default function HistoryPage() {
           tone="error"
           title="Histori tidak dapat dimuat"
           message="Periksa koneksi server, lalu muat kembali halaman."
+          action={<button className="secondary-button" type="button" onClick={() => setRequestVersion((current) => current + 1)}>Coba lagi</button>}
         />
       </section>
     );
@@ -106,6 +115,11 @@ export default function HistoryPage() {
             </select>
           </label>
         </div>
+        {(filters.tanggal || filters.tahapanId) && (
+          <button className="text-button" type="button" onClick={() => setFilters((current) => ({ ...current, tanggal: "", tahapanId: "", page: 1 }))}>
+            Hapus filter
+          </button>
+        )}
       </section>
       <section className="data-section table-panel">
         <div className="section-heading">
@@ -115,7 +129,7 @@ export default function HistoryPage() {
           </div>
         </div>
         <div className="table-wrap">
-          <table>
+          <table className="employee-history-table">
             <caption className="sr-only">Histori laporan pegawai</caption>
             <thead>
               <tr>
@@ -132,7 +146,7 @@ export default function HistoryPage() {
             <tbody>
               {result.items.map((item) => (
                 <tr key={item.id}>
-                  <td>
+                  <td data-label="Tanggal">
                     {String(item.tanggalKegiatan).slice(0, 10)}
                     <small className="table-subline">
                       {item.createdAt
@@ -143,23 +157,23 @@ export default function HistoryPage() {
                         : "-"}
                     </small>
                   </td>
-                  <td>
+                  <td data-label="Lokasi">
                     {item.rw?.desa?.namaDesa} · {item.rw?.nomorRw}
                   </td>
-                  <td>
+                  <td data-label="Tahapan">
                     <strong>{item.tahapan?.namaTahapan}</strong>
                   </td>
-                  <td>{item.nomorPerangkat || "-"}</td>
-                  <td className="description-cell">{item.keterangan}</td>
-                  <td>{item.dokumentasi?.length || 0} foto</td>
-                  <td>
+                  <td data-label="Perangkat">{item.nomorPerangkat || "-"}</td>
+                  <td data-label="Keterangan" className="description-cell">{item.keterangan}</td>
+                  <td data-label="Dokumentasi">{item.dokumentasi?.length || 0} foto</td>
+                  <td data-label="Status edit">
                     <span
                       className={`status-badge ${item.canEdit ? "active" : "inactive"}`}
                     >
                       {item.canEdit ? "Dapat diedit" : "Terkunci"}
                     </span>
                   </td>
-                  <td>
+                  <td data-label="Aksi">
                     <div className="table-actions">
                       <Link
                         className="table-link"

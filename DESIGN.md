@@ -61,7 +61,7 @@ Antarmuka mengikuti dunia buku kerja survey lapangan: tinta gelap, garis pencata
 - **Audience and primary job:** Pegawai lapangan mengirim laporan harian dengan cepat; Superadmin memantau kepatuhan, data, dan aktivitas terbaru.
 - **Target market and evidence:** Operasional internal Indonesia berdasarkan spesifikasi `docs/superpowers/specs/2026-08-21-sistem-pelaporan-kegiatan-pegawai-design.md`.
 - **Locale and language policy:** Antarmuka berbahasa Indonesia; format tanggal bisnis menggunakan zona `Asia/Jakarta`.
-- **Usage scene:** Laptop kantor dan ponsel lapangan, dipakai berulang setiap hari, dengan kepadatan informasi menengah.
+- **Usage scene:** Pegawai terutama memakai ponsel di lapangan dengan satu tangan; Superadmin terutama memakai laptop kantor. Keduanya dipakai berulang setiap hari dengan kepadatan informasi menengah.
 - **Register:** Product. Kejelasan tugas, aksesibilitas, dan konsistensi lebih penting daripada dekorasi.
 - **Memorable signature:** Rel aktivitas oranye vertikal yang menghubungkan bagian penting pada dashboard dan formulir.
 - **Restraint:** Tabel, input, dan area baca menggunakan permukaan putih, aturan garis, dan sedikit bayangan. Aksen oranye hanya untuk progres atau perhatian.
@@ -78,7 +78,7 @@ Judul memakai keluarga humanis `Aptos Display` dengan fallback Windows yang stab
 
 ## Layout
 
-Desktop memakai sidebar tetap selebar `sidebar` dan kanvas terbuka maksimal `page-max`. Mobile mengubah sidebar menjadi header ringkas dan navigasi horizontal yang dapat digulir. Formulir tetap mengalir alami; tabel memiliki overflow horizontal sendiri. Ritme utama menggunakan gutter 24px dan jarak vertikal 16/24/32px. Kontrol penting minimal 44px.
+Desktop memakai sidebar tetap selebar `sidebar` dan kanvas terbuka maksimal `page-max`. Pada area Pegawai, mobile memakai header identitas ringkas dan navigasi bawah dua tujuan yang mengikuti safe area perangkat; area Superadmin tetap mengubah sidebar menjadi navigasi horizontal. Formulir mengalir satu kolom dengan kelompok bertahap dan aksi kirim yang mudah dijangkau. Histori Pegawai berubah menjadi kartu berlabel, bukan tabel yang harus digeser. Ritme utama menggunakan gutter 24px dan jarak vertikal 16/24/32px. Kontrol penting minimal 44px.
 
 ## Elevation & Depth
 
@@ -104,7 +104,7 @@ Sidebar adalah pemilik navigasi desktop. Item aktif memakai blok hijau tegas. Ta
 
 ### Forms and overlays
 
-Field memiliki label eksplisit, helper/error terasosiasi, tinggi minimal 44px, dan `noValidate`. Native select dan date diterima untuk prototipe karena popup platform-owned dianggap cukup. Textarea tidak dapat di-resize dan memiliki tinggi memadai. Upload memakai zona berpagar putus-putus dengan picker yang tetap dapat diakses.
+Field memiliki label eksplisit, helper/error terasosiasi, tinggi minimal 44px, dan `noValidate`. Native select dan date diterima untuk prototipe karena popup platform-owned dianggap cukup. Textarea tidak dapat di-resize dan memiliki tinggi memadai. Upload memakai zona berpagar putus-putus dengan jalur kamera belakang dan galeri yang terpisah di ponsel. Isian laporan non-sensitif disimpan sebagai draf lokal per pengguna; foto tidak disimpan ke penyimpanan browser dan harus dipilih kembali.
 
 ### Iconography
 

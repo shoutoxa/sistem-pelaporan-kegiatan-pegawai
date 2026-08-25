@@ -9,6 +9,13 @@ function file(name, size, type = 'image/jpeg') {
 }
 
 describe('FilePicker', () => {
+  it('offers separate camera and gallery inputs for phone users', () => {
+    render(<FilePicker files={[]} onChange={vi.fn()} />)
+
+    expect(screen.getByLabelText(/ambil foto dengan kamera/i)).toHaveAttribute('capture', 'environment')
+    expect(screen.getByLabelText(/dokumentasi/i)).toHaveAttribute('multiple')
+  })
+
   it('rejects a sixth file and a file over 10 MB', () => {
     const onChange = vi.fn()
     render(<FilePicker files={[]} onChange={onChange} />)

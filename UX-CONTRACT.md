@@ -74,7 +74,7 @@ Native select/date ownership accepts operating-system popup geometry for the one
 | Edit master | Simpan perubahan | Stable busy button | Stay on Master Data | Inline status | Keep editor open + error | Editor/list context | API contract |
 | Toggle status | Aktifkan/Nonaktifkan | Disable relevant action | Stay on list | Inline status | Inline error + retry action | Updated row/list | Spec 8 |
 | Search/filter | Date fields | Stable list frame | Same route | Result count | Empty/error copy | Filter/list heading | API contract |
-| Upload | Pilih foto | File row state | Stay in report form | Preview row | Per-file inline error/remove | Upload zone/file row | Spec 9.3 |
+| Upload | Ambil foto/Pilih galeri | File row state | Stay in report form | Preview row | Per-file inline error/remove | Upload zone/file row | Spec 9.3 |
 | Cancel/back | Batal/Kembali | None | Owning route | None | Unsaved guard target for later | Originating context | Route structure |
 
 No report deletion exists in the MVP. Master “nonaktif” is reversible and must never be presented as permanent deletion.
@@ -84,10 +84,10 @@ No report deletion exists in the MVP. Master “nonaktif” is reversible and mu
 - Route document title policy: `{Halaman} — Sistem Pelaporan`.
 - Route error / 403 page behavior: App-owned access-denied page with link to an allowed destination.
 - Breadcrumb/tab/route-state policy: Sidebar navigation owns top-level routes; back links own detail-to-list transitions.
-- Sidebar/drawer/bottom-sheet transformation: Persistent desktop sidebar becomes compact top shell and horizontally scrollable navigation under 860px.
-- Responsive table strategy: Horizontal scroll with visible cue; do not silently hide columns.
+- Sidebar/drawer/bottom-sheet transformation: Area Pegawai menggunakan header identitas ringkas dan navigasi bawah dua tujuan di bawah 860px; area Superadmin mempertahankan compact top shell dan navigasi horizontal.
+- Responsive table strategy: Tabel admin memakai horizontal scroll dengan isyarat terlihat. Histori Pegawai berubah menjadi kartu berlabel pada layar ponsel tanpa menghilangkan data atau aksi.
 - Truncation/full-value access: Descriptions wrap; identifiers are not clipped without a detail path.
-- Focus restoration and sticky-obstruction policy: `scroll-margin` and visible focus; no sticky bottom bar on mobile.
+- Focus restoration and sticky-obstruction policy: `scroll-margin`, fokus error pertama, dan visible focus. Aksi form Pegawai boleh sticky tepat di atas navigasi bawah serta wajib menghormati safe area.
 
 ## Overlays and feedback
 
@@ -103,7 +103,7 @@ No report deletion exists in the MVP. Master “nonaktif” is reversible and mu
 
 - Mutation default: Pessimistic.
 - Idempotency and duplicate-submit policy: Submit buttons disabled and busy until response.
-- Auto-save/draft recovery: Not implemented in prototype.
+- Auto-save/draft recovery: Form laporan baru menyimpan draf versi per pengguna di `localStorage`. Hanya field non-sensitif yang disimpan; berkas/foto tidak dipersistenkan, draf dapat dihapus, dan draf dibersihkan setelah kirim berhasil.
 - Offline/read-stale/write behavior: Preserve entered form data; show actionable error.
 - Retry/backoff/timeout behavior: Manual retry; dashboard has manual refresh and 30-second polling.
 - Version conflict and multi-tab behavior: Backend remains authoritative; no optimistic editing.

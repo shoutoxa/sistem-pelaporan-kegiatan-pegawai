@@ -1,13 +1,15 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import ReportForm from './ReportForm.jsx'
 
 const user = { id: 'u1', nama: 'Ayu Pegawai', role: 'PEGAWAI' }
 const villages = [{ id: 'd1', namaDesa: 'Dewasari' }]
-const stages = [{ id: 't1', namaTahapan: 'Pemasangan ODN', requiresNomorPerangkat: true }, { id: 't2', namaTahapan: 'Absensi Mulai', requiresNomorPerangkat: false }]
+const stages = [{ id: 't1', namaTahapan: 'Pemasangan ODN', requiresNomorPerangkat: true, instruksiDokumentasi: 'Foto perangkat dan label nomor harus terbaca.' }, { id: 't2', namaTahapan: 'Absensi Mulai', requiresNomorPerangkat: false }]
 
 describe('ReportForm', () => {
+  beforeEach(() => localStorage.clear())
+
   it('shows the device number only when the selected stage requires it and submits FormData', async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce({ ok: true, json: async () => [{ id: 'r1', nomorRw: 'RW 01' }] })
@@ -27,6 +29,7 @@ describe('ReportForm', () => {
     fireEvent.click(screen.getByRole('button', { name: /kirim laporan/i }))
 
     await waitFor(() => expect(screen.getByText('success')).toBeInTheDocument())
+    expect(localStorage.getItem('sistem-pelaporan:report-draft:v1:u1')).toBeNull()
     const body = fetchMock.mock.calls[1][1].body
     expect(body).toBeInstanceOf(FormData)
     expect(body.get('rwId')).toBe('r1')
@@ -53,5 +56,25 @@ describe('ReportForm', () => {
     expect(screen.getByText('Keterangan perlu diperjelas')).toBeInTheDocument()
     expect(screen.getByLabelText(/rw/i)).toHaveAttribute('aria-invalid', 'true')
     expect(screen.getByLabelText(/keterangan/i)).toHaveValue('Kegiatan lapangan selesai')
+  })
+
+  it('restores a versioned mobile draft and shows documentation guidance for the selected stage', async () => {
+    localStorage.setItem('sistem-pelaporan:report-draft:v1:u1', JSON.stringify({
+      tanggalKegiatan: '2026-08-22',
+      desaId: 'd1',
+      rwId: 'r1',
+      tahapanId: 't1',
+      keterangan: 'Pemasangan selesai di sisi utara',
+      nomorPerangkat: 'ODN-22',
+    }))
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => [{ id: 'r1', nomorRw: 'RW 01' }] }))
+
+    render(<MemoryRouter><ReportForm user={user} villages={villages} stages={stages} /></MemoryRouter>)
+
+    expect(screen.getByRole('status', { name: /draf laporan/i })).toHaveTextContent(/draf sebelumnya dipulihkan/i)
+    expect(screen.getByLabelText(/keterangan/i)).toHaveValue('Pemasangan selesai di sisi utara')
+    expect(screen.getByLabelText(/nomor perangkat/i)).toHaveValue('ODN-22')
+    expect(screen.getByText('Foto perangkat dan label nomor harus terbaca.')).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByRole('option', { name: 'RW 01' })).toBeInTheDocument())
   })
 })
