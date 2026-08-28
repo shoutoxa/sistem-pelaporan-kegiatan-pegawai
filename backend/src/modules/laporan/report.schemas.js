@@ -5,8 +5,7 @@ export const reportSchema = z.object({
   clusterId: z.string().min(1),
   pekerjaanId: z.string().min(1),
   keterangan: z.string().trim().min(5).max(2000),
-  nomorPerangkat: z.string().trim().max(200).optional().default(''),
-  diterima: z.boolean().optional().default(false),
+  nomorPerangkat: z.string().trim().max(20).optional().default(''),
 })
 
 export function reportError(code, message = code) {

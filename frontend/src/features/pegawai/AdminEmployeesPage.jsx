@@ -25,6 +25,8 @@ export default function AdminEmployeesPage() {
   const [fieldErrors, setFieldErrors] = useState({})
   const [showPassword, setShowPassword] = useState(false)
   const [uploadingPhotoId, setUploadingPhotoId] = useState('')
+  const activeCount = rows.filter((row) => row.isActive).length
+  const wajibLaporCount = rows.filter((row) => row.wajibLapor).length
 
   const load = () => {
     setState('loading')
@@ -136,7 +138,7 @@ export default function AdminEmployeesPage() {
   }
 
   return (
-    <section className="page">
+    <section className="page employee-page">
       <PageHeader
         title="Pegawai"
         description="Kelola akun, foto profil, dan kewajiban pelaporan anggota tim."
@@ -148,6 +150,23 @@ export default function AdminEmployeesPage() {
       />
       {message && <Notice tone="success">{message}</Notice>}
       {error && <Notice tone="error">{error}</Notice>}
+      <section className="employee-summary" aria-label="Ringkasan data pegawai">
+        <article>
+          <span>Total pegawai</span>
+          <strong>{rows.length}</strong>
+          <small>akun terdaftar</small>
+        </article>
+        <article>
+          <span>Akun aktif</span>
+          <strong className="success-value">{activeCount}</strong>
+          <small>siap digunakan</small>
+        </article>
+        <article>
+          <span>Wajib lapor</span>
+          <strong className="signal-value">{wajibLaporCount}</strong>
+          <small>mengisi laporan harian</small>
+        </article>
+      </section>
       {showForm && (
         <form className="data-section employee-form" onSubmit={save} noValidate>
           <div className="section-heading">
@@ -284,7 +303,7 @@ export default function AdminEmployeesPage() {
           }
         />
       ) : (
-        <section className="data-section table-panel">
+        <section className="data-section table-panel employee-table-panel">
           <div className="section-heading">
             <div>
               <h2>Daftar Pegawai</h2>
@@ -292,7 +311,7 @@ export default function AdminEmployeesPage() {
             </div>
           </div>
           <div className="table-wrap">
-            <table>
+            <table className="employee-table">
               <caption className="sr-only">Daftar akun pegawai</caption>
               <thead>
                 <tr>
@@ -308,7 +327,7 @@ export default function AdminEmployeesPage() {
               <tbody>
                 {rows.map((row) => (
                   <tr key={row.id}>
-                    <td>
+                    <td data-label="Foto profil">
                       <div className="avatar-cell">
                         {row.fotoProfil ? (
                           <img
@@ -335,22 +354,22 @@ export default function AdminEmployeesPage() {
                         </label>
                       </div>
                     </td>
-                    <td>
+                    <td data-label="Nama">
                       <strong>{row.nama}</strong>
                     </td>
-                    <td>
+                    <td data-label="Username">
                       <code>{row.username}</code>
                     </td>
-                    <td>{row.nomorHp || '-'}</td>
-                    <td>{row.wajibLapor ? 'Ya' : 'Tidak'}</td>
-                    <td>
+                    <td data-label="Nomor HP">{row.nomorHp || '-'}</td>
+                    <td data-label="Wajib lapor">{row.wajibLapor ? 'Ya' : 'Tidak'}</td>
+                    <td data-label="Status">
                       <span
                         className={`status-badge ${row.isActive ? 'active' : 'inactive'}`}
                       >
                         {row.isActive ? 'Aktif' : 'Nonaktif'}
                       </span>
                     </td>
-                    <td>
+                    <td data-label="Aksi">
                       <div className="table-actions">
                         <button
                           className="secondary-button"
@@ -379,6 +398,13 @@ export default function AdminEmployeesPage() {
                   <tr>
                     <td className="empty-cell" colSpan="7">
                       Memuat data Pegawai...
+                    </td>
+                  </tr>
+                )}
+                {state !== 'loading' && rows.length === 0 && (
+                  <tr>
+                    <td className="empty-cell" colSpan="7">
+                      Belum ada akun pegawai. Tambahkan pegawai untuk mulai mengatur pelaporan.
                     </td>
                   </tr>
                 )}

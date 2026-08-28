@@ -1,43 +1,19 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { dashboardApi } from '../../api/dashboard.js'
-import { masterApi } from '../../api/master.js'
 import PageHeader from '../../components/PageHeader.jsx'
 import PageState from '../../components/PageState.jsx'
 import Icon from '../../components/Icon.jsx'
 
 export default function DokumentasiPage() {
-  const [filters, setFilters] = useState({
-    desaId: '',
-    pekerjaanId: '',
-    search: '',
-  })
-  const [options, setOptions] = useState({
-    villages: [],
-    jobs: [],
-  })
   const [data, setData] = useState({ items: [], total: 0 })
   const [state, setState] = useState('loading')
-
-  useEffect(() => {
-    Promise.all([
-      masterApi.fetchDesa(),
-      masterApi.fetchPekerjaan(),
-    ])
-      .then(([villages, jobs]) => {
-        setOptions({
-          villages: Array.isArray(villages) ? villages : [],
-          jobs: Array.isArray(jobs) ? jobs : [],
-        })
-      })
-      .catch(() => {})
-  }, [])
 
   useEffect(() => {
     let active = true
     setState('loading')
     dashboardApi
-      .listDocumentation(filters)
+      .listDocumentation()
       .then((res) => {
         if (active) {
           setData(res.data)
@@ -50,17 +26,7 @@ export default function DokumentasiPage() {
     return () => {
       active = false
     }
-  }, [filters])
-
-  const updateFilter = (key, value) => {
-    setFilters((current) => ({ ...current, [key]: value }))
-  }
-
-  const resetFilters = () => {
-    setFilters({ desaId: '', pekerjaanId: '', search: '' })
-  }
-
-  const hasFilters = Boolean(filters.desaId || filters.pekerjaanId || filters.search)
+  }, [])
 
   // Group photos by Hierarchy: Cluster (Cluster / Desa) -> Pekerjaan -> Foto
   const groupedByCluster = data.items.reduce((acc, item) => {
@@ -87,7 +53,7 @@ export default function DokumentasiPage() {
     <section className="page documentation-page">
       <PageHeader
         title="Dokumentasi Kegiatan"
-        description="Galeri dokumentasi foto kegiatan proyek berdasarkan hirarki Cluster dan Pekerjaan."
+        description="Galeri dokumentasi foto kegiatan proyek berdasarkan hirarki Desa, RW, dan Pekerjaan."
         action={
           <button className="secondary-button icon-label no-print" onClick={handlePrint}>
             <Icon name="download" />
@@ -95,58 +61,6 @@ export default function DokumentasiPage() {
           </button>
         }
       />
-
-      <section className="filter-bar no-print" aria-label="Filter dokumentasi">
-        <div className="filter-fields">
-          <label htmlFor="filter-doc-search">
-            Cari Keterangan / PIC
-            <input
-              id="filter-doc-search"
-              type="text"
-              placeholder="Cari..."
-              value={filters.search}
-              onChange={(e) => updateFilter('search', e.target.value)}
-            />
-          </label>
-          <label htmlFor="filter-doc-desa">
-            Cluster / Desa
-            <select
-              id="filter-doc-desa"
-              aria-label="Cluster / Desa"
-              value={filters.desaId}
-              onChange={(e) => updateFilter('desaId', e.target.value)}
-            >
-              <option value="">Semua Cluster / Desa</option>
-              {options.villages.map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.namaDesa}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label htmlFor="filter-doc-pekerjaan">
-            Pekerjaan
-            <select
-              id="filter-doc-pekerjaan"
-              aria-label="Pekerjaan"
-              value={filters.pekerjaanId}
-              onChange={(e) => updateFilter('pekerjaanId', e.target.value)}
-            >
-              <option value="">Semua Pekerjaan</option>
-              {options.jobs.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.namaPekerjaan}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-        {hasFilters && (
-          <button className="text-button" type="button" onClick={resetFilters}>
-            Hapus filter
-          </button>
-        )}
-      </section>
 
       {state === 'loading' && (
         <PageState
@@ -166,11 +80,7 @@ export default function DokumentasiPage() {
       {state === 'ready' && data.items.length === 0 && (
         <PageState
           title="Tidak ada dokumentasi"
-          message={
-            hasFilters
-              ? 'Tidak ditemukan foto yang sesuai dengan filter yang dipilih.'
-              : 'Belum ada foto dokumentasi yang diunggah pada sistem.'
-          }
+          message="Belum ada foto dokumentasi yang diunggah pada sistem."
         />
       )}
 
@@ -180,17 +90,17 @@ export default function DokumentasiPage() {
             <div key={clusterTitle} className="desa-group-card data-section">
               <div className="section-heading desa-heading">
                 <div>
-                  <h2>Cluster: {clusterTitle}</h2>
+                  <h2>Lokasi: {clusterTitle}</h2>
                   <p>
                     {Object.values(pekerjaanMap).reduce((sum, list) => sum + list.length, 0)} foto terdaftar
                   </p>
                 </div>
               </div>
 
-              <div className="tahapan-group-list">
+              <div className="pekerjaan-group-list">
                 {Object.entries(pekerjaanMap).map(([pekerjaanName, photos]) => (
-                  <div key={pekerjaanName} className="tahapan-subcard">
-                    <h3 className="tahapan-subheading">Pekerjaan: {pekerjaanName}</h3>
+                  <div key={pekerjaanName} className="pekerjaan-subcard">
+                    <h3 className="pekerjaan-subheading">Pekerjaan: {pekerjaanName}</h3>
                     <div className="photo-grid">
                       {photos.map((item) => (
                         <div key={item.id} className="photo-card">
@@ -204,9 +114,6 @@ export default function DokumentasiPage() {
                               </span>
                               <span className="badge-tag stage-tag">{item.pekerjaan?.namaPekerjaan}</span>
                             </div>
-                            <p className="photo-pic">
-                              <strong>PIC:</strong> {item.pegawai?.nama || '-'} {item.pegawai?.nomorHp ? `(${item.pegawai.nomorHp})` : ''}
-                            </p>
                             <p className="photo-date">
                               <strong>Tanggal:</strong> {String(item.tanggalKegiatan || '').slice(0, 10)}
                             </p>

@@ -11,7 +11,7 @@ function createFakePrisma() {
       update: async ({ data }) => ({ id: 'd1', ...data }),
     },
     cluster: {
-      findMany: async () => [{ id: 'c1', desaId: 'd1', clusterName: 'Cluster 01', isActive: true }],
+      findMany: async () => [{ id: 'c1', desaId: 'd1', clusterName: 'RW 01', isActive: true }],
       findFirst: async () => null,
       create: async ({ data }) => ({ id: 'c2', ...data }),
       update: async ({ data }) => ({ id: 'c1', ...data }),
@@ -31,7 +31,7 @@ describe('master data service', () => {
     const service = createMasterService({ prisma })
 
     await expect(service.listActiveDesa()).resolves.toEqual([{ id: 'd1', namaDesa: 'Dewasari', isActive: true }])
-    await expect(service.listActiveClusterByDesa('d1')).resolves.toEqual([{ id: 'c1', desaId: 'd1', clusterName: 'Cluster 01', isActive: true }])
+    await expect(service.listActiveClusterByDesa('d1')).resolves.toEqual([{ id: 'c1', desaId: 'd1', clusterName: 'RW 01', isActive: true }])
     await expect(service.listActivePekerjaan()).resolves.toEqual([{ id: 'p1', namaPekerjaan: 'Penggalian Lubang', isActive: true }])
   })
 
@@ -54,7 +54,7 @@ describe('master data service', () => {
     const service = createMasterService({ prisma })
 
     await expect(service.create('desa', { namaDesa: '  Dewasari  ' })).rejects.toMatchObject({ code: 'DUPLICATE' })
-    await expect(service.create('cluster', { desaId: 'd2', clusterName: 'Cluster 02' })).rejects.toMatchObject({ code: 'INACTIVE_PARENT' })
+    await expect(service.create('cluster', { desaId: 'd2', clusterName: 'RW 02' })).rejects.toMatchObject({ code: 'INACTIVE_PARENT' })
   })
 
   it('soft-disables a master record with update, never delete', async () => {

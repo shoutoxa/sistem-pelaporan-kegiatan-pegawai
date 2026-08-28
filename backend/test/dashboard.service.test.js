@@ -6,10 +6,10 @@ describe('dashboard service', () => {
     const prisma = {
       user: { findMany: async () => [{ id: 'u1', nama: 'Ayu' }, { id: 'u2', nama: 'Budi' }, { id: 'u3', nama: 'Cici' }] },
       laporan: { findMany: async () => [
-        { id: 'r1', userId: 'u1', cluster: { clusterName: 'Cluster 01', desa: { namaDesa: 'Dewasari' } }, pekerjaan: { namaPekerjaan: 'ODN' }, createdAt: new Date('2026-08-22T01:00:00Z') },
-        { id: 'r2', userId: 'u1', cluster: { clusterName: 'Cluster 01', desa: { namaDesa: 'Dewasari' } }, pekerjaan: { namaPekerjaan: 'ODN' }, createdAt: new Date('2026-08-22T02:00:00Z') },
-        { id: 'r3', userId: 'u2', cluster: { clusterName: 'Cluster 02', desa: { namaDesa: 'Pamalayan' } }, pekerjaan: { namaPekerjaan: 'FO' }, createdAt: new Date('2026-08-22T03:00:00Z') },
-        { id: 'r4', userId: 'non-wajib', cluster: { clusterName: 'Cluster 02', desa: { namaDesa: 'Pamalayan' } }, pekerjaan: { namaPekerjaan: 'FO' }, createdAt: new Date('2026-08-22T04:00:00Z') },
+        { id: 'r1', userId: 'u1', cluster: { clusterName: 'RW 01', desa: { namaDesa: 'Dewasari' } }, pekerjaan: { namaPekerjaan: 'ODN' }, createdAt: new Date('2026-08-22T01:00:00Z') },
+        { id: 'r2', userId: 'u1', cluster: { clusterName: 'RW 01', desa: { namaDesa: 'Dewasari' } }, pekerjaan: { namaPekerjaan: 'ODN' }, createdAt: new Date('2026-08-22T02:00:00Z') },
+        { id: 'r3', userId: 'u2', cluster: { clusterName: 'RW 02', desa: { namaDesa: 'Pamalayan' } }, pekerjaan: { namaPekerjaan: 'FO' }, createdAt: new Date('2026-08-22T03:00:00Z') },
+        { id: 'r4', userId: 'non-wajib', cluster: { clusterName: 'RW 02', desa: { namaDesa: 'Pamalayan' } }, pekerjaan: { namaPekerjaan: 'FO' }, createdAt: new Date('2026-08-22T04:00:00Z') },
       ] },
       desa: { findMany: async () => [{ id: 'd1', namaDesa: 'Dewasari' }, { id: 'd2', namaDesa: 'Pamalayan' }] },
       pekerjaan: { findMany: async () => [{ id: 'p1', namaPekerjaan: 'ODN' }, { id: 'p2', namaPekerjaan: 'FO' }] },

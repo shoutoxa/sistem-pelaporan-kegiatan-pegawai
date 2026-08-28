@@ -62,10 +62,10 @@ export default function ReportDetailPage() {
     )
   const backTo = isAdmin ? '/admin/laporan' : '/pegawai/histori'
   const editAction =
-    report.canEdit && !isAdmin ? (
+    report.canEdit ? (
       <Link
         className="primary-button"
-        to={`/pegawai/laporan/${report.id}/edit`}
+        to={`${isAdmin ? '/admin' : '/pegawai'}/laporan/${report.id}/edit`}
       >
         Edit laporan
       </Link>
@@ -101,12 +101,6 @@ export default function ReportDetailPage() {
             )}
           </div>
           <dl>
-            {report.user?.nama && (
-              <div>
-                <dt>PIC</dt>
-                <dd>{report.user.nama} {report.user.nomorHp ? `(${report.user.nomorHp})` : ''}</dd>
-              </div>
-            )}
             <div>
               <dt>Status</dt>
               <dd>

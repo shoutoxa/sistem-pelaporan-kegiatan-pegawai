@@ -15,7 +15,7 @@ const emptyForms = {
   },
 }
 
-const labels = { desa: 'Desa', cluster: 'Cluster', pekerjaan: 'Pekerjaan' }
+const labels = { desa: 'Desa', cluster: 'RW', pekerjaan: 'Pekerjaan' }
 
 export default function AdminMasterPage() {
   const [data, setData] = useState({ desa: [], cluster: [], pekerjaan: [] })
@@ -113,7 +113,7 @@ export default function AdminMasterPage() {
     <section className="page">
       <PageHeader
         title="Master Data"
-        description="Kelola pilihan Desa, Cluster, dan Pekerjaan yang digunakan pada formulir laporan."
+        description="Kelola pilihan Desa, RW, dan Pekerjaan yang digunakan pada formulir laporan."
       />
       {message && <Notice tone="success">{message}</Notice>}
       {error && <Notice tone="error">{error}</Notice>}
@@ -170,10 +170,10 @@ export default function AdminMasterPage() {
                 </select>
               </label>
               <label>
-                Nama Cluster
+                Nama RW
                 <input
-                  aria-label="Nama Cluster"
-                  placeholder="Contoh: Cluster 01"
+                  aria-label="Nama RW"
+                  placeholder="Contoh: RW 01"
                   value={form.clusterName}
                   onChange={(event) =>
                     setForm({ ...form, clusterName: event.target.value })
@@ -200,7 +200,7 @@ export default function AdminMasterPage() {
       {state === 'loading' && data.desa.length === 0 ? (
         <PageState
           title="Menyiapkan master data"
-          message="Mengambil Desa, Cluster, dan Pekerjaan."
+            message="Mengambil Desa, RW, dan Pekerjaan."
         />
       ) : (
         <div className="master-stack">
@@ -213,14 +213,14 @@ export default function AdminMasterPage() {
             onToggleActive={(row) => toggle('desa', row)}
           />
           <MasterTable
-            title="Cluster"
+            title="RW"
             columns={[
               {
                 key: 'desaId',
                 label: 'Desa',
                 render: (row) => desaNames[row.desaId] || row.desa?.namaDesa || '-',
               },
-              { key: 'clusterName', label: 'Nama Cluster' },
+              { key: 'clusterName', label: 'Nama RW' },
             ]}
             rows={data.cluster}
             onCreate={() => openCreate('cluster')}

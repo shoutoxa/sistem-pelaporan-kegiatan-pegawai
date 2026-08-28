@@ -7,7 +7,7 @@ describe('master data routes', () => {
   it('serves active data for report forms', async () => {
     const service = {
       listActiveDesa: async () => [{ id: 'd1', namaDesa: 'Dewasari' }],
-      listActiveClusterByDesa: async () => [{ id: 'c1', clusterName: 'Cluster 01' }],
+      listActiveClusterByDesa: async () => [{ id: 'c1', clusterName: 'RW 01' }],
       listActivePekerjaan: async () => [{ id: 'p1', namaPekerjaan: 'Penggalian Lubang' }],
     }
     const response = await request(createApp({ masterRouter: createMasterRouter({ service }) })).get('/api/master/desa')

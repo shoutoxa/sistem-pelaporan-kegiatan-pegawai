@@ -5,7 +5,7 @@ import HistoryPage from './HistoryPage.jsx'
 
 describe('HistoryPage', () => {
   it('renders reports returned by the employee history endpoint', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ data: { items: [{ id: 'r1', tanggalKegiatan: '2026-08-22', createdAt: '2026-08-22T03:15:00Z', keterangan: 'Kegiatan selesai', nomorPerangkat: 'ODP-01', canEdit: true, dokumentasi: [{ id: 'f1' }], cluster: { clusterName: 'Cluster 01', desa: { namaDesa: 'Dewasari' } }, pekerjaan: { id: 'p1', namaPekerjaan: 'ODN' } }], total: 1, page: 1, limit: 20 } }) }))
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ data: { items: [{ id: 'r1', tanggalKegiatan: '2026-08-22', createdAt: '2026-08-22T03:15:00Z', keterangan: 'Kegiatan selesai', nomorPerangkat: 'ODP-01', canEdit: true, dokumentasi: [{ id: 'f1' }], cluster: { clusterName: 'RW 01', desa: { namaDesa: 'Dewasari' } }, pekerjaan: { id: 'p1', namaPekerjaan: 'ODN' } }], total: 1, page: 1, limit: 20 } }) }))
     render(<MemoryRouter><HistoryPage /></MemoryRouter>)
     await waitFor(() => expect(screen.getByText('Kegiatan selesai')).toBeInTheDocument())
     expect(screen.getByText(/Dewasari/)).toBeInTheDocument()

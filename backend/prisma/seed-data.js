@@ -1,8 +1,8 @@
 export const DEMO_VILLAGES = [
-  { name: 'Dewasari', clusters: ['Cluster 01', 'Cluster 02'] },
-  { name: 'Handapherang', clusters: ['Cluster 01', 'Cluster 02'] },
-  { name: 'Kertasari', clusters: ['Cluster 01', 'Cluster 02'] },
-  { name: 'Pamalayan', clusters: ['Cluster 01', 'Cluster 02'] },
+  { name: 'Dewasari', clusters: ['RW 01', 'RW 02'] },
+  { name: 'Handapherang', clusters: ['RW 01', 'RW 02'] },
+  { name: 'Kertasari', clusters: ['RW 01', 'RW 02'] },
+  { name: 'Pamalayan', clusters: ['RW 01', 'RW 02'] },
 ]
 
 export const DEMO_JOBS = [

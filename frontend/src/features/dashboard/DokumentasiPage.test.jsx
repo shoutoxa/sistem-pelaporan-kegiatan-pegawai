@@ -24,7 +24,7 @@ describe('DokumentasiPage', () => {
                 keterangan: 'Foto pengerjaan ODN',
                 pegawai: { nama: 'Budi' },
                 desa: { namaDesa: 'Handapherang' },
-                cluster: { clusterName: 'Cluster 02', desa: { namaDesa: 'Handapherang' } },
+                cluster: { clusterName: 'RW 02', desa: { namaDesa: 'Handapherang' } },
                 pekerjaan: { namaPekerjaan: 'Pemasangan ODN' },
               },
             ],

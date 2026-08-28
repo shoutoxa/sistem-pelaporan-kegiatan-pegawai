@@ -39,6 +39,7 @@ export default function App() {
               <Route path="dashboard" element={<DashboardPage />} />
               <Route path="laporan" element={<AdminReportsPage />} />
               <Route path="laporan/:id" element={<ReportDetailPage />} />
+              <Route path="laporan/:id/edit" element={<EditReportPage />} />
               <Route path="dokumentasi" element={<DokumentasiPage />} />
               <Route path="pegawai" element={<AdminEmployeesPage />} />
               <Route path="master" element={<AdminMasterPage />} />

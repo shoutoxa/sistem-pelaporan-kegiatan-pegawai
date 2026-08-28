@@ -15,7 +15,7 @@ export function createExportRouter({ exportService, requireAuth, requireSuperadm
 export async function createProductionExportRouter({ authService } = {}) {
   const [{ prisma }, { requireAuth, requireRole }, { createExportService }] = await Promise.all([import('../../config/prisma.js'), import('../auth/auth.middleware.js'), import('./export.service.js')])
   const sessionService = authService || await (await import('../auth/auth.routes.js')).createProductionAuthService()
-  const filtersToWhere = ({ from, to, pegawaiId, desaId, rwId, tahapanId }) => ({ ...(pegawaiId ? { userId: pegawaiId } : {}), ...(desaId ? { rw: { desaId } } : {}), ...(rwId ? { rwId } : {}), ...(tahapanId ? { tahapanId } : {}), ...((from || to) ? { tanggalKegiatan: { ...(from ? { gte: new Date(`${from}T00:00:00Z`) } : {}), ...(to ? { lte: new Date(`${to}T00:00:00Z`) } : {}) } } : {}) })
-  const exportService = createExportService({ rowsProvider: (filters) => prisma.laporan.findMany({ where: filtersToWhere(filters), include: { user: true, rw: { include: { desa: true } }, tahapan: true }, orderBy: { createdAt: 'desc' } }) })
+  const filtersToWhere = ({ from, to, pegawaiId, desaId, clusterId, pekerjaanId }) => ({ ...(pegawaiId ? { userId: pegawaiId } : {}), ...(desaId ? { cluster: { desaId } } : {}), ...(clusterId ? { clusterId } : {}), ...(pekerjaanId ? { pekerjaanId } : {}), ...((from || to) ? { tanggalKegiatan: { ...(from ? { gte: new Date(`${from}T00:00:00Z`) } : {}), ...(to ? { lte: new Date(`${to}T00:00:00Z`) } : {}) } } : {}) })
+  const exportService = createExportService({ rowsProvider: (filters) => prisma.laporan.findMany({ where: filtersToWhere(filters), include: { user: true, cluster: { include: { desa: true } }, pekerjaan: true }, orderBy: { createdAt: 'desc' } }) })
   return createExportRouter({ exportService, requireAuth: requireAuth({ authService: sessionService }), requireSuperadmin: requireRole('SUPERADMIN') })
 }

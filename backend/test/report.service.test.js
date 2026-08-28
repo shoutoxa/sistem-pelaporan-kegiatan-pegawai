@@ -61,7 +61,7 @@ describe('report service', () => {
       userId: 'user-1',
       createdAt: new Date('2026-08-22T01:00:00Z'),
       dokumentasi: [{ storagePath: 'reports/report-1/1.jpg' }],
-      ...(include?.cluster?.include?.desa ? { cluster: { clusterName: 'Cluster 01', desa: { namaDesa: 'Dewasari' } } } : {}),
+      ...(include?.cluster?.include?.desa ? { cluster: { clusterName: 'RW 01', desa: { namaDesa: 'Dewasari' } } } : {}),
       ...(include?.pekerjaan ? { pekerjaan: { namaPekerjaan: 'Penanaman Tiang' } } : {}),
       ...(include?.user ? { user: { nama: 'Pegawai Dewasari', nomorHp: '08123' } } : {}),
     }))
@@ -69,7 +69,7 @@ describe('report service', () => {
     const detail = await service.getReportDetail({ actor: { id: 'user-1', role: 'PEGAWAI' }, reportId: 'report-1' })
 
     expect(detail.dokumentasi[0].signedUrl).toBe('signed')
-    expect(detail).toMatchObject({ canEdit: true, cluster: { clusterName: 'Cluster 01', desa: { namaDesa: 'Dewasari' } }, pekerjaan: { namaPekerjaan: 'Penanaman Tiang' }, user: { nama: 'Pegawai Dewasari' } })
+    expect(detail).toMatchObject({ canEdit: true, cluster: { clusterName: 'RW 01', desa: { namaDesa: 'Dewasari' } }, pekerjaan: { namaPekerjaan: 'Penanaman Tiang' }, user: { nama: 'Pegawai Dewasari' } })
     expect(detail.editableUntil).toBe('2026-08-23T01:00:00.000Z')
     expect(storage.createSignedUrl).toHaveBeenCalledWith('reports/report-1/1.jpg', 600)
   })
@@ -106,5 +106,26 @@ describe('report service', () => {
     prisma.pekerjaan.findFirst.mockResolvedValueOnce({ id: 'job-1' })
     await service.updateReport({ actor: { id: 'user-1' }, reportId: 'report-1', fields: { pekerjaanId: 'job-1', nomorPerangkat: '' } })
     expect(prisma.laporan.update).toHaveBeenLastCalledWith({ where: { id: 'report-1' }, data: { pekerjaanId: 'job-1', nomorPerangkat: null } })
+  })
+
+  it('locks accepted reports and rejects employee status manipulation', async () => {
+    const prisma = makePrisma()
+    prisma.laporan.findFirst = vi.fn().mockResolvedValue({ id: 'report-1', userId: 'user-1', createdAt: new Date('2026-08-22T00:00:00Z'), diterima: true })
+    const service = createReportService({ prisma, storage: {}, clock: () => new Date('2026-08-22T04:00:00Z') })
+
+    await expect(service.updateReport({ actor: { id: 'user-1', role: 'PEGAWAI' }, reportId: 'report-1', fields: { keterangan: 'Perubahan tidak boleh' } })).rejects.toMatchObject({ code: 'LOCKED' })
+    prisma.laporan.findFirst.mockResolvedValue({ id: 'report-1', userId: 'user-1', createdAt: new Date('2026-08-22T00:00:00Z'), diterima: false })
+    await expect(service.updateReport({ actor: { id: 'user-1', role: 'PEGAWAI' }, reportId: 'report-1', fields: { diterima: true } })).rejects.toMatchObject({ code: 'FORBIDDEN' })
+  })
+
+  it('allows superadmin correction only after reopening a report', async () => {
+    const prisma = makePrisma()
+    prisma.laporan.findUnique = vi.fn().mockResolvedValue({ id: 'report-1', diterima: true })
+    prisma.laporan.update = vi.fn().mockResolvedValue({ id: 'report-1', keterangan: 'Koreksi' })
+    const service = createReportService({ prisma, storage: {}, clock: () => new Date('2026-08-22T04:00:00Z') })
+
+    await expect(service.updateReportByAdmin({ reportId: 'report-1', fields: { keterangan: 'Koreksi admin' } })).rejects.toMatchObject({ code: 'LOCKED' })
+    prisma.laporan.findUnique.mockResolvedValue({ id: 'report-1', diterima: false })
+    await expect(service.updateReportByAdmin({ reportId: 'report-1', fields: { keterangan: 'Koreksi admin' } })).resolves.toMatchObject({ id: 'report-1' })
   })
 })

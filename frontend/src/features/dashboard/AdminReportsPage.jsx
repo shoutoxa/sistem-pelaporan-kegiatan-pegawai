@@ -8,6 +8,7 @@ import PageState from '../../components/PageState.jsx'
 export default function AdminReportsPage() {
   const [page, setPage] = useState(1)
   const limit = 20
+  const [search, setSearch] = useState('')
   const [result, setResult] = useState({ items: [], total: 0 })
   const [state, setState] = useState('loading')
 
@@ -15,7 +16,7 @@ export default function AdminReportsPage() {
     let active = true
     setState('loading')
     dashboardApi
-      .listReports({ page, limit })
+      .listReports({ page, limit, search })
       .then((response) => {
         if (active) {
           setResult(response.data)
@@ -28,7 +29,7 @@ export default function AdminReportsPage() {
     return () => {
       active = false
     }
-  }, [page])
+  }, [page, search])
 
   const totalPages = Math.max(
     1,
@@ -41,6 +42,21 @@ export default function AdminReportsPage() {
         title="Laporan"
         description="Seluruh laporan kegiatan harian pegawai yang tercatat pada sistem."
       />
+      <section className="filter-bar" aria-label="Pencarian laporan">
+        <label htmlFor="report-search">
+          Cari laporan
+          <input
+            id="report-search"
+            type="search"
+            placeholder="Pegawai, lokasi/RW, atau pekerjaan..."
+            value={search}
+            onChange={(event) => {
+              setSearch(event.target.value)
+              setPage(1)
+            }}
+          />
+        </label>
+      </section>
       <section className="data-section table-panel">
         <div className="section-heading">
           <div>

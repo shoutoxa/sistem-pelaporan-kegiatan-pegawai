@@ -46,7 +46,7 @@ export function createMasterService({ prisma }) {
       data.clusterName = normalizeClusterName(data.clusterName)
       const parent = await prisma.desa.findUnique({ where: { id: data.desaId } })
       if (!parent || !parent.isActive) throw masterError('INACTIVE_PARENT', 'Desa tidak aktif atau tidak ditemukan.')
-      if (await prisma.cluster.findFirst({ where: { desaId_clusterName: { desaId: data.desaId, clusterName: data.clusterName } } })) throw masterError('DUPLICATE', 'Nama Cluster sudah digunakan pada Desa tersebut.')
+      if (await prisma.cluster.findFirst({ where: { desaId_clusterName: { desaId: data.desaId, clusterName: data.clusterName } } })) throw masterError('DUPLICATE', 'Nama RW sudah digunakan pada Desa tersebut.')
     }
     if (resource === 'pekerjaan') {
       data.namaPekerjaan = normalizeSpaces(data.namaPekerjaan)

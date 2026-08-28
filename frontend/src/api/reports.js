@@ -15,6 +15,10 @@ export function updateReport(id, fields) {
   return http.request(`/api/laporan/${id}`, { method: 'PUT', body: JSON.stringify(fields) })
 }
 
+export function updateAdminReport(id, fields) {
+  return http.request(`/api/admin/laporan/${id}`, { method: 'PUT', body: JSON.stringify(fields) })
+}
+
 export function updateDiterimaStatus(id, diterima) {
   return http.request(`/api/admin/laporan/${id}/diterima`, { method: 'PATCH', body: JSON.stringify({ diterima }) })
 }

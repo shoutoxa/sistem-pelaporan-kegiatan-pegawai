@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { dashboardApi } from '../../api/dashboard.js'
-import { masterApi } from '../../api/master.js'
 import PageHeader from '../../components/PageHeader.jsx'
 import PageState from '../../components/PageState.jsx'
 import Icon from '../../components/Icon.jsx'
@@ -11,67 +10,22 @@ const POLL_MS = 30_000
 export default function DashboardPage() {
   const [data, setData] = useState(null)
   const [state, setState] = useState('loading')
-  const [filters, setFilters] = useState({
-    date: '',
-    desaId: '',
-    pekerjaanId: '',
-    search: '',
-  })
-  const [options, setOptions] = useState({
-    villages: [],
-    jobs: [],
-  })
-
-  useEffect(() => {
-    Promise.all([masterApi.fetchDesa(), masterApi.fetchPekerjaan()])
-      .then(([villages, jobs]) => {
-        setOptions({
-          villages: Array.isArray(villages) ? villages : [],
-          jobs: Array.isArray(jobs) ? jobs : [],
-        })
-      })
-      .catch(() => {})
-  }, [])
-
   const refresh = useCallback(() => {
     setState((current) => (current === 'ready' ? 'refreshing' : 'loading'))
-    const query = {
-      ...(filters.date ? { date: filters.date } : {}),
-      ...(filters.desaId ? { desaId: filters.desaId } : {}),
-      ...(filters.pekerjaanId ? { pekerjaanId: filters.pekerjaanId } : {}),
-      ...(filters.search ? { search: filters.search } : {}),
-    }
     return dashboardApi
-      .get(query)
+      .get()
       .then((response) => {
         setData(response.data)
         setState('ready')
       })
       .catch(() => setState('error'))
-  }, [filters])
+  }, [])
 
   useEffect(() => {
     refresh()
     const timer = setInterval(refresh, POLL_MS)
     return () => clearInterval(timer)
   }, [refresh])
-
-  const updateFilter = (key, value) => {
-    setFilters((current) => ({ ...current, [key]: value }))
-  }
-
-  const resetFilters = () => {
-    setFilters({
-      date: '',
-      desaId: '',
-      pekerjaanId: '',
-      search: '',
-    })
-  }
-
-  const hasCustomFilters = Boolean(
-    filters.desaId || filters.pekerjaanId || filters.search || filters.date,
-  )
 
   if (state === 'loading' && !data)
     return (
@@ -129,73 +83,24 @@ export default function DashboardPage() {
         }
       />
 
-      <section className="filter-bar" aria-label="Filter dashboard">
-        <div className="filter-fields">
-          <label htmlFor="dashboard-search">
-            Cari Keterangan / PIC
-            <input
-              id="dashboard-search"
-              type="text"
-              placeholder="Kata kunci..."
-              value={filters.search}
-              onChange={(e) => updateFilter('search', e.target.value)}
-            />
-          </label>
-          <label htmlFor="dashboard-desa">
-            Cluster / Desa
-            <select
-              id="dashboard-desa"
-              aria-label="Cluster / Desa"
-              value={filters.desaId}
-              onChange={(e) => updateFilter('desaId', e.target.value)}
-            >
-              <option value="">Semua Cluster / Desa</option>
-              {options.villages.map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.namaDesa}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label htmlFor="dashboard-pekerjaan">
-            Pekerjaan
-            <select
-              id="dashboard-pekerjaan"
-              aria-label="Pekerjaan"
-              value={filters.pekerjaanId}
-              onChange={(e) => updateFilter('pekerjaanId', e.target.value)}
-            >
-              <option value="">Semua Pekerjaan</option>
-              {options.jobs.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.namaPekerjaan}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label htmlFor="dashboard-date">
-            Tanggal
-            <input
-              id="dashboard-date"
-              type="date"
-              value={filters.date}
-              onChange={(e) => updateFilter('date', e.target.value)}
-            />
-          </label>
-        </div>
-        {hasCustomFilters && (
-          <button className="text-button" type="button" onClick={resetFilters}>
-            Reset filter (Semua data)
-          </button>
-        )}
-      </section>
-
-      <div className="activity-frame">
-        <div className="activity-rail" aria-hidden="true">
-          <span></span>
-          <span></span>
-          <span></span>
-        </div>
+      <div className="dashboard-content">
+        <section className="metric-band" aria-label="Ringkasan pegawai lapor">
+          <article>
+            <span>Pegawai wajib lapor</span>
+            <strong>{data?.wajibLapor ?? 0}</strong>
+            <small>pegawai aktif</small>
+          </article>
+          <article>
+            <span>Sudah melapor</span>
+            <strong className="success-value">{data?.sudahMelapor ?? 0}</strong>
+            <small>tanggal {labelDate}</small>
+          </article>
+          <article>
+            <span>Belum melapor</span>
+            <strong className="signal-value">{data?.belumMelapor ?? 0}</strong>
+            <small>tanggal {labelDate}</small>
+          </article>
+        </section>
 
         <section className="data-section latest-reports">
           <div className="section-heading">
@@ -212,9 +117,9 @@ export default function DashboardPage() {
               <caption className="sr-only">Laporan terbaru</caption>
               <thead>
                 <tr>
+                  <th>Pegawai</th>
                   <th>Pekerjaan</th>
                   <th>Lokasi</th>
-                  <th>PIC</th>
                   <th>Keterangan</th>
                   <th>Aksi</th>
                 </tr>
@@ -222,13 +127,11 @@ export default function DashboardPage() {
               <tbody>
                 {(data?.terbaru || []).slice(0, 5).map((item) => (
                   <tr key={item.id}>
+                    <td>{item.user?.nama || '-'}</td>
                     <td>{item.pekerjaan?.namaPekerjaan || '-'}</td>
                     <td>
                       {item.cluster?.desa?.namaDesa || '-'} ·{' '}
                       {item.cluster?.clusterName || '-'}
-                    </td>
-                    <td>
-                      <strong>{item.user?.nama || '-'}</strong>
                     </td>
                     <td className="description-cell">
                       {item.keterangan || '-'}
@@ -253,24 +156,6 @@ export default function DashboardPage() {
               </tbody>
             </table>
           </div>
-        </section>
-
-        <section className="metric-band" aria-label="Ringkasan pegawai lapor">
-          <article>
-            <span>Pegawai wajib lapor</span>
-            <strong>{data?.wajibLapor ?? 0}</strong>
-            <small>pegawai aktif</small>
-          </article>
-          <article>
-            <span>Sudah melapor</span>
-            <strong className="success-value">{data?.sudahMelapor ?? 0}</strong>
-            <small>tanggal {labelDate}</small>
-          </article>
-          <article>
-            <span>Belum melapor</span>
-            <strong className="signal-value">{data?.belumMelapor ?? 0}</strong>
-            <small>tanggal {labelDate}</small>
-          </article>
         </section>
 
         <div className="dashboard-grid">

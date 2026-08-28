@@ -335,7 +335,7 @@ export default function ReportForm({ user, villages, jobs: jobProp }) {
                 className="resize-none"
                 id="report-description"
                 aria-label="Keterangan"
-                placeholder="Contoh: Penanaman tiang di Cluster 01 sebanyak 12 titik. Kondisi lokasi aman."
+                placeholder="Contoh: Penanaman tiang di RW 01 sebanyak 12 titik. Kondisi lokasi aman."
                 value={form.keterangan}
                 onChange={(event) => setField('keterangan', event.target.value)}
                 maxLength="2000"

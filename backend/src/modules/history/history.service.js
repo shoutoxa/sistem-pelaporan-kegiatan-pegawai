@@ -14,7 +14,7 @@ export function createHistoryService({ prisma, storage, clock = () => new Date()
     const now = clock().getTime()
     return { items: items.map((item) => {
       const editableUntil = new Date(new Date(item.createdAt).getTime() + 24 * 60 * 60 * 1000)
-      return { ...item, editableUntil: editableUntil.toISOString(), canEdit: now <= editableUntil.getTime() }
+      return { ...item, editableUntil: editableUntil.toISOString(), canEdit: !item.diterima && now <= editableUntil.getTime() }
     }), total, page: safePage, limit: safeLimit }
   }
 
@@ -27,7 +27,7 @@ export function createHistoryService({ prisma, storage, clock = () => new Date()
   }
 
   async function listAdminReports(filters = {}) {
-    const { page = 1, limit = 20, from, to, pegawaiId, desaId, clusterId, pekerjaanId } = filters
+    const { page = 1, limit = 20, from, to, pegawaiId, desaId, clusterId, pekerjaanId, search } = filters
     const safePage = Math.max(1, Number(page) || 1)
     const safeLimit = Math.min(100, Math.max(1, Number(limit) || 20))
     const where = {}
@@ -36,6 +36,15 @@ export function createHistoryService({ prisma, storage, clock = () => new Date()
     if (pekerjaanId) where.pekerjaanId = pekerjaanId
     if (desaId) where.cluster = { desaId }
     if (from || to) where.tanggalKegiatan = { ...(from ? { gte: new Date(`${from}T00:00:00.000Z`) } : {}), ...(to ? { lte: new Date(`${to}T00:00:00.000Z`) } : {}) }
+    const keyword = typeof search === 'string' ? search.trim() : ''
+    if (keyword) {
+      where.OR = [
+        { user: { nama: { contains: keyword, mode: 'insensitive' } } },
+        { cluster: { clusterName: { contains: keyword, mode: 'insensitive' } } },
+        { cluster: { desa: { namaDesa: { contains: keyword, mode: 'insensitive' } } } },
+        { pekerjaan: { namaPekerjaan: { contains: keyword, mode: 'insensitive' } } },
+      ]
+    }
     const [items, total] = await Promise.all([
       prisma.laporan.findMany({ where, include: { user: true, cluster: { include: { desa: true } }, pekerjaan: true, dokumentasi: true }, orderBy: { createdAt: 'desc' }, skip: (safePage - 1) * safeLimit, take: safeLimit }),
       prisma.laporan.count({ where }),
@@ -44,19 +53,11 @@ export function createHistoryService({ prisma, storage, clock = () => new Date()
   }
 
   async function listDocumentation(filters = {}) {
-    const { desaId, clusterId, pekerjaanId, search } = filters
+    const { desaId, clusterId, pekerjaanId } = filters
     const where = { dokumentasi: { some: {} } }
     if (pekerjaanId) where.pekerjaanId = pekerjaanId
     if (clusterId) where.clusterId = clusterId
     else if (desaId) where.cluster = { desaId }
-    if (search) {
-      where.OR = [
-        { keterangan: { contains: search, mode: 'insensitive' } },
-        { user: { nama: { contains: search, mode: 'insensitive' } } },
-        { cluster: { desa: { namaDesa: { contains: search, mode: 'insensitive' } } } },
-      ]
-    }
-
     const reports = await prisma.laporan.findMany({
       where,
       include: {

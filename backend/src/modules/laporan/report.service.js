@@ -65,7 +65,6 @@ export function createReportService({ prisma, storage, clock = () => new Date() 
               tanggalKegiatan: new Date(`${parsed.data.tanggalKegiatan}T00:00:00.000Z`),
               keterangan: parsed.data.keterangan,
               nomorPerangkat: nomorPerangkat || null,
-              diterima: parsed.data.diterima ?? false,
             },
           })
           await tx.dokumentasi.createMany({
@@ -96,13 +95,12 @@ export function createReportService({ prisma, storage, clock = () => new Date() 
     if (!report) throw reportError('NOT_FOUND', 'Laporan tidak ditemukan.')
     const dokumentasi = await Promise.all(report.dokumentasi.map(async (item) => ({ ...item, signedUrl: await storage.createSignedUrl(item.storagePath, 600) })))
     const editableUntilDate = new Date(new Date(report.createdAt).getTime() + 24 * 60 * 60 * 1000)
-    return { ...report, dokumentasi, editableUntil: editableUntilDate.toISOString(), canEdit: actor.role === 'PEGAWAI' && clock().getTime() <= editableUntilDate.getTime() }
+    const withinEditWindow = clock().getTime() <= editableUntilDate.getTime()
+    const canEdit = actor.role === 'SUPERADMIN' ? !report.diterima : actor.role === 'PEGAWAI' && !report.diterima && withinEditWindow
+    return { ...report, dokumentasi, editableUntil: editableUntilDate.toISOString(), canEdit }
   }
 
-  async function updateReport({ actor, reportId, fields }) {
-    const report = await prisma.laporan.findFirst({ where: { id: reportId, userId: actor.id } })
-    if (!report) throw reportError('NOT_FOUND', 'Laporan tidak ditemukan.')
-    if (clock().getTime() - new Date(report.createdAt).getTime() > 24 * 60 * 60 * 1000) throw reportError('EDIT_EXPIRED', 'Batas edit laporan sudah lewat 24 jam.')
+  async function updateReportFields({ reportId, report, fields }) {
     const data = {}
     if (fields.keterangan !== undefined) {
       if (typeof fields.keterangan !== 'string' || fields.keterangan.trim().length < 5 || fields.keterangan.trim().length > 2000) throw reportError('VALIDATION', 'Keterangan harus 5 sampai 2.000 karakter.')
@@ -125,12 +123,27 @@ export function createReportService({ prisma, storage, clock = () => new Date() 
     }
     if (fields.nomorPerangkat !== undefined) {
       const np = String(fields.nomorPerangkat).trim()
+      if (np.length > 20) throw reportError('VALIDATION', 'Nomor perangkat maksimal 20 karakter.')
       data.nomorPerangkat = np || null
     }
-    if (fields.diterima !== undefined) {
-      data.diterima = Boolean(fields.diterima)
-    }
     return prisma.laporan.update({ where: { id: reportId }, data })
+  }
+
+  async function updateReport({ actor, reportId, fields }) {
+    if (fields && Object.prototype.hasOwnProperty.call(fields, 'diterima')) throw reportError('FORBIDDEN', 'Status penerimaan hanya dapat diubah oleh Superadmin.')
+    const report = await prisma.laporan.findFirst({ where: { id: reportId, userId: actor.id } })
+    if (!report) throw reportError('NOT_FOUND', 'Laporan tidak ditemukan.')
+    if (report.diterima) throw reportError('LOCKED', 'Laporan sudah diterima dan terkunci.')
+    if (clock().getTime() - new Date(report.createdAt).getTime() > 24 * 60 * 60 * 1000) throw reportError('EDIT_EXPIRED', 'Batas edit laporan sudah lewat 24 jam.')
+    return updateReportFields({ reportId, report, fields })
+  }
+
+  async function updateReportByAdmin({ reportId, fields }) {
+    if (fields && Object.prototype.hasOwnProperty.call(fields, 'diterima')) throw reportError('FORBIDDEN', 'Gunakan endpoint status untuk mengubah penerimaan laporan.')
+    const report = await prisma.laporan.findUnique({ where: { id: reportId } })
+    if (!report) throw reportError('NOT_FOUND', 'Laporan tidak ditemukan.')
+    if (report.diterima) throw reportError('LOCKED', 'Buka kembali penerimaan laporan sebelum mengoreksi data.')
+    return updateReportFields({ reportId, report, fields })
   }
 
   async function updateDiterimaStatus({ reportId, diterima }) {
@@ -139,5 +152,5 @@ export function createReportService({ prisma, storage, clock = () => new Date() 
     return prisma.laporan.update({ where: { id: reportId }, data: { diterima: Boolean(diterima) } })
   }
 
-  return { createReport, getReportDetail, updateReport, updateDiterimaStatus }
+  return { createReport, getReportDetail, updateReport, updateReportByAdmin, updateDiterimaStatus }
 }

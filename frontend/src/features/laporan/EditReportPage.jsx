@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { historyApi } from '../../api/history.js'
 import { masterApi } from '../../api/master.js'
-import { updateReport } from '../../api/reports.js'
+import { updateAdminReport, updateReport } from '../../api/reports.js'
 import LocationFields from '../master-data/LocationFields.jsx'
 import PageHeader from '../../components/PageHeader.jsx'
 import PageState from '../../components/PageState.jsx'
@@ -10,7 +10,9 @@ import Notice from '../../components/Notice.jsx'
 
 export default function EditReportPage() {
   const { id } = useParams()
+  const location = useLocation()
   const navigate = useNavigate()
+  const isAdmin = location.pathname.startsWith('/admin')
   const [report, setReport] = useState(null)
   const [jobs, setJobs] = useState([])
   const [form, setForm] = useState(null)
@@ -23,7 +25,8 @@ export default function EditReportPage() {
     Promise.all([historyApi.getDetail(id), masterApi.fetchPekerjaan()])
       .then(([detail, jobRows]) => {
         if (!detail.data.canEdit) {
-          setState('expired')
+          setReport(detail.data)
+          setState(detail.data.diterima ? 'locked' : 'expired')
           return
         }
         const item = detail.data
@@ -59,14 +62,15 @@ export default function EditReportPage() {
     setError('')
     setFieldErrors({})
     try {
-      await updateReport(id, {
+      const saveReport = isAdmin ? updateAdminReport : updateReport
+      await saveReport(id, {
         tanggalKegiatan: form.tanggalKegiatan,
         clusterId: form.clusterId,
         pekerjaanId: form.pekerjaanId,
         nomorPerangkat: form.nomorPerangkat,
         keterangan: form.keterangan,
       })
-      navigate(`/pegawai/laporan/${id}`)
+      navigate(`${isAdmin ? '/admin' : '/pegawai'}/laporan/${id}`)
     } catch (requestError) {
       setError(requestError.message)
       setFieldErrors(requestError.errors || {})
@@ -92,7 +96,22 @@ export default function EditReportPage() {
           title="Batas edit sudah berakhir"
           message="Laporan hanya dapat diubah selama 24 jam setelah dikirim."
           action={
-            <Link className="secondary-button" to={`/pegawai/laporan/${id}`}>
+            <Link className="secondary-button" to={`${isAdmin ? '/admin' : '/pegawai'}/laporan/${id}`}>
+              Kembali ke detail
+            </Link>
+          }
+        />
+      </section>
+    )
+  if (state === 'locked')
+    return (
+      <section className="page">
+        <PageState
+          tone="error"
+          title="Laporan terkunci"
+          message={isAdmin ? 'Buka kembali status penerimaan laporan sebelum mengoreksi data.' : 'Laporan sudah diterima oleh Superadmin dan tidak dapat diubah.'}
+          action={
+            <Link className="secondary-button" to={`${isAdmin ? '/admin' : '/pegawai'}/laporan/${id}`}>
               Kembali ke detail
             </Link>
           }
@@ -193,7 +212,7 @@ export default function EditReportPage() {
           dipertahankan.
         </p>
         <div className="form-actions">
-          <Link className="secondary-button" to={`/pegawai/laporan/${id}`}>
+          <Link className="secondary-button" to={`${isAdmin ? '/admin' : '/pegawai'}/laporan/${id}`}>
             Batal
           </Link>
           <button className="primary-button" disabled={saving} type="submit">

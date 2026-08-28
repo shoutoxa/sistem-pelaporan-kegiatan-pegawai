@@ -79,10 +79,10 @@ export default function LocationFields({
         )}
       </label>
       <label htmlFor="report-cluster">
-        Cluster <b aria-hidden="true">*</b>
+        RW <b aria-hidden="true">*</b>
         <select
           id="report-cluster"
-          aria-label="Cluster"
+          aria-label="RW"
           value={value.clusterId || ''}
           disabled={!selectedDesa || loadingCluster}
           onChange={(event) =>
@@ -96,7 +96,7 @@ export default function LocationFields({
             {loadingCluster
               ? 'Memuat Cluster...'
               : selectedDesa
-                ? 'Pilih Cluster'
+                ? 'Pilih RW'
                 : 'Pilih Desa lebih dahulu'}
           </option>
           {clusterOptions
