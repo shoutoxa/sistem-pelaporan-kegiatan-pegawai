@@ -1,81 +1,81 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
-import { historyApi } from "../../api/history.js";
-import { masterApi } from "../../api/master.js";
-import { updateReport } from "../../api/reports.js";
-import LocationFields from "../master-data/LocationFields.jsx";
-import PageHeader from "../../components/PageHeader.jsx";
-import PageState from "../../components/PageState.jsx";
-import Notice from "../../components/Notice.jsx";
+import { useEffect, useMemo, useState } from 'react'
+import { Link, useNavigate, useParams } from 'react-router-dom'
+import { historyApi } from '../../api/history.js'
+import { masterApi } from '../../api/master.js'
+import { updateReport } from '../../api/reports.js'
+import LocationFields from '../master-data/LocationFields.jsx'
+import PageHeader from '../../components/PageHeader.jsx'
+import PageState from '../../components/PageState.jsx'
+import Notice from '../../components/Notice.jsx'
 
 export default function EditReportPage() {
-  const { id } = useParams();
-  const navigate = useNavigate();
-  const [report, setReport] = useState(null);
-  const [stages, setStages] = useState([]);
-  const [form, setForm] = useState(null);
-  const [state, setState] = useState("loading");
-  const [error, setError] = useState("");
-  const [fieldErrors, setFieldErrors] = useState({});
-  const [saving, setSaving] = useState(false);
+  const { id } = useParams()
+  const navigate = useNavigate()
+  const [report, setReport] = useState(null)
+  const [jobs, setJobs] = useState([])
+  const [form, setForm] = useState(null)
+  const [state, setState] = useState('loading')
+  const [error, setError] = useState('')
+  const [fieldErrors, setFieldErrors] = useState({})
+  const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    Promise.all([historyApi.getDetail(id), masterApi.fetchTahapan()])
-      .then(([detail, stageRows]) => {
+    Promise.all([historyApi.getDetail(id), masterApi.fetchPekerjaan()])
+      .then(([detail, jobRows]) => {
         if (!detail.data.canEdit) {
-          setState("expired");
-          return;
+          setState('expired')
+          return
         }
-        const item = detail.data;
-        setReport(item);
-        setStages(stageRows);
+        const item = detail.data
+        setReport(item)
+        setJobs(Array.isArray(jobRows) ? jobRows : (jobRows?.data || []))
         setForm({
           tanggalKegiatan: String(item.tanggalKegiatan).slice(0, 10),
-          desaId: item.rw?.desa?.id || item.rw?.desaId || "",
-          rwId: item.rw?.id || item.rwId || "",
-          tahapanId: item.tahapan?.id || item.tahapanId || "",
-          nomorPerangkat: item.nomorPerangkat || "",
-          keterangan: item.keterangan || "",
-        });
-        setState("ready");
+          desaId: item.cluster?.desa?.id || item.cluster?.desaId || '',
+          clusterId: item.cluster?.id || item.clusterId || '',
+          pekerjaanId: item.pekerjaan?.id || item.pekerjaanId || '',
+          nomorPerangkat: item.nomorPerangkat || '',
+          keterangan: item.keterangan || '',
+        })
+        setState('ready')
       })
       .catch((requestError) => {
-        setError(requestError.message);
-        setState("error");
-      });
-  }, [id]);
+        setError(requestError.message)
+        setState('error')
+      })
+  }, [id])
 
-  const selectedStage = useMemo(
-    () => stages.find((row) => row.id === form?.tahapanId),
-    [stages, form?.tahapanId],
-  );
+  const selectedJob = useMemo(
+    () => jobs.find((row) => row.id === form?.pekerjaanId),
+    [jobs, form?.pekerjaanId],
+  )
   function setField(key, value) {
-    setForm((current) => ({ ...current, [key]: value }));
-    setFieldErrors((current) => ({ ...current, [key]: undefined }));
+    setForm((current) => ({ ...current, [key]: value }))
+    setFieldErrors((current) => ({ ...current, [key]: undefined }))
   }
   async function save(event) {
-    event.preventDefault();
-    setSaving(true);
-    setError("");
-    setFieldErrors({});
+    event.preventDefault()
+    setSaving(true)
+    setError('')
+    setFieldErrors({})
     try {
       await updateReport(id, {
         tanggalKegiatan: form.tanggalKegiatan,
-        rwId: form.rwId,
-        tahapanId: form.tahapanId,
+        clusterId: form.clusterId,
+        pekerjaanId: form.pekerjaanId,
         nomorPerangkat: form.nomorPerangkat,
         keterangan: form.keterangan,
-      });
-      navigate(`/pegawai/laporan/${id}`);
+      })
+      navigate(`/pegawai/laporan/${id}`)
     } catch (requestError) {
-      setError(requestError.message);
-      setFieldErrors(requestError.errors || {});
+      setError(requestError.message)
+      setFieldErrors(requestError.errors || {})
     } finally {
-      setSaving(false);
+      setSaving(false)
     }
   }
 
-  if (state === "loading")
+  if (state === 'loading')
     return (
       <section className="page">
         <PageState
@@ -83,8 +83,8 @@ export default function EditReportPage() {
           message="Memeriksa batas waktu edit dan memuat data."
         />
       </section>
-    );
-  if (state === "expired")
+    )
+  if (state === 'expired')
     return (
       <section className="page">
         <PageState
@@ -98,17 +98,17 @@ export default function EditReportPage() {
           }
         />
       </section>
-    );
-  if (state === "error" || !form)
+    )
+  if (state === 'error' || !form)
     return (
       <section className="page">
         <PageState
           tone="error"
           title="Laporan tidak dapat diedit"
-          message={error || "Data laporan tidak tersedia."}
+          message={error || 'Data laporan tidak tersedia.'}
         />
       </section>
-    );
+    )
 
   return (
     <section className="page">
@@ -126,24 +126,23 @@ export default function EditReportPage() {
               type="date"
               value={form.tanggalKegiatan}
               onChange={(event) =>
-                setField("tanggalKegiatan", event.target.value)
+                setField('tanggalKegiatan', event.target.value)
               }
             />
           </label>
           <label>
-            Tahapan
+            Pekerjaan
             <select
-              aria-label="Tahapan"
-              value={form.tahapanId}
+              aria-label="Pekerjaan"
+              value={form.pekerjaanId}
               onChange={(event) => {
-                setField("tahapanId", event.target.value);
-                setField("nomorPerangkat", "");
+                setField('pekerjaanId', event.target.value)
               }}
             >
-              <option value="">Pilih Tahapan</option>
-              {stages.map((stage) => (
-                <option key={stage.id} value={stage.id}>
-                  {stage.namaTahapan}
+              <option value="">Pilih Pekerjaan</option>
+              {jobs.map((job) => (
+                <option key={job.id} value={job.id}>
+                  {job.namaPekerjaan}
                 </option>
               ))}
             </select>
@@ -154,26 +153,25 @@ export default function EditReportPage() {
           onChange={(location) =>
             setForm((current) => ({ ...current, ...location }))
           }
-          desaOptions={report?.rw?.desa ? [report.rw.desa] : []}
+          desaOptions={report?.cluster?.desa ? [report.cluster.desa] : []}
           errors={fieldErrors}
         />
-        {selectedStage?.requiresNomorPerangkat && (
-          <label>
-            Nomor perangkat
-            <input
-              aria-label="Nomor perangkat"
-              value={form.nomorPerangkat}
-              onChange={(event) =>
-                setField("nomorPerangkat", event.target.value)
-              }
-            />
-          </label>
-        )}
-        {selectedStage?.instruksiDokumentasi && (
+        <label>
+          Nomor perangkat <small className="optional-tag">(Opsional)</small>
+          <input
+            aria-label="Nomor perangkat"
+            placeholder="Opsional / Kosongkan jika tidak ada"
+            value={form.nomorPerangkat}
+            onChange={(event) =>
+              setField('nomorPerangkat', event.target.value)
+            }
+          />
+        </label>
+        {selectedJob?.instruksiDokumentasi && (
           <div className="stage-guidance" role="status">
             <span>
-              <strong>Panduan foto tahapan</strong>
-              <p>{selectedStage.instruksiDokumentasi}</p>
+              <strong>Panduan foto pekerjaan</strong>
+              <p>{selectedJob.instruksiDokumentasi}</p>
             </span>
           </div>
         )}
@@ -183,7 +181,7 @@ export default function EditReportPage() {
             className="resize-none"
             aria-label="Keterangan"
             value={form.keterangan}
-            onChange={(event) => setField("keterangan", event.target.value)}
+            onChange={(event) => setField('keterangan', event.target.value)}
             maxLength="2000"
           />
           {fieldErrors.keterangan && (
@@ -199,10 +197,10 @@ export default function EditReportPage() {
             Batal
           </Link>
           <button className="primary-button" disabled={saving} type="submit">
-            {saving ? "Menyimpan..." : "Simpan perubahan"}
+            {saving ? 'Menyimpan...' : 'Simpan perubahan'}
           </button>
         </div>
       </form>
     </section>
-  );
+  )
 }

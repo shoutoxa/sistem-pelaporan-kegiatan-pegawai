@@ -28,13 +28,12 @@ export function createReportService({ prisma, storage, clock = () => new Date() 
     const yesterday = jakartaDate(yesterdayDate)
     if (![today, yesterday].includes(parsed.data.tanggalKegiatan)) throw reportError('DATE_VALIDATION', 'Tanggal kegiatan hanya boleh hari ini atau kemarin.')
 
-    const [rw, tahapan] = await Promise.all([
-      prisma.rw.findFirst({ where: { id: parsed.data.rwId, isActive: true, desa: { isActive: true } } }),
-      prisma.tahapan.findFirst({ where: { id: parsed.data.tahapanId, isActive: true } }),
+    const [cluster, pekerjaan] = await Promise.all([
+      prisma.cluster.findFirst({ where: { id: parsed.data.clusterId, isActive: true, desa: { isActive: true } } }),
+      prisma.pekerjaan.findFirst({ where: { id: parsed.data.pekerjaanId, isActive: true } }),
     ])
-    if (!rw) throw reportError('REFERENCE_INVALID', 'RW tidak aktif atau tidak ditemukan.')
-    if (!tahapan) throw reportError('REFERENCE_INVALID', 'Tahapan tidak aktif atau tidak ditemukan.')
-    if (tahapan.requiresNomorPerangkat && !parsed.data.nomorPerangkat) throw reportError('VALIDATION', 'Nomor Perangkat wajib diisi untuk Tahapan ini.')
+    if (!cluster) throw reportError('REFERENCE_INVALID', 'Cluster tidak aktif atau tidak ditemukan.')
+    if (!pekerjaan) throw reportError('REFERENCE_INVALID', 'Pekerjaan tidak aktif atau tidak ditemukan.')
 
     const reportId = randomUUID()
     const uploadedPaths = []
@@ -42,6 +41,8 @@ export function createReportService({ prisma, storage, clock = () => new Date() 
       path: `laporan/${actor.id}/${parsed.data.tanggalKegiatan}/${reportId}/${randomUUID()}.${extensionFor(file.mimetype, file.originalname)}`,
       file,
     }))
+
+    const nomorPerangkat = parsed.data.nomorPerangkat ? parsed.data.nomorPerangkat.trim() : null
 
     try {
       for (const item of documentation) {
@@ -59,11 +60,12 @@ export function createReportService({ prisma, storage, clock = () => new Date() 
             data: {
               id: reportId,
               userId: actor.id,
-              rwId: parsed.data.rwId,
-              tahapanId: parsed.data.tahapanId,
+              clusterId: parsed.data.clusterId,
+              pekerjaanId: parsed.data.pekerjaanId,
               tanggalKegiatan: new Date(`${parsed.data.tanggalKegiatan}T00:00:00.000Z`),
               keterangan: parsed.data.keterangan,
-              nomorPerangkat: tahapan.requiresNomorPerangkat ? parsed.data.nomorPerangkat : null,
+              nomorPerangkat: nomorPerangkat || null,
+              diterima: parsed.data.diterima ?? false,
             },
           })
           await tx.dokumentasi.createMany({
@@ -85,9 +87,9 @@ export function createReportService({ prisma, storage, clock = () => new Date() 
     const report = await prisma.laporan.findFirst({
       where,
       include: {
-        user: { select: { id: true, nama: true, username: true } },
-        rw: { include: { desa: true } },
-        tahapan: true,
+        user: { select: { id: true, nama: true, username: true, nomorHp: true } },
+        cluster: { include: { desa: true } },
+        pekerjaan: true,
         dokumentasi: true,
       },
     })
@@ -112,22 +114,30 @@ export function createReportService({ prisma, storage, clock = () => new Date() 
       if (!/^\d{4}-\d{2}-\d{2}$/.test(fields.tanggalKegiatan) || ![today, yesterday].includes(fields.tanggalKegiatan)) throw reportError('DATE_VALIDATION', 'Tanggal kegiatan hanya boleh hari ini atau kemarin.')
       data.tanggalKegiatan = new Date(`${fields.tanggalKegiatan}T00:00:00.000Z`)
     }
-    if (fields.rwId !== undefined) {
-      if (!await prisma.rw.findFirst({ where: { id: fields.rwId, isActive: true, desa: { isActive: true } } })) throw reportError('REFERENCE_INVALID', 'RW tidak aktif atau tidak ditemukan.')
-      data.rwId = fields.rwId
+    if (fields.clusterId !== undefined) {
+      if (!await prisma.cluster.findFirst({ where: { id: fields.clusterId, isActive: true, desa: { isActive: true } } })) throw reportError('REFERENCE_INVALID', 'Cluster tidak aktif atau tidak ditemukan.')
+      data.clusterId = fields.clusterId
     }
-    if (fields.tahapanId !== undefined || fields.nomorPerangkat !== undefined) {
-      const targetTahapanId = fields.tahapanId || report.tahapanId
-      const tahapan = await prisma.tahapan.findFirst({ where: { id: targetTahapanId, isActive: true } })
-      if (!tahapan) throw reportError('REFERENCE_INVALID', 'Tahapan tidak aktif atau tidak ditemukan.')
-      const stageChanged = fields.tahapanId !== undefined && fields.tahapanId !== report.tahapanId
-      const nomorPerangkat = fields.nomorPerangkat !== undefined ? String(fields.nomorPerangkat).trim() : (stageChanged ? '' : report.nomorPerangkat)
-      if (tahapan.requiresNomorPerangkat && !nomorPerangkat) throw reportError('VALIDATION', 'Nomor Perangkat wajib diisi untuk Tahapan ini.')
-      if (fields.tahapanId !== undefined) data.tahapanId = fields.tahapanId
-      data.nomorPerangkat = tahapan.requiresNomorPerangkat ? nomorPerangkat : null
+    if (fields.pekerjaanId !== undefined) {
+      const pekerjaan = await prisma.pekerjaan.findFirst({ where: { id: fields.pekerjaanId, isActive: true } })
+      if (!pekerjaan) throw reportError('REFERENCE_INVALID', 'Pekerjaan tidak aktif atau tidak ditemukan.')
+      data.pekerjaanId = fields.pekerjaanId
+    }
+    if (fields.nomorPerangkat !== undefined) {
+      const np = String(fields.nomorPerangkat).trim()
+      data.nomorPerangkat = np || null
+    }
+    if (fields.diterima !== undefined) {
+      data.diterima = Boolean(fields.diterima)
     }
     return prisma.laporan.update({ where: { id: reportId }, data })
   }
 
-  return { createReport, getReportDetail, updateReport }
+  async function updateDiterimaStatus({ reportId, diterima }) {
+    const report = await prisma.laporan.findUnique({ where: { id: reportId } })
+    if (!report) throw reportError('NOT_FOUND', 'Laporan tidak ditemukan.')
+    return prisma.laporan.update({ where: { id: reportId }, data: { diterima: Boolean(diterima) } })
+  }
+
+  return { createReport, getReportDetail, updateReport, updateDiterimaStatus }
 }

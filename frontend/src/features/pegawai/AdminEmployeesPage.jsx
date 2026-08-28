@@ -1,113 +1,137 @@
-import { useEffect, useState } from "react";
-import { http } from "../../api/http.js";
-import PageHeader from "../../components/PageHeader.jsx";
-import Notice from "../../components/Notice.jsx";
-import PageState from "../../components/PageState.jsx";
+import { useEffect, useState } from 'react'
+import { http } from '../../api/http.js'
+import PageHeader from '../../components/PageHeader.jsx'
+import Notice from '../../components/Notice.jsx'
+import PageState from '../../components/PageState.jsx'
 
 const emptyForm = {
-  nama: "",
-  username: "",
-  password: "",
+  nama: '',
+  username: '',
+  password: '',
+  nomorHp: '',
   wajibLapor: false,
   isActive: true,
-};
+}
 
 export default function AdminEmployeesPage() {
-  const [rows, setRows] = useState([]);
-  const [error, setError] = useState("");
-  const [message, setMessage] = useState("");
-  const [state, setState] = useState("loading");
-  const [pendingId, setPendingId] = useState("");
-  const [editingId, setEditingId] = useState("");
-  const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState(emptyForm);
-  const [fieldErrors, setFieldErrors] = useState({});
-  const [showPassword, setShowPassword] = useState(false);
+  const [rows, setRows] = useState([])
+  const [error, setError] = useState('')
+  const [message, setMessage] = useState('')
+  const [state, setState] = useState('loading')
+  const [pendingId, setPendingId] = useState('')
+  const [editingId, setEditingId] = useState('')
+  const [showForm, setShowForm] = useState(false)
+  const [form, setForm] = useState(emptyForm)
+  const [fieldErrors, setFieldErrors] = useState({})
+  const [showPassword, setShowPassword] = useState(false)
+  const [uploadingPhotoId, setUploadingPhotoId] = useState('')
 
   const load = () => {
-    setState("loading");
+    setState('loading')
     return http
-      .request("/api/admin/pegawai")
+      .request('/api/admin/pegawai')
       .then((body) => {
-        setRows(body.data || []);
-        setState("ready");
+        setRows(body.data || [])
+        setState('ready')
       })
       .catch((requestError) => {
-        setError(requestError.message);
-        setState("error");
-      });
-  };
+        setError(requestError.message)
+        setState('error')
+      })
+  }
   useEffect(() => {
-    load();
-  }, []);
+    load()
+  }, [])
 
   function openCreate() {
-    setEditingId("");
-    setForm(emptyForm);
-    setFieldErrors({});
-    setShowPassword(false);
-    setShowForm(true);
+    setEditingId('')
+    setForm(emptyForm)
+    setFieldErrors({})
+    setShowPassword(false)
+    setShowForm(true)
   }
   function openEdit(row) {
-    setEditingId(row.id);
+    setEditingId(row.id)
     setForm({
       nama: row.nama,
       username: row.username,
-      password: "",
+      password: '',
+      nomorHp: row.nomorHp || '',
       wajibLapor: row.wajibLapor,
       isActive: row.isActive,
-    });
-    setFieldErrors({});
-    setShowPassword(false);
-    setShowForm(true);
+    })
+    setFieldErrors({})
+    setShowPassword(false)
+    setShowForm(true)
   }
   function setField(key, value) {
-    setForm((current) => ({ ...current, [key]: value }));
-    setFieldErrors((current) => ({ ...current, [key]: undefined }));
+    setForm((current) => ({ ...current, [key]: value }))
+    setFieldErrors((current) => ({ ...current, [key]: undefined }))
   }
 
   async function save(event) {
-    event.preventDefault();
-    setError("");
-    setMessage("");
-    setPendingId(editingId || "new");
+    event.preventDefault()
+    setError('')
+    setMessage('')
+    setPendingId(editingId || 'new')
     try {
-      const payload = { ...form };
-      if (editingId && !payload.password) delete payload.password;
+      const payload = { ...form }
+      if (editingId && !payload.password) delete payload.password
       await http.request(
-        `/api/admin/pegawai${editingId ? `/${editingId}` : ""}`,
-        { method: editingId ? "PUT" : "POST", body: JSON.stringify(payload) },
-      );
+        `/api/admin/pegawai${editingId ? `/${editingId}` : ''}`,
+        { method: editingId ? 'PUT' : 'POST', body: JSON.stringify(payload) },
+      )
       setMessage(
-        `Pegawai berhasil ${editingId ? "diperbarui" : "ditambahkan"}.`,
-      );
-      setShowForm(false);
-      await load();
+        `Pegawai berhasil ${editingId ? 'diperbarui' : 'ditambahkan'}.`,
+      )
+      setShowForm(false)
+      await load()
     } catch (requestError) {
-      setError(requestError.message);
-      setFieldErrors(requestError.errors || {});
+      setError(requestError.message)
+      setFieldErrors(requestError.errors || {})
     } finally {
-      setPendingId("");
+      setPendingId('')
     }
   }
 
   async function toggle(row) {
-    setError("");
-    setMessage("");
-    setPendingId(row.id);
+    setError('')
+    setMessage('')
+    setPendingId(row.id)
     try {
       await http.request(`/api/admin/pegawai/${row.id}/status`, {
-        method: "PATCH",
+        method: 'PATCH',
         body: JSON.stringify({ isActive: !row.isActive }),
-      });
+      })
       setMessage(
-        `${row.nama} berhasil ${row.isActive ? "dinonaktifkan" : "diaktifkan"}.`,
-      );
-      await load();
+        `${row.nama} berhasil ${row.isActive ? 'dinonaktifkan' : 'diaktifkan'}.`,
+      )
+      await load()
     } catch (requestError) {
-      setError(requestError.message);
+      setError(requestError.message)
     } finally {
-      setPendingId("");
+      setPendingId('')
+    }
+  }
+
+  async function handlePhotoUpload(row, file) {
+    if (!file) return
+    setError('')
+    setMessage('')
+    setUploadingPhotoId(row.id)
+    try {
+      const formData = new FormData()
+      formData.append('fotoProfil', file)
+      await http.request(`/api/admin/pegawai/${row.id}/foto`, {
+        method: 'POST',
+        body: formData,
+      })
+      setMessage(`Foto profil ${row.nama} berhasil diperbarui.`)
+      await load()
+    } catch (requestError) {
+      setError(requestError.message || 'Gagal mengunggah foto profil.')
+    } finally {
+      setUploadingPhotoId('')
     }
   }
 
@@ -115,7 +139,7 @@ export default function AdminEmployeesPage() {
     <section className="page">
       <PageHeader
         title="Pegawai"
-        description="Kelola akun dan kewajiban pelaporan anggota tim."
+        description="Kelola akun, foto profil, dan kewajiban pelaporan anggota tim."
         action={
           <button className="primary-button" onClick={openCreate}>
             Tambah Pegawai
@@ -128,7 +152,7 @@ export default function AdminEmployeesPage() {
         <form className="data-section employee-form" onSubmit={save} noValidate>
           <div className="section-heading">
             <div>
-              <h2>{editingId ? "Edit Pegawai" : "Tambah Pegawai"}</h2>
+              <h2>{editingId ? 'Edit Pegawai' : 'Tambah Pegawai'}</h2>
               <p>
                 Role akun selalu Pegawai dan tidak dapat diubah dari formulir
                 ini.
@@ -149,7 +173,7 @@ export default function AdminEmployeesPage() {
                 id="employee-name"
                 aria-label="Nama Pegawai"
                 value={form.nama}
-                onChange={(event) => setField("nama", event.target.value)}
+                onChange={(event) => setField('nama', event.target.value)}
                 aria-invalid={Boolean(fieldErrors.nama)}
                 required
               />
@@ -163,7 +187,7 @@ export default function AdminEmployeesPage() {
                 id="employee-username"
                 aria-label="Username"
                 value={form.username}
-                onChange={(event) => setField("username", event.target.value)}
+                onChange={(event) => setField('username', event.target.value)}
                 aria-invalid={Boolean(fieldErrors.username)}
                 required
               />
@@ -173,19 +197,29 @@ export default function AdminEmployeesPage() {
             </label>
           </div>
           <div className="field-grid">
+            <label htmlFor="employee-phone">
+              Nomor HP
+              <input
+                id="employee-phone"
+                aria-label="Nomor HP"
+                placeholder="Contoh: 081234567890"
+                value={form.nomorHp}
+                onChange={(event) => setField('nomorHp', event.target.value)}
+              />
+            </label>
             <div className="form-field">
               <label htmlFor="employee-password">
-                Password{" "}
+                Password{' '}
                 {editingId && <small>(kosongkan jika tidak diubah)</small>}
               </label>
               <div className="password-field">
                 <input
                   id="employee-password"
                   aria-label="Password"
-                  type={showPassword ? "text" : "password"}
+                  type={showPassword ? 'text' : 'password'}
                   autoComplete="new-password"
                   value={form.password}
-                  onChange={(event) => setField("password", event.target.value)}
+                  onChange={(event) => setField('password', event.target.value)}
                   aria-invalid={Boolean(fieldErrors.password)}
                   required={!editingId}
                 />
@@ -193,52 +227,52 @@ export default function AdminEmployeesPage() {
                   type="button"
                   className="text-button"
                   aria-label={
-                    showPassword ? "Sembunyikan password" : "Tampilkan password"
+                    showPassword ? 'Sembunyikan password' : 'Tampilkan password'
                   }
                   onClick={() => setShowPassword((current) => !current)}
                 >
-                  {showPassword ? "Sembunyikan" : "Tampilkan"}
+                  {showPassword ? 'Sembunyikan' : 'Tampilkan'}
                 </button>
               </div>
               {fieldErrors.password && (
                 <small className="field-error">{fieldErrors.password}</small>
               )}
             </div>
-            <div className="checkbox-stack">
-              <label>
-                <input
-                  type="checkbox"
-                  checked={form.wajibLapor}
-                  onChange={(event) =>
-                    setField("wajibLapor", event.target.checked)
-                  }
-                />{" "}
-                Wajib membuat laporan harian
-              </label>
-              <label>
-                <input
-                  type="checkbox"
-                  checked={form.isActive}
-                  onChange={(event) =>
-                    setField("isActive", event.target.checked)
-                  }
-                />{" "}
-                Akun aktif
-              </label>
-            </div>
+          </div>
+          <div className="checkbox-stack">
+            <label>
+              <input
+                type="checkbox"
+                checked={form.wajibLapor}
+                onChange={(event) =>
+                  setField('wajibLapor', event.target.checked)
+                }
+              />{' '}
+              Wajib membuat laporan harian
+            </label>
+            <label>
+              <input
+                type="checkbox"
+                checked={form.isActive}
+                onChange={(event) =>
+                  setField('isActive', event.target.checked)
+                }
+              />{' '}
+              Akun aktif
+            </label>
           </div>
           <button
             className="primary-button"
-            disabled={pendingId === (editingId || "new")}
+            disabled={pendingId === (editingId || 'new')}
             type="submit"
           >
-            {pendingId === (editingId || "new")
-              ? "Menyimpan..."
-              : "Simpan Pegawai"}
+            {pendingId === (editingId || 'new')
+              ? 'Menyimpan...'
+              : 'Simpan Pegawai'}
           </button>
         </form>
       )}
-      {state === "error" && rows.length === 0 ? (
+      {state === 'error' && rows.length === 0 ? (
         <PageState
           tone="error"
           title="Data Pegawai tidak dapat dimuat"
@@ -262,8 +296,10 @@ export default function AdminEmployeesPage() {
               <caption className="sr-only">Daftar akun pegawai</caption>
               <thead>
                 <tr>
+                  <th>Foto Profil</th>
                   <th>Nama</th>
                   <th>Username</th>
+                  <th>Nomor HP</th>
                   <th>Wajib Lapor</th>
                   <th>Status</th>
                   <th>Aksi</th>
@@ -273,17 +309,45 @@ export default function AdminEmployeesPage() {
                 {rows.map((row) => (
                   <tr key={row.id}>
                     <td>
+                      <div className="avatar-cell">
+                        {row.fotoProfil ? (
+                          <img
+                            src={row.fotoProfilUrl || row.fotoProfil}
+                            alt={`Foto ${row.nama}`}
+                            className="avatar-img"
+                          />
+                        ) : (
+                          <div className="avatar-placeholder">
+                            {row.nama ? row.nama.charAt(0).toUpperCase() : 'P'}
+                          </div>
+                        )}
+                        <label className="photo-upload-label">
+                          <input
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp"
+                            style={{ display: 'none' }}
+                            onChange={(e) => handlePhotoUpload(row, e.target.files[0])}
+                            disabled={uploadingPhotoId === row.id}
+                          />
+                          <span className="secondary-button photo-upload-btn">
+                            {uploadingPhotoId === row.id ? 'Unggah...' : 'Ganti Foto'}
+                          </span>
+                        </label>
+                      </div>
+                    </td>
+                    <td>
                       <strong>{row.nama}</strong>
                     </td>
                     <td>
                       <code>{row.username}</code>
                     </td>
-                    <td>{row.wajibLapor ? "Ya" : "Tidak"}</td>
+                    <td>{row.nomorHp || '-'}</td>
+                    <td>{row.wajibLapor ? 'Ya' : 'Tidak'}</td>
                     <td>
                       <span
-                        className={`status-badge ${row.isActive ? "active" : "inactive"}`}
+                        className={`status-badge ${row.isActive ? 'active' : 'inactive'}`}
                       >
-                        {row.isActive ? "Aktif" : "Nonaktif"}
+                        {row.isActive ? 'Aktif' : 'Nonaktif'}
                       </span>
                     </td>
                     <td>
@@ -296,24 +360,24 @@ export default function AdminEmployeesPage() {
                         </button>
                         <button
                           className={
-                            row.isActive ? "warning-button" : "secondary-button"
+                            row.isActive ? 'warning-button' : 'secondary-button'
                           }
                           disabled={pendingId === row.id}
                           onClick={() => toggle(row)}
                         >
                           {pendingId === row.id
-                            ? "Memproses..."
+                            ? 'Memproses...'
                             : row.isActive
-                              ? "Nonaktifkan"
-                              : "Aktifkan"}
+                              ? 'Nonaktifkan'
+                              : 'Aktifkan'}
                         </button>
                       </div>
                     </td>
                   </tr>
                 ))}
-                {state === "loading" && rows.length === 0 && (
+                {state === 'loading' && rows.length === 0 && (
                   <tr>
-                    <td className="empty-cell" colSpan="5">
+                    <td className="empty-cell" colSpan="7">
                       Memuat data Pegawai...
                     </td>
                   </tr>
@@ -324,5 +388,5 @@ export default function AdminEmployeesPage() {
         </section>
       )}
     </section>
-  );
+  )
 }

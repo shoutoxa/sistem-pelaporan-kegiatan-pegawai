@@ -41,14 +41,16 @@ export function createAuthRouter({ authService }) {
 }
 
 export async function createProductionAuthService() {
-  const [{ prisma }, bcrypt, jwt] = await Promise.all([
+  const [{ prisma }, bcrypt, jwt, { createSupabaseStorage }] = await Promise.all([
     import('../../config/prisma.js'),
     import('bcryptjs'),
     import('jsonwebtoken'),
+    import('../../config/supabase.js'),
   ])
   const jwtApi = jwt.default || jwt
   const secret = process.env.JWT_SECRET
   if (!secret) throw new Error('JWT_SECRET belum dikonfigurasi.')
+  const storage = createSupabaseStorage()
 
   const authService = (await import('./auth.service.js')).createAuthService({
     userRepository: {
@@ -60,6 +62,7 @@ export async function createProductionAuthService() {
       sign: (payload) => jwtApi.sign({ ...payload, sub: payload.userId }, secret, { expiresIn: '8h' }),
       verify: (token) => jwtApi.verify(token, secret),
     },
+    storage,
   })
 
   return authService

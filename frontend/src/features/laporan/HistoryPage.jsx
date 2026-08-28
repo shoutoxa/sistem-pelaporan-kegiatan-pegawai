@@ -1,46 +1,49 @@
-import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-import { historyApi } from "../../api/history.js";
-import PageHeader from "../../components/PageHeader.jsx";
-import PageState from "../../components/PageState.jsx";
-import Icon from "../../components/Icon.jsx";
-import { masterApi } from "../../api/master.js";
+import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { historyApi } from '../../api/history.js'
+import PageHeader from '../../components/PageHeader.jsx'
+import PageState from '../../components/PageState.jsx'
+import Icon from '../../components/Icon.jsx'
+import { masterApi } from '../../api/master.js'
 
 export default function HistoryPage() {
-  const [result, setResult] = useState({ items: [], total: 0 });
-  const [state, setState] = useState("loading");
+  const [result, setResult] = useState({ items: [], total: 0 })
+  const [state, setState] = useState('loading')
   const [filters, setFilters] = useState({
-    tanggal: "",
-    tahapanId: "",
+    tanggal: '',
+    pekerjaanId: '',
     page: 1,
     limit: 20,
-  });
-  const [stages, setStages] = useState([]);
-  const [requestVersion, setRequestVersion] = useState(0);
+  })
+  const [jobs, setJobs] = useState([])
+  const [requestVersion, setRequestVersion] = useState(0)
+
   useEffect(() => {
     masterApi
-      .fetchTahapan()
-      .then((rows) => setStages(Array.isArray(rows) ? rows : []))
-      .catch(() => setStages([]));
-  }, []);
+      .fetchPekerjaan()
+      .then((rows) => setJobs(Array.isArray(rows) ? rows : []))
+      .catch(() => setJobs([]))
+  }, [])
+
   useEffect(() => {
-    let active = true;
-    setState("loading");
+    let active = true
+    setState('loading')
     historyApi
       .listMine(filters)
       .then((response) => {
-        if (!active) return;
-        setResult(response.data);
-        setState("ready");
+        if (!active) return
+        setResult(response.data)
+        setState('ready')
       })
       .catch(() => {
-        if (active) setState("error");
-      });
+        if (active) setState('error')
+      })
     return () => {
-      active = false;
-    };
-  }, [filters, requestVersion]);
-  if (state === "loading")
+      active = false
+    }
+  }, [filters, requestVersion])
+
+  if (state === 'loading')
     return (
       <section className="page">
         <PageState
@@ -48,8 +51,8 @@ export default function HistoryPage() {
           message="Mengambil laporan yang pernah Anda kirim."
         />
       </section>
-    );
-  if (state === "error")
+    )
+  if (state === 'error')
     return (
       <section className="page">
         <PageState
@@ -59,11 +62,11 @@ export default function HistoryPage() {
           action={<button className="secondary-button" type="button" onClick={() => setRequestVersion((current) => current + 1)}>Coba lagi</button>}
         />
       </section>
-    );
+    )
   const totalPages = Math.max(
     1,
     Math.ceil(result.total / (result.limit || filters.limit)),
-  );
+  )
   return (
     <section className="page">
       <PageHeader
@@ -94,29 +97,29 @@ export default function HistoryPage() {
             />
           </label>
           <label>
-            Tahapan
+            Pekerjaan
             <select
-              aria-label="Tahapan histori"
-              value={filters.tahapanId}
+              aria-label="Pekerjaan histori"
+              value={filters.pekerjaanId}
               onChange={(event) =>
                 setFilters((current) => ({
                   ...current,
-                  tahapanId: event.target.value,
+                  pekerjaanId: event.target.value,
                   page: 1,
                 }))
               }
             >
-              <option value="">Semua Tahapan</option>
-              {stages.map((stage) => (
-                <option key={stage.id} value={stage.id}>
-                  {stage.namaTahapan}
+              <option value="">Semua Pekerjaan</option>
+              {jobs.map((job) => (
+                <option key={job.id} value={job.id}>
+                  {job.namaPekerjaan}
                 </option>
               ))}
             </select>
           </label>
         </div>
-        {(filters.tanggal || filters.tahapanId) && (
-          <button className="text-button" type="button" onClick={() => setFilters((current) => ({ ...current, tanggal: "", tahapanId: "", page: 1 }))}>
+        {(filters.tanggal || filters.pekerjaanId) && (
+          <button className="text-button" type="button" onClick={() => setFilters((current) => ({ ...current, tanggal: '', pekerjaanId: '', page: 1 }))}>
             Hapus filter
           </button>
         )}
@@ -135,7 +138,7 @@ export default function HistoryPage() {
               <tr>
                 <th>Kegiatan & kirim</th>
                 <th>Lokasi</th>
-                <th>Tahapan</th>
+                <th>Pekerjaan</th>
                 <th>Perangkat</th>
                 <th>Keterangan</th>
                 <th>Foto</th>
@@ -150,27 +153,27 @@ export default function HistoryPage() {
                     {String(item.tanggalKegiatan).slice(0, 10)}
                     <small className="table-subline">
                       {item.createdAt
-                        ? new Date(item.createdAt).toLocaleTimeString("id-ID", {
-                            hour: "2-digit",
-                            minute: "2-digit",
+                        ? new Date(item.createdAt).toLocaleTimeString('id-ID', {
+                            hour: '2-digit',
+                            minute: '2-digit',
                           })
-                        : "-"}
+                        : '-'}
                     </small>
                   </td>
                   <td data-label="Lokasi">
-                    {item.rw?.desa?.namaDesa} · {item.rw?.nomorRw}
+                    {item.cluster?.desa?.namaDesa} · {item.cluster?.clusterName}
                   </td>
-                  <td data-label="Tahapan">
-                    <strong>{item.tahapan?.namaTahapan}</strong>
+                  <td data-label="Pekerjaan">
+                    <strong>{item.pekerjaan?.namaPekerjaan}</strong>
                   </td>
-                  <td data-label="Perangkat">{item.nomorPerangkat || "-"}</td>
+                  <td data-label="Perangkat">{item.nomorPerangkat || '-'}</td>
                   <td data-label="Keterangan" className="description-cell">{item.keterangan}</td>
                   <td data-label="Dokumentasi">{item.dokumentasi?.length || 0} foto</td>
                   <td data-label="Status edit">
                     <span
-                      className={`status-badge ${item.canEdit ? "active" : "inactive"}`}
+                      className={`status-badge ${item.canEdit ? 'active' : 'inactive'}`}
                     >
-                      {item.canEdit ? "Dapat diedit" : "Terkunci"}
+                      {item.canEdit ? 'Dapat diedit' : 'Terkunci'}
                     </span>
                   </td>
                   <td data-label="Aksi">
@@ -228,5 +231,5 @@ export default function HistoryPage() {
         </div>
       </section>
     </section>
-  );
+  )
 }

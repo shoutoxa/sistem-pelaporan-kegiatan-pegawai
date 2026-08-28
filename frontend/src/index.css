@@ -415,3 +415,45 @@ td { color: #2d3e35; font-size: .87rem; line-height: 1.45; }
   .activity-rail, .form-progress, .distribution-track i { background: CanvasText; }
   .status-badge, .brand-mark, .avatar { border: 1px solid CanvasText; }
 }
+
+/* Documentation Module Styles */
+.documentation-container { display: flex; flex-direction: column; gap: 1.5rem; }
+.desa-group-card { border: 1px solid var(--border); border-radius: var(--rounded-md); background: var(--surface); padding: 1.25rem; }
+.desa-heading { border-bottom: 1px solid var(--border); padding-bottom: 0.75rem; margin-bottom: 1.25rem; }
+.tahapan-group-list { display: flex; flex-direction: column; gap: 1.25rem; }
+.tahapan-subcard { background: var(--surface-muted); border: 1px solid var(--border); border-radius: var(--rounded); padding: 1rem; }
+.tahapan-subheading { color: var(--brand); font-size: 1rem; font-weight: 700; margin-bottom: 0.85rem; padding-bottom: 0.35rem; border-bottom: 1px dashed var(--border); }
+.photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1rem; }
+.photo-card { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: var(--rounded); background: var(--surface); overflow: hidden; }
+.photo-wrap { aspect-ratio: 4 / 3; background: #000; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+.photo-wrap img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.2s ease; }
+.photo-card:hover .photo-wrap img { transform: scale(1.03); }
+.photo-meta { padding: 0.85rem; display: flex; flex-direction: column; gap: 0.4rem; font-size: 0.875rem; }
+.photo-badges { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 0.25rem; }
+.badge-tag { font-size: 0.75rem; font-weight: 600; padding: 0.2rem 0.5rem; border-radius: 4px; }
+.village-tag { background: #E8F5E9; color: #1B5E20; border: 1px solid #C8E6C9; }
+.stage-tag { background: #FFF3E0; color: #E65100; border: 1px solid #FFE0B2; }
+.photo-pic, .photo-date { color: var(--text-muted); margin: 0; }
+.photo-caption { margin-top: 0.25rem; font-style: italic; color: var(--text); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.photo-detail-link { margin-top: 0.5rem; align-self: flex-start; }
+
+@media print {
+  .no-print, nav, sidebar, .sidebar, .app-header, .dashboard-controls, .filter-bar { display: none !important; }
+  body { background: #fff !important; color: #000 !important; }
+  .page { padding: 0 !important; max-width: 100% !important; }
+  .desa-group-card { page-break-inside: avoid; border: 1px solid #ccc !important; box-shadow: none !important; }
+  .photo-grid { grid-template-columns: repeat(3, 1fr) !important; }
+}
+
+/* Avatar Cell & Profile Photo Styles */
+.avatar-cell { display: flex; align-items: center; gap: 0.65rem; }
+.avatar-img { width: 38px; height: 38px; border-radius: 50%; object-fit: cover; border: 2px solid var(--border); flex-shrink: 0; }
+.avatar-placeholder { display: flex; align-items: center; justify-content: center; width: 38px; height: 38px; border-radius: 50%; background: var(--brand); color: #ffffff; font-weight: 700; font-size: 0.95rem; flex-shrink: 0; }
+.photo-upload-label { cursor: pointer; display: inline-flex; margin: 0; }
+.photo-upload-btn { font-size: 0.75rem; padding: 0.25rem 0.55rem; line-height: 1.2; border-radius: var(--rounded); }
+
+.topbar-user { display: flex; align-items: center; gap: 0.65rem; font-weight: 700; color: var(--text); }
+.mobile-avatar { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; border: 1.5px solid var(--border); flex-shrink: 0; }
+.sidebar-account .avatar-img { width: 38px; height: 38px; border-radius: 50%; object-fit: cover; border: 1.5px solid var(--border); flex-shrink: 0; }
+
+

@@ -1,6 +1,6 @@
-import { masterSchemas, normalizeRw, normalizeSpaces } from './master.schemas.js'
+import { masterSchemas, normalizeClusterName, normalizeSpaces } from './master.schemas.js'
 
-const models = { desa: 'desa', rw: 'rw', tahapan: 'tahapan' }
+const models = { desa: 'desa', cluster: 'cluster', pekerjaan: 'pekerjaan' }
 
 function masterError(code, message = code) {
   const error = new Error(message)
@@ -18,16 +18,19 @@ export function createMasterService({ prisma }) {
     return prisma.desa.findMany({ where: { isActive: true }, orderBy: { namaDesa: 'asc' } })
   }
 
-  async function listActiveRwByDesa(desaId) {
-    return prisma.rw.findMany({ where: { desaId, isActive: true, desa: { isActive: true } }, orderBy: { nomorRw: 'asc' } })
+  async function listActiveClusterByDesa(desaId) {
+    return prisma.cluster.findMany({ where: { desaId, isActive: true, desa: { isActive: true } }, orderBy: { clusterName: 'asc' } })
   }
 
-  async function listActiveTahapan() {
-    return prisma.tahapan.findMany({ where: { isActive: true }, orderBy: { namaTahapan: 'asc' } })
+  async function listActivePekerjaan() {
+    return prisma.pekerjaan.findMany({ where: { isActive: true }, orderBy: { namaPekerjaan: 'asc' } })
   }
 
   async function listAdmin(resource) {
-    return modelFor(resource).findMany({ orderBy: resource === 'rw' ? { nomorRw: 'asc' } : resource === 'desa' ? { namaDesa: 'asc' } : { namaTahapan: 'asc' } })
+    return modelFor(resource).findMany({
+      orderBy: resource === 'cluster' ? { clusterName: 'asc' } : resource === 'desa' ? { namaDesa: 'asc' } : { namaPekerjaan: 'asc' },
+      ...(resource === 'cluster' ? { include: { desa: true } } : {}),
+    })
   }
 
   async function create(resource, input) {
@@ -39,15 +42,15 @@ export function createMasterService({ prisma }) {
       data.namaDesa = normalizeSpaces(data.namaDesa)
       if (await prisma.desa.findFirst({ where: { namaDesa: data.namaDesa } })) throw masterError('DUPLICATE', 'Nama Desa sudah digunakan.')
     }
-    if (resource === 'rw') {
-      data.nomorRw = normalizeRw(data.nomorRw)
+    if (resource === 'cluster') {
+      data.clusterName = normalizeClusterName(data.clusterName)
       const parent = await prisma.desa.findUnique({ where: { id: data.desaId } })
       if (!parent || !parent.isActive) throw masterError('INACTIVE_PARENT', 'Desa tidak aktif atau tidak ditemukan.')
-      if (await prisma.rw.findFirst({ where: { desaId_nomorRw: { desaId: data.desaId, nomorRw: data.nomorRw } } })) throw masterError('DUPLICATE', 'Nomor RW sudah digunakan pada Desa tersebut.')
+      if (await prisma.cluster.findFirst({ where: { desaId_clusterName: { desaId: data.desaId, clusterName: data.clusterName } } })) throw masterError('DUPLICATE', 'Nama Cluster sudah digunakan pada Desa tersebut.')
     }
-    if (resource === 'tahapan') {
-      data.namaTahapan = normalizeSpaces(data.namaTahapan)
-      if (await prisma.tahapan.findFirst({ where: { namaTahapan: data.namaTahapan } })) throw masterError('DUPLICATE', 'Nama Tahapan sudah digunakan.')
+    if (resource === 'pekerjaan') {
+      data.namaPekerjaan = normalizeSpaces(data.namaPekerjaan)
+      if (await prisma.pekerjaan.findFirst({ where: { namaPekerjaan: data.namaPekerjaan } })) throw masterError('DUPLICATE', 'Nama Pekerjaan sudah digunakan.')
     }
     return modelFor(resource).create({ data })
   }
@@ -57,8 +60,8 @@ export function createMasterService({ prisma }) {
     if (!parsed?.success) throw masterError('VALIDATION', 'Data master tidak valid.')
     const data = { ...parsed.data }
     if (resource === 'desa') data.namaDesa = normalizeSpaces(data.namaDesa)
-    if (resource === 'rw') data.nomorRw = normalizeRw(data.nomorRw)
-    if (resource === 'tahapan') data.namaTahapan = normalizeSpaces(data.namaTahapan)
+    if (resource === 'cluster') data.clusterName = normalizeClusterName(data.clusterName)
+    if (resource === 'pekerjaan') data.namaPekerjaan = normalizeSpaces(data.namaPekerjaan)
     return modelFor(resource).update({ where: { id }, data })
   }
 
@@ -67,5 +70,5 @@ export function createMasterService({ prisma }) {
     return modelFor(resource).update({ where: { id }, data: { isActive } })
   }
 
-  return { listActiveDesa, listActiveRwByDesa, listActiveTahapan, listAdmin, create, update, setActive }
+  return { listActiveDesa, listActiveClusterByDesa, listActivePekerjaan, listAdmin, create, update, setActive }
 }
