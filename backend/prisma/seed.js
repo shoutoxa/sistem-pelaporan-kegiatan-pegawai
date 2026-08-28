@@ -1,7 +1,7 @@
 import '../load-env.js'
 import bcrypt from 'bcryptjs'
 import { prisma } from '../src/config/prisma.js'
-import { DEMO_STAGES, DEMO_USERS, DEMO_VILLAGES } from './seed-data.js'
+import { DEMO_JOBS, DEMO_USERS, DEMO_VILLAGES } from './seed-data.js'
 
 const adminPassword = process.env.SEED_ADMIN_PASSWORD
 const employeePassword = process.env.SEED_EMPLOYEE_PASSWORD
@@ -22,27 +22,25 @@ for (const village of DEMO_VILLAGES) {
     create: { namaDesa: village.name, isActive: true },
   })
 
-  for (const nomorRw of village.rws) {
-    await prisma.rw.upsert({
-      where: { desaId_nomorRw: { desaId: desa.id, nomorRw } },
+  for (const clusterName of village.clusters) {
+    await prisma.cluster.upsert({
+      where: { desaId_clusterName: { desaId: desa.id, clusterName } },
       update: { isActive: true },
-      create: { desaId: desa.id, nomorRw, isActive: true },
+      create: { desaId: desa.id, clusterName, isActive: true },
     })
   }
 }
 
-for (const stage of DEMO_STAGES) {
-  await prisma.tahapan.upsert({
-    where: { namaTahapan: stage.name },
+for (const job of DEMO_JOBS) {
+  await prisma.pekerjaan.upsert({
+    where: { namaPekerjaan: job.name },
     update: {
-      requiresNomorPerangkat: stage.requiresDeviceNumber,
-      instruksiDokumentasi: stage.instruction,
+      instruksiDokumentasi: job.instruction,
       isActive: true,
     },
     create: {
-      namaTahapan: stage.name,
-      requiresNomorPerangkat: stage.requiresDeviceNumber,
-      instruksiDokumentasi: stage.instruction,
+      namaPekerjaan: job.name,
+      instruksiDokumentasi: job.instruction,
       isActive: true,
     },
   })
@@ -51,8 +49,8 @@ for (const stage of DEMO_STAGES) {
 for (const user of DEMO_USERS) {
   await prisma.user.upsert({
     where: { username: user.username },
-    update: { nama: user.name, role: user.role, wajibLapor: user.wajibReport, isActive: true, passwordHash: passwordHashes[user.role] },
-    create: { nama: user.name, username: user.username, role: user.role, wajibLapor: user.wajibReport, isActive: true, passwordHash: passwordHashes[user.role] },
+    update: { nama: user.name, role: user.role, wajibLapor: user.wajibReport, nomorHp: user.nomorHp, isActive: true, passwordHash: passwordHashes[user.role] },
+    create: { nama: user.name, username: user.username, role: user.role, wajibLapor: user.wajibReport, nomorHp: user.nomorHp, isActive: true, passwordHash: passwordHashes[user.role] },
   })
 }
 

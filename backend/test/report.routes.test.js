@@ -11,7 +11,7 @@ describe('report route', () => {
     const requirePegawai = (request, _response, next) => { request.user = { id: 'user-1', role: 'PEGAWAI' }; next() }
     const response = await request(createApp({ reportRouter: createReportRouter({ reportService, requirePegawai }) }))
       .post('/api/laporan')
-      .field('tanggalKegiatan', '2026-08-22').field('rwId', 'rw-1').field('tahapanId', 'stage-1').field('keterangan', 'Kegiatan lapangan selesai')
+      .field('tanggalKegiatan', '2026-08-22').field('clusterId', 'c-1').field('pekerjaanId', 'p-1').field('keterangan', 'Kegiatan lapangan selesai')
       .attach('dokumentasi', validPng, { filename: 'photo.png', contentType: 'image/png' })
 
     expect(response.status).toBe(201)
@@ -23,7 +23,7 @@ describe('report route', () => {
     const requirePegawai = (request, _response, next) => { request.user = { id: 'user-1', role: 'PEGAWAI' }; next() }
     const response = await request(createApp({ reportRouter: createReportRouter({ reportService, requirePegawai }) }))
       .post('/api/laporan')
-      .field('tanggalKegiatan', '2026-08-22').field('rwId', 'rw-1').field('tahapanId', 'stage-1').field('keterangan', 'Kegiatan lapangan selesai')
+      .field('tanggalKegiatan', '2026-08-22').field('clusterId', 'c-1').field('pekerjaanId', 'p-1').field('keterangan', 'Kegiatan lapangan selesai')
       .attach('dokumentasi', Buffer.from('not-an-image'), { filename: 'photo.jpg', contentType: 'image/jpeg' })
 
     expect(response.status).toBe(400)
@@ -31,14 +31,14 @@ describe('report route', () => {
   })
 
   it('returns the canonical field-error response shape', async () => {
-    const reportService = { createReport: async () => { const error = new Error('Data laporan tidak valid'); error.code = 'VALIDATION'; error.errors = { rwId: 'RW tidak tersedia' }; throw error } }
+    const reportService = { createReport: async () => { const error = new Error('Data laporan tidak valid'); error.code = 'VALIDATION'; error.errors = { clusterId: 'Cluster tidak tersedia' }; throw error } }
     const requirePegawai = (request, _response, next) => { request.user = { id: 'user-1', role: 'PEGAWAI' }; next() }
     const response = await request(createApp({ reportRouter: createReportRouter({ reportService, requirePegawai }) }))
       .post('/api/laporan')
-      .field('tanggalKegiatan', '2026-08-22').field('rwId', 'rw-1').field('tahapanId', 'stage-1').field('keterangan', 'Kegiatan lapangan selesai')
+      .field('tanggalKegiatan', '2026-08-22').field('clusterId', 'c-1').field('pekerjaanId', 'p-1').field('keterangan', 'Kegiatan lapangan selesai')
       .attach('dokumentasi', validPng, { filename: 'photo.png', contentType: 'image/png' })
 
     expect(response.status).toBe(400)
-    expect(response.body).toEqual({ message: 'Data laporan tidak valid', errors: { rwId: 'RW tidak tersedia' } })
+    expect(response.body).toEqual({ message: 'Data laporan tidak valid', errors: { clusterId: 'Cluster tidak tersedia' } })
   })
 })

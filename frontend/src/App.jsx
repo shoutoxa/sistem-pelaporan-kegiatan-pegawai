@@ -12,6 +12,7 @@ import HistoryPage from './features/laporan/HistoryPage.jsx'
 import ReportDetailPage from './features/laporan/ReportDetailPage.jsx'
 import DashboardPage from './features/dashboard/DashboardPage.jsx'
 import AdminReportsPage from './features/dashboard/AdminReportsPage.jsx'
+import DokumentasiPage from './features/dashboard/DokumentasiPage.jsx'
 import AdminEmployeesPage from './features/pegawai/AdminEmployeesPage.jsx'
 import EditReportPage from './features/laporan/EditReportPage.jsx'
 
@@ -38,6 +39,8 @@ export default function App() {
               <Route path="dashboard" element={<DashboardPage />} />
               <Route path="laporan" element={<AdminReportsPage />} />
               <Route path="laporan/:id" element={<ReportDetailPage />} />
+              <Route path="laporan/:id/edit" element={<EditReportPage />} />
+              <Route path="dokumentasi" element={<DokumentasiPage />} />
               <Route path="pegawai" element={<AdminEmployeesPage />} />
               <Route path="master" element={<AdminMasterPage />} />
             </Route>

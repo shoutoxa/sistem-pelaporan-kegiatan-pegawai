@@ -1,47 +1,108 @@
 function historyError(code, message) { const error = new Error(message); error.code = code; return error }
 
 export function createHistoryService({ prisma, storage, clock = () => new Date() }) {
-  async function listOwnReports({ actor, page = 1, limit = 20, tanggal, tahapanId }) {
+  async function listOwnReports({ actor, page = 1, limit = 20, tanggal, pekerjaanId }) {
     const safePage = Math.max(1, Number(page) || 1)
     const safeLimit = Math.min(100, Math.max(1, Number(limit) || 20))
     const where = { userId: actor.id }
     if (tanggal) where.tanggalKegiatan = new Date(`${tanggal}T00:00:00.000Z`)
-    if (tahapanId) where.tahapanId = tahapanId
+    if (pekerjaanId) where.pekerjaanId = pekerjaanId
     const [items, total] = await Promise.all([
-      prisma.laporan.findMany({ where, include: { rw: { include: { desa: true } }, tahapan: true, dokumentasi: true }, orderBy: { createdAt: 'desc' }, skip: (safePage - 1) * safeLimit, take: safeLimit }),
+      prisma.laporan.findMany({ where, include: { cluster: { include: { desa: true } }, pekerjaan: true, dokumentasi: true }, orderBy: { createdAt: 'desc' }, skip: (safePage - 1) * safeLimit, take: safeLimit }),
       prisma.laporan.count({ where }),
     ])
     const now = clock().getTime()
     return { items: items.map((item) => {
       const editableUntil = new Date(new Date(item.createdAt).getTime() + 24 * 60 * 60 * 1000)
-      return { ...item, editableUntil: editableUntil.toISOString(), canEdit: now <= editableUntil.getTime() }
+      return { ...item, editableUntil: editableUntil.toISOString(), canEdit: !item.diterima && now <= editableUntil.getTime() }
     }), total, page: safePage, limit: safeLimit }
   }
 
   async function getReportDetail({ actor, reportId }) {
     const where = actor.role === 'SUPERADMIN' ? { id: reportId } : { id: reportId, userId: actor.id }
-    const report = await prisma.laporan.findFirst({ where, include: { rw: { include: { desa: true } }, tahapan: true, dokumentasi: true } })
+    const report = await prisma.laporan.findFirst({ where, include: { user: { select: { id: true, nama: true, username: true, nomorHp: true } }, cluster: { include: { desa: true } }, pekerjaan: true, dokumentasi: true } })
     if (!report || (actor.role !== 'SUPERADMIN' && report.userId !== actor.id)) throw historyError('NOT_FOUND', 'Laporan tidak ditemukan.')
     const dokumentasi = storage ? await Promise.all(report.dokumentasi.map(async (item) => ({ ...item, signedUrl: await storage.createSignedUrl(item.storagePath, 600) }))) : report.dokumentasi
     return { ...report, dokumentasi }
   }
 
   async function listAdminReports(filters = {}) {
-    const { page = 1, limit = 20, from, to, pegawaiId, desaId, rwId, tahapanId } = filters
+    const { page = 1, limit = 20, from, to, pegawaiId, desaId, clusterId, pekerjaanId, search } = filters
     const safePage = Math.max(1, Number(page) || 1)
     const safeLimit = Math.min(100, Math.max(1, Number(limit) || 20))
     const where = {}
     if (pegawaiId) where.userId = pegawaiId
-    if (rwId) where.rwId = rwId
-    if (tahapanId) where.tahapanId = tahapanId
-    if (desaId) where.rw = { desaId }
+    if (clusterId) where.clusterId = clusterId
+    if (pekerjaanId) where.pekerjaanId = pekerjaanId
+    if (desaId) where.cluster = { desaId }
     if (from || to) where.tanggalKegiatan = { ...(from ? { gte: new Date(`${from}T00:00:00.000Z`) } : {}), ...(to ? { lte: new Date(`${to}T00:00:00.000Z`) } : {}) }
+    const keyword = typeof search === 'string' ? search.trim() : ''
+    if (keyword) {
+      where.OR = [
+        { user: { nama: { contains: keyword, mode: 'insensitive' } } },
+        { cluster: { clusterName: { contains: keyword, mode: 'insensitive' } } },
+        { cluster: { desa: { namaDesa: { contains: keyword, mode: 'insensitive' } } } },
+        { pekerjaan: { namaPekerjaan: { contains: keyword, mode: 'insensitive' } } },
+      ]
+    }
     const [items, total] = await Promise.all([
-      prisma.laporan.findMany({ where, include: { user: true, rw: { include: { desa: true } }, tahapan: true, dokumentasi: true }, orderBy: { createdAt: 'desc' }, skip: (safePage - 1) * safeLimit, take: safeLimit }),
+      prisma.laporan.findMany({ where, include: { user: true, cluster: { include: { desa: true } }, pekerjaan: true, dokumentasi: true }, orderBy: { createdAt: 'desc' }, skip: (safePage - 1) * safeLimit, take: safeLimit }),
       prisma.laporan.count({ where }),
     ])
     return { items, total, page: safePage, limit: safeLimit }
   }
 
-  return { listOwnReports, getReportDetail, listAdminReports }
+  async function listDocumentation(filters = {}) {
+    const { desaId, clusterId, pekerjaanId } = filters
+    const where = { dokumentasi: { some: {} } }
+    if (pekerjaanId) where.pekerjaanId = pekerjaanId
+    if (clusterId) where.clusterId = clusterId
+    else if (desaId) where.cluster = { desaId }
+    const reports = await prisma.laporan.findMany({
+      where,
+      include: {
+        user: { select: { id: true, nama: true, nomorHp: true } },
+        cluster: { include: { desa: true } },
+        pekerjaan: true,
+        dokumentasi: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    })
+
+    const items = []
+    for (const report of reports) {
+      const docs = storage
+        ? await Promise.all(
+            report.dokumentasi.map(async (doc) => ({
+              ...doc,
+              signedUrl: await storage.createSignedUrl(doc.storagePath, 600),
+            }))
+          )
+        : report.dokumentasi
+
+      for (const doc of docs) {
+        items.push({
+          id: doc.id,
+          storagePath: doc.storagePath,
+          signedUrl: doc.signedUrl || doc.storagePath,
+          originalName: doc.originalName,
+          mimeType: doc.mimeType,
+          fileSize: doc.fileSize,
+          createdAt: doc.createdAt,
+          laporanId: report.id,
+          tanggalKegiatan: report.tanggalKegiatan,
+          keterangan: report.keterangan,
+          diterima: report.diterima,
+          pegawai: report.user,
+          desa: report.cluster?.desa,
+          cluster: report.cluster,
+          pekerjaan: report.pekerjaan,
+        })
+      }
+    }
+
+    return { items, total: items.length }
+  }
+
+  return { listOwnReports, getReportDetail, listAdminReports, listDocumentation }
 }

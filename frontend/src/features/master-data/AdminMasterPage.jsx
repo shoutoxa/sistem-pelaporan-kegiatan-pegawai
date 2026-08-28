@@ -1,113 +1,111 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { masterApi } from "../../api/master.js";
-import MasterTable from "./MasterTable.jsx";
-import StageFields from "./StageFields.jsx";
-import PageHeader from "../../components/PageHeader.jsx";
-import Notice from "../../components/Notice.jsx";
-import PageState from "../../components/PageState.jsx";
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { masterApi } from '../../api/master.js'
+import MasterTable from './MasterTable.jsx'
+import JobFields from './JobFields.jsx'
+import PageHeader from '../../components/PageHeader.jsx'
+import Notice from '../../components/Notice.jsx'
+import PageState from '../../components/PageState.jsx'
 
 const emptyForms = {
-  desa: { namaDesa: "" },
-  rw: { desaId: "", nomorRw: "" },
-  tahapan: {
-    namaTahapan: "",
-    requiresNomorPerangkat: false,
-    instruksiDokumentasi: "",
+  desa: { namaDesa: '' },
+  cluster: { desaId: '', clusterName: '' },
+  pekerjaan: {
+    namaPekerjaan: '',
+    instruksiDokumentasi: '',
   },
-};
+}
 
-const labels = { desa: "Desa", rw: "RW", tahapan: "Tahapan" };
+const labels = { desa: 'Desa', cluster: 'RW', pekerjaan: 'Pekerjaan' }
 
 export default function AdminMasterPage() {
-  const [data, setData] = useState({ desa: [], rw: [], tahapan: [] });
-  const [editor, setEditor] = useState(null);
-  const [form, setForm] = useState(emptyForms.desa);
-  const [state, setState] = useState("loading");
-  const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
+  const [data, setData] = useState({ desa: [], cluster: [], pekerjaan: [] })
+  const [editor, setEditor] = useState(null)
+  const [form, setForm] = useState(emptyForms.desa)
+  const [state, setState] = useState('loading')
+  const [message, setMessage] = useState('')
+  const [error, setError] = useState('')
 
   const load = useCallback(async () => {
-    setState("loading");
+    setState('loading')
     try {
-      const [desa, rw, tahapan] = await Promise.all(
-        ["desa", "rw", "tahapan"].map(masterApi.fetchAdmin),
-      );
-      setData({ desa, rw, tahapan });
-      setState("ready");
+      const [desa, cluster, pekerjaan] = await Promise.all(
+        ['desa', 'cluster', 'pekerjaan'].map(masterApi.fetchAdmin),
+      )
+      setData({ desa, cluster, pekerjaan })
+      setState('ready')
     } catch (requestError) {
-      setError(requestError.message || "Master data tidak dapat dimuat.");
-      setState("error");
+      setError(requestError.message || 'Master data tidak dapat dimuat.')
+      setState('error')
     }
-  }, []);
+  }, [])
 
   useEffect(() => {
-    load();
-  }, [load]);
+    load()
+  }, [load])
 
   const desaNames = useMemo(
     () => Object.fromEntries(data.desa.map((item) => [item.id, item.namaDesa])),
     [data.desa],
-  );
+  )
 
   function openCreate(resource) {
-    setEditor({ resource, id: null });
-    setForm({ ...emptyForms[resource] });
-    setError("");
-    setMessage("");
+    setEditor({ resource, id: null })
+    setForm({ ...emptyForms[resource] })
+    setError('')
+    setMessage('')
   }
 
   function openEdit(resource, row) {
-    setEditor({ resource, id: row.id });
-    if (resource === "desa") setForm({ namaDesa: row.namaDesa });
-    if (resource === "rw")
-      setForm({ desaId: row.desaId, nomorRw: row.nomorRw });
-    if (resource === "tahapan")
+    setEditor({ resource, id: row.id })
+    if (resource === 'desa') setForm({ namaDesa: row.namaDesa })
+    if (resource === 'cluster')
+      setForm({ desaId: row.desaId, clusterName: row.clusterName })
+    if (resource === 'pekerjaan')
       setForm({
-        namaTahapan: row.namaTahapan,
-        requiresNomorPerangkat: row.requiresNomorPerangkat,
-        instruksiDokumentasi: row.instruksiDokumentasi || "",
-      });
-    setError("");
-    setMessage("");
+        namaPekerjaan: row.namaPekerjaan,
+        instruksiDokumentasi: row.instruksiDokumentasi || '',
+      })
+    setError('')
+    setMessage('')
   }
 
   async function save(event) {
-    event.preventDefault();
-    setState("saving");
-    setError("");
+    event.preventDefault()
+    setState('saving')
+    setError('')
     try {
       const payload =
-        editor.resource === "tahapan"
+        editor.resource === 'pekerjaan'
           ? {
               ...form,
               instruksiDokumentasi: form.instruksiDokumentasi.trim() || null,
             }
-          : form;
+          : form
       if (editor.id)
-        await masterApi.update(editor.resource, editor.id, payload);
-      else await masterApi.create(editor.resource, payload);
+        await masterApi.update(editor.resource, editor.id, payload)
+      else await masterApi.create(editor.resource, payload)
       setMessage(
-        `${labels[editor.resource]} berhasil ${editor.id ? "diperbarui" : "ditambahkan"}.`,
-      );
-      setEditor(null);
-      await load();
+        `${labels[editor.resource]} berhasil ${editor.id ? 'diperbarui' : 'ditambahkan'}.`,
+      )
+      setEditor(null)
+      await load()
     } catch (requestError) {
-      setError(requestError.message || "Perubahan gagal disimpan.");
-      setState("ready");
+      setError(requestError.message || 'Perubahan gagal disimpan.')
+      setState('ready')
     }
   }
 
   async function toggle(resource, row) {
-    setError("");
-    setMessage("");
+    setError('')
+    setMessage('')
     try {
-      await masterApi.setActive(resource, row.id, !row.isActive);
+      await masterApi.setActive(resource, row.id, !row.isActive)
       setMessage(
-        `${labels[resource]} berhasil ${row.isActive ? "dinonaktifkan" : "diaktifkan"}.`,
-      );
-      await load();
+        `${labels[resource]} berhasil ${row.isActive ? 'dinonaktifkan' : 'diaktifkan'}.`,
+      )
+      await load()
     } catch (requestError) {
-      setError(requestError.message || "Status gagal diperbarui.");
+      setError(requestError.message || 'Status gagal diperbarui.')
     }
   }
 
@@ -115,7 +113,7 @@ export default function AdminMasterPage() {
     <section className="page">
       <PageHeader
         title="Master Data"
-        description="Kelola pilihan Desa, RW, dan Tahapan yang digunakan pada formulir laporan."
+        description="Kelola pilihan Desa, RW, dan Pekerjaan yang digunakan pada formulir laporan."
       />
       {message && <Notice tone="success">{message}</Notice>}
       {error && <Notice tone="error">{error}</Notice>}
@@ -138,7 +136,7 @@ export default function AdminMasterPage() {
               Batal
             </button>
           </div>
-          {editor.resource === "desa" && (
+          {editor.resource === 'desa' && (
             <label>
               Nama Desa
               <input
@@ -149,12 +147,12 @@ export default function AdminMasterPage() {
               />
             </label>
           )}
-          {editor.resource === "rw" && (
+          {editor.resource === 'cluster' && (
             <div className="field-grid">
               <label>
                 Desa
                 <select
-                  aria-label="Desa RW"
+                  aria-label="Desa Cluster"
                   value={form.desaId}
                   onChange={(event) =>
                     setForm({ ...form, desaId: event.target.value })
@@ -172,81 +170,80 @@ export default function AdminMasterPage() {
                 </select>
               </label>
               <label>
-                Nomor RW
+                Nama RW
                 <input
-                  aria-label="Nomor RW"
+                  aria-label="Nama RW"
                   placeholder="Contoh: RW 01"
-                  value={form.nomorRw}
+                  value={form.clusterName}
                   onChange={(event) =>
-                    setForm({ ...form, nomorRw: event.target.value })
+                    setForm({ ...form, clusterName: event.target.value })
                   }
                   required
                 />
               </label>
             </div>
           )}
-          {editor.resource === "tahapan" && (
-            <StageFields value={form} onChange={setForm} />
+          {editor.resource === 'pekerjaan' && (
+            <JobFields value={form} onChange={setForm} />
           )}
           <div className="form-actions">
             <button
               className="primary-button"
               type="submit"
-              disabled={state === "saving"}
+              disabled={state === 'saving'}
             >
-              {state === "saving" ? "Menyimpan..." : "Simpan"}
+              {state === 'saving' ? 'Menyimpan...' : 'Simpan'}
             </button>
           </div>
         </form>
       )}
-      {state === "loading" && data.desa.length === 0 ? (
+      {state === 'loading' && data.desa.length === 0 ? (
         <PageState
           title="Menyiapkan master data"
-          message="Mengambil Desa, RW, dan Tahapan."
+            message="Mengambil Desa, RW, dan Pekerjaan."
         />
       ) : (
         <div className="master-stack">
           <MasterTable
             title="Desa"
-            columns={[{ key: "namaDesa", label: "Nama Desa" }]}
+            columns={[{ key: 'namaDesa', label: 'Nama Desa' }]}
             rows={data.desa}
-            onCreate={() => openCreate("desa")}
-            onEdit={(row) => openEdit("desa", row)}
-            onToggleActive={(row) => toggle("desa", row)}
+            onCreate={() => openCreate('desa')}
+            onEdit={(row) => openEdit('desa', row)}
+            onToggleActive={(row) => toggle('desa', row)}
           />
           <MasterTable
             title="RW"
             columns={[
               {
-                key: "desaId",
-                label: "Desa",
-                render: (row) => desaNames[row.desaId] || "-",
+                key: 'desaId',
+                label: 'Desa',
+                render: (row) => desaNames[row.desaId] || row.desa?.namaDesa || '-',
               },
-              { key: "nomorRw", label: "Nomor RW" },
+              { key: 'clusterName', label: 'Nama RW' },
             ]}
-            rows={data.rw}
-            onCreate={() => openCreate("rw")}
-            onEdit={(row) => openEdit("rw", row)}
-            onToggleActive={(row) => toggle("rw", row)}
+            rows={data.cluster}
+            onCreate={() => openCreate('cluster')}
+            onEdit={(row) => openEdit('cluster', row)}
+            onToggleActive={(row) => toggle('cluster', row)}
           />
           <MasterTable
-            title="Tahapan"
+            title="Pekerjaan"
             columns={[
-              { key: "namaTahapan", label: "Nama Tahapan" },
+              { key: 'namaPekerjaan', label: 'Nama Pekerjaan' },
               {
-                key: "requiresNomorPerangkat",
-                label: "Nomor Perangkat",
-                render: (row) =>
-                  row.requiresNomorPerangkat ? "Wajib" : "Tidak wajib",
+                key: 'instruksiDokumentasi',
+                label: 'Instruksi Dokumentasi',
+                render: (row) => row.instruksiDokumentasi || '-',
               },
             ]}
-            rows={data.tahapan}
-            onCreate={() => openCreate("tahapan")}
-            onEdit={(row) => openEdit("tahapan", row)}
-            onToggleActive={(row) => toggle("tahapan", row)}
+            rows={data.pekerjaan}
+            onCreate={() => openCreate('pekerjaan')}
+            onEdit={(row) => openEdit('pekerjaan', row)}
+            onToggleActive={(row) => toggle('pekerjaan', row)}
           />
         </div>
       )}
     </section>
-  );
+  )
 }

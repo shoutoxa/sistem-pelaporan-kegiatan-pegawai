@@ -9,6 +9,5 @@ describe('ReportDetailPage', () => {
     render(<MemoryRouter initialEntries={['/pegawai/laporan/r1']}><Routes><Route path="/pegawai/laporan/:id" element={<ReportDetailPage />} /></Routes></MemoryRouter>)
     await waitFor(() => expect(screen.getByAltText('photo.jpg')).toHaveAttribute('src', 'https://signed.test/photo.jpg'))
     expect(screen.getByRole('link', { name: /edit laporan/i })).toHaveAttribute('href', '/pegawai/laporan/r1/edit')
-    expect(screen.getByText('Ayu')).toBeInTheDocument()
   })
 })

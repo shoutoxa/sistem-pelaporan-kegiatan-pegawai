@@ -28,13 +28,12 @@ export function createReportService({ prisma, storage, clock = () => new Date() 
     const yesterday = jakartaDate(yesterdayDate)
     if (![today, yesterday].includes(parsed.data.tanggalKegiatan)) throw reportError('DATE_VALIDATION', 'Tanggal kegiatan hanya boleh hari ini atau kemarin.')
 
-    const [rw, tahapan] = await Promise.all([
-      prisma.rw.findFirst({ where: { id: parsed.data.rwId, isActive: true, desa: { isActive: true } } }),
-      prisma.tahapan.findFirst({ where: { id: parsed.data.tahapanId, isActive: true } }),
+    const [cluster, pekerjaan] = await Promise.all([
+      prisma.cluster.findFirst({ where: { id: parsed.data.clusterId, isActive: true, desa: { isActive: true } } }),
+      prisma.pekerjaan.findFirst({ where: { id: parsed.data.pekerjaanId, isActive: true } }),
     ])
-    if (!rw) throw reportError('REFERENCE_INVALID', 'RW tidak aktif atau tidak ditemukan.')
-    if (!tahapan) throw reportError('REFERENCE_INVALID', 'Tahapan tidak aktif atau tidak ditemukan.')
-    if (tahapan.requiresNomorPerangkat && !parsed.data.nomorPerangkat) throw reportError('VALIDATION', 'Nomor Perangkat wajib diisi untuk Tahapan ini.')
+    if (!cluster) throw reportError('REFERENCE_INVALID', 'Cluster tidak aktif atau tidak ditemukan.')
+    if (!pekerjaan) throw reportError('REFERENCE_INVALID', 'Pekerjaan tidak aktif atau tidak ditemukan.')
 
     const reportId = randomUUID()
     const uploadedPaths = []
@@ -42,6 +41,8 @@ export function createReportService({ prisma, storage, clock = () => new Date() 
       path: `laporan/${actor.id}/${parsed.data.tanggalKegiatan}/${reportId}/${randomUUID()}.${extensionFor(file.mimetype, file.originalname)}`,
       file,
     }))
+
+    const nomorPerangkat = parsed.data.nomorPerangkat ? parsed.data.nomorPerangkat.trim() : null
 
     try {
       for (const item of documentation) {
@@ -59,11 +60,11 @@ export function createReportService({ prisma, storage, clock = () => new Date() 
             data: {
               id: reportId,
               userId: actor.id,
-              rwId: parsed.data.rwId,
-              tahapanId: parsed.data.tahapanId,
+              clusterId: parsed.data.clusterId,
+              pekerjaanId: parsed.data.pekerjaanId,
               tanggalKegiatan: new Date(`${parsed.data.tanggalKegiatan}T00:00:00.000Z`),
               keterangan: parsed.data.keterangan,
-              nomorPerangkat: tahapan.requiresNomorPerangkat ? parsed.data.nomorPerangkat : null,
+              nomorPerangkat: nomorPerangkat || null,
             },
           })
           await tx.dokumentasi.createMany({
@@ -85,22 +86,21 @@ export function createReportService({ prisma, storage, clock = () => new Date() 
     const report = await prisma.laporan.findFirst({
       where,
       include: {
-        user: { select: { id: true, nama: true, username: true } },
-        rw: { include: { desa: true } },
-        tahapan: true,
+        user: { select: { id: true, nama: true, username: true, nomorHp: true } },
+        cluster: { include: { desa: true } },
+        pekerjaan: true,
         dokumentasi: true,
       },
     })
     if (!report) throw reportError('NOT_FOUND', 'Laporan tidak ditemukan.')
     const dokumentasi = await Promise.all(report.dokumentasi.map(async (item) => ({ ...item, signedUrl: await storage.createSignedUrl(item.storagePath, 600) })))
     const editableUntilDate = new Date(new Date(report.createdAt).getTime() + 24 * 60 * 60 * 1000)
-    return { ...report, dokumentasi, editableUntil: editableUntilDate.toISOString(), canEdit: actor.role === 'PEGAWAI' && clock().getTime() <= editableUntilDate.getTime() }
+    const withinEditWindow = clock().getTime() <= editableUntilDate.getTime()
+    const canEdit = actor.role === 'SUPERADMIN' ? !report.diterima : actor.role === 'PEGAWAI' && !report.diterima && withinEditWindow
+    return { ...report, dokumentasi, editableUntil: editableUntilDate.toISOString(), canEdit }
   }
 
-  async function updateReport({ actor, reportId, fields }) {
-    const report = await prisma.laporan.findFirst({ where: { id: reportId, userId: actor.id } })
-    if (!report) throw reportError('NOT_FOUND', 'Laporan tidak ditemukan.')
-    if (clock().getTime() - new Date(report.createdAt).getTime() > 24 * 60 * 60 * 1000) throw reportError('EDIT_EXPIRED', 'Batas edit laporan sudah lewat 24 jam.')
+  async function updateReportFields({ reportId, report, fields }) {
     const data = {}
     if (fields.keterangan !== undefined) {
       if (typeof fields.keterangan !== 'string' || fields.keterangan.trim().length < 5 || fields.keterangan.trim().length > 2000) throw reportError('VALIDATION', 'Keterangan harus 5 sampai 2.000 karakter.')
@@ -112,22 +112,45 @@ export function createReportService({ prisma, storage, clock = () => new Date() 
       if (!/^\d{4}-\d{2}-\d{2}$/.test(fields.tanggalKegiatan) || ![today, yesterday].includes(fields.tanggalKegiatan)) throw reportError('DATE_VALIDATION', 'Tanggal kegiatan hanya boleh hari ini atau kemarin.')
       data.tanggalKegiatan = new Date(`${fields.tanggalKegiatan}T00:00:00.000Z`)
     }
-    if (fields.rwId !== undefined) {
-      if (!await prisma.rw.findFirst({ where: { id: fields.rwId, isActive: true, desa: { isActive: true } } })) throw reportError('REFERENCE_INVALID', 'RW tidak aktif atau tidak ditemukan.')
-      data.rwId = fields.rwId
+    if (fields.clusterId !== undefined) {
+      if (!await prisma.cluster.findFirst({ where: { id: fields.clusterId, isActive: true, desa: { isActive: true } } })) throw reportError('REFERENCE_INVALID', 'Cluster tidak aktif atau tidak ditemukan.')
+      data.clusterId = fields.clusterId
     }
-    if (fields.tahapanId !== undefined || fields.nomorPerangkat !== undefined) {
-      const targetTahapanId = fields.tahapanId || report.tahapanId
-      const tahapan = await prisma.tahapan.findFirst({ where: { id: targetTahapanId, isActive: true } })
-      if (!tahapan) throw reportError('REFERENCE_INVALID', 'Tahapan tidak aktif atau tidak ditemukan.')
-      const stageChanged = fields.tahapanId !== undefined && fields.tahapanId !== report.tahapanId
-      const nomorPerangkat = fields.nomorPerangkat !== undefined ? String(fields.nomorPerangkat).trim() : (stageChanged ? '' : report.nomorPerangkat)
-      if (tahapan.requiresNomorPerangkat && !nomorPerangkat) throw reportError('VALIDATION', 'Nomor Perangkat wajib diisi untuk Tahapan ini.')
-      if (fields.tahapanId !== undefined) data.tahapanId = fields.tahapanId
-      data.nomorPerangkat = tahapan.requiresNomorPerangkat ? nomorPerangkat : null
+    if (fields.pekerjaanId !== undefined) {
+      const pekerjaan = await prisma.pekerjaan.findFirst({ where: { id: fields.pekerjaanId, isActive: true } })
+      if (!pekerjaan) throw reportError('REFERENCE_INVALID', 'Pekerjaan tidak aktif atau tidak ditemukan.')
+      data.pekerjaanId = fields.pekerjaanId
+    }
+    if (fields.nomorPerangkat !== undefined) {
+      const np = String(fields.nomorPerangkat).trim()
+      if (np.length > 20) throw reportError('VALIDATION', 'Nomor perangkat maksimal 20 karakter.')
+      data.nomorPerangkat = np || null
     }
     return prisma.laporan.update({ where: { id: reportId }, data })
   }
 
-  return { createReport, getReportDetail, updateReport }
+  async function updateReport({ actor, reportId, fields }) {
+    if (fields && Object.prototype.hasOwnProperty.call(fields, 'diterima')) throw reportError('FORBIDDEN', 'Status penerimaan hanya dapat diubah oleh Superadmin.')
+    const report = await prisma.laporan.findFirst({ where: { id: reportId, userId: actor.id } })
+    if (!report) throw reportError('NOT_FOUND', 'Laporan tidak ditemukan.')
+    if (report.diterima) throw reportError('LOCKED', 'Laporan sudah diterima dan terkunci.')
+    if (clock().getTime() - new Date(report.createdAt).getTime() > 24 * 60 * 60 * 1000) throw reportError('EDIT_EXPIRED', 'Batas edit laporan sudah lewat 24 jam.')
+    return updateReportFields({ reportId, report, fields })
+  }
+
+  async function updateReportByAdmin({ reportId, fields }) {
+    if (fields && Object.prototype.hasOwnProperty.call(fields, 'diterima')) throw reportError('FORBIDDEN', 'Gunakan endpoint status untuk mengubah penerimaan laporan.')
+    const report = await prisma.laporan.findUnique({ where: { id: reportId } })
+    if (!report) throw reportError('NOT_FOUND', 'Laporan tidak ditemukan.')
+    if (report.diterima) throw reportError('LOCKED', 'Buka kembali penerimaan laporan sebelum mengoreksi data.')
+    return updateReportFields({ reportId, report, fields })
+  }
+
+  async function updateDiterimaStatus({ reportId, diterima }) {
+    const report = await prisma.laporan.findUnique({ where: { id: reportId } })
+    if (!report) throw reportError('NOT_FOUND', 'Laporan tidak ditemukan.')
+    return prisma.laporan.update({ where: { id: reportId }, data: { diterima: Boolean(diterima) } })
+  }
+
+  return { createReport, getReportDetail, updateReport, updateReportByAdmin, updateDiterimaStatus }
 }

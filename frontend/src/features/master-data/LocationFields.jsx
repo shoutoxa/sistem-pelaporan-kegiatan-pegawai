@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { masterApi } from "../../api/master.js";
+import { useEffect, useState } from 'react'
+import { masterApi } from '../../api/master.js'
 
 export default function LocationFields({
   value,
@@ -7,47 +7,47 @@ export default function LocationFields({
   errors = {},
   desaOptions: desaProp,
 }) {
-  const [fetchedDesaOptions, setFetchedDesaOptions] = useState([]);
-  const [rwOptions, setRwOptions] = useState([]);
-  const [loadingRw, setLoadingRw] = useState(false);
-  const desaOptions = desaProp || fetchedDesaOptions;
-  const selectedDesa = value.desaId || "";
+  const [fetchedDesaOptions, setFetchedDesaOptions] = useState([])
+  const [clusterOptions, setClusterOptions] = useState([])
+  const [loadingCluster, setLoadingCluster] = useState(false)
+  const desaOptions = desaProp || fetchedDesaOptions
+  const selectedDesa = value.desaId || ''
 
   useEffect(() => {
-    if (desaProp) return;
+    if (desaProp) return
     masterApi
       .fetchDesa()
       .then(setFetchedDesaOptions)
-      .catch(() => setFetchedDesaOptions([]));
-  }, [desaProp]);
+      .catch(() => setFetchedDesaOptions([]))
+  }, [desaProp])
 
   useEffect(() => {
-    if (selectedDesa) loadRw(selectedDesa);
+    if (selectedDesa) loadCluster(selectedDesa)
     // Initial value is used by the edit form; later changes load in the handler.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [])
 
-  async function loadRw(desaId) {
+  async function loadCluster(desaId) {
     if (!desaId) {
-      setRwOptions([]);
-      return;
+      setClusterOptions([])
+      return
     }
-    setLoadingRw(true);
+    setLoadingCluster(true)
     try {
-      const rows = await masterApi.fetchRwByDesa(desaId);
-      setRwOptions(Array.isArray(rows) ? rows : []);
+      const rows = await masterApi.fetchClusterByDesa(desaId)
+      setClusterOptions(Array.isArray(rows) ? rows : [])
     } catch {
-      setRwOptions([]);
+      setClusterOptions([])
     } finally {
-      setLoadingRw(false);
+      setLoadingCluster(false)
     }
   }
 
   async function handleDesaChange(event) {
-    const desaId = event.target.value;
-    setRwOptions([]);
-    onChange({ desaId, rwId: "" });
-    await loadRw(desaId);
+    const desaId = event.target.value
+    setClusterOptions([])
+    onChange({ desaId, clusterId: '' })
+    await loadCluster(desaId)
   }
 
   return (
@@ -61,7 +61,7 @@ export default function LocationFields({
           onChange={handleDesaChange}
           required
           aria-invalid={Boolean(errors.desaId)}
-          aria-describedby={errors.desaId ? "report-village-error" : undefined}
+          aria-describedby={errors.desaId ? 'report-village-error' : undefined}
         >
           <option value="">Pilih Desa</option>
           {desaOptions
@@ -78,41 +78,41 @@ export default function LocationFields({
           </small>
         )}
       </label>
-      <label htmlFor="report-rw">
+      <label htmlFor="report-cluster">
         RW <b aria-hidden="true">*</b>
         <select
-          id="report-rw"
+          id="report-cluster"
           aria-label="RW"
-          value={value.rwId || ""}
-          disabled={!selectedDesa || loadingRw}
+          value={value.clusterId || ''}
+          disabled={!selectedDesa || loadingCluster}
           onChange={(event) =>
-            onChange({ desaId: selectedDesa, rwId: event.target.value })
+            onChange({ desaId: selectedDesa, clusterId: event.target.value })
           }
           required
-          aria-invalid={Boolean(errors.rwId)}
-          aria-describedby={errors.rwId ? "report-rw-error" : undefined}
+          aria-invalid={Boolean(errors.clusterId)}
+          aria-describedby={errors.clusterId ? 'report-cluster-error' : undefined}
         >
           <option value="">
-            {loadingRw
-              ? "Memuat RW..."
+            {loadingCluster
+              ? 'Memuat Cluster...'
               : selectedDesa
-                ? "Pilih RW"
-                : "Pilih Desa lebih dahulu"}
+                ? 'Pilih RW'
+                : 'Pilih Desa lebih dahulu'}
           </option>
-          {rwOptions
+          {clusterOptions
             .filter((row) => row.isActive !== false)
             .map((row) => (
               <option key={row.id} value={row.id}>
-                {row.nomorRw}
+                {row.clusterName}
               </option>
             ))}
         </select>
-        {errors.rwId && (
-          <small id="report-rw-error" className="field-error" role="alert">
-            {errors.rwId}
+        {errors.clusterId && (
+          <small id="report-cluster-error" className="field-error" role="alert">
+            {errors.clusterId}
           </small>
         )}
       </label>
     </div>
-  );
+  )
 }

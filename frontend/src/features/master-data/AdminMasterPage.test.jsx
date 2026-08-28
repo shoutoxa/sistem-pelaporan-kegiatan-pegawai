@@ -7,8 +7,8 @@ describe('AdminMasterPage', () => {
     const fetchMock = vi.fn(async (url, options = {}) => {
       if (options.method === 'POST') return { ok: true, json: async () => ({ id: 'd2', namaDesa: 'Pamalayan', isActive: true }) }
       if (String(url).endsWith('/api/admin/desa')) return { ok: true, json: async () => [{ id: 'd1', namaDesa: 'Dewasari', isActive: true }] }
-      if (String(url).endsWith('/api/admin/rw')) return { ok: true, json: async () => [] }
-      if (String(url).endsWith('/api/admin/tahapan')) return { ok: true, json: async () => [] }
+      if (String(url).endsWith('/api/admin/cluster')) return { ok: true, json: async () => [] }
+      if (String(url).endsWith('/api/admin/pekerjaan')) return { ok: true, json: async () => [] }
       throw new Error(`Unexpected request: ${url}`)
     })
     vi.stubGlobal('fetch', fetchMock)

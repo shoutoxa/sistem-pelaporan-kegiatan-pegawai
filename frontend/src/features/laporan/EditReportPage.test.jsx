@@ -6,10 +6,10 @@ import EditReportPage from './EditReportPage.jsx'
 describe('EditReportPage', () => {
   it('loads an editable report and sends allowed fields without replacing photos', async () => {
     const fetchMock = vi.fn(async (url, options) => {
-      if (String(url).includes('/master/tahapan')) return { ok: true, json: async () => [{ id: 't1', namaTahapan: 'ODN', requiresNomorPerangkat: false }] }
-      if (String(url).includes('/master/desa/d1/rw')) return { ok: true, json: async () => [{ id: 'rw1', nomorRw: 'RW 01' }] }
+      if (String(url).includes('/master/pekerjaan')) return { ok: true, json: async () => [{ id: 'p1', namaPekerjaan: 'ODN' }] }
+      if (String(url).includes('/master/desa/d1/cluster')) return { ok: true, json: async () => [{ id: 'c1', clusterName: 'RW 01' }] }
       if (options?.method === 'PUT') return { ok: true, json: async () => ({ data: { id: 'r1' } }) }
-      return { ok: true, json: async () => ({ data: { id: 'r1', canEdit: true, tanggalKegiatan: '2026-08-22', keterangan: 'Keterangan lama', rwId: 'rw1', tahapanId: 't1', rw: { id: 'rw1', nomorRw: 'RW 01', desa: { id: 'd1', namaDesa: 'Dewasari' } }, tahapan: { id: 't1', namaTahapan: 'ODN' }, dokumentasi: [{ id: 'f1' }] } }) }
+      return { ok: true, json: async () => ({ data: { id: 'r1', canEdit: true, tanggalKegiatan: '2026-08-22', keterangan: 'Keterangan lama', clusterId: 'c1', pekerjaanId: 'p1', cluster: { id: 'c1', clusterName: 'RW 01', desa: { id: 'd1', namaDesa: 'Dewasari' } }, pekerjaan: { id: 'p1', namaPekerjaan: 'ODN' }, dokumentasi: [{ id: 'f1' }] } }) }
     })
     vi.stubGlobal('fetch', fetchMock)
     render(<MemoryRouter initialEntries={['/pegawai/laporan/r1/edit']}><Routes><Route path="/pegawai/laporan/:id/edit" element={<EditReportPage />} /><Route path="/pegawai/laporan/:id" element={<p>saved</p>} /></Routes></MemoryRouter>)

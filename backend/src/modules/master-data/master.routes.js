@@ -4,7 +4,7 @@ import { statusSchema } from './master.schemas.js'
 function sendError(error, response) {
   const statuses = { VALIDATION: 400, DUPLICATE: 409, INACTIVE_PARENT: 422, NOT_FOUND: 404 }
   const message = error.message || 'Terjadi kesalahan pada server.'
-  const fieldByResource = { desa: 'namaDesa', rw: 'nomorRw', tahapan: 'namaTahapan' }
+  const fieldByResource = { desa: 'namaDesa', cluster: 'clusterName', pekerjaan: 'namaPekerjaan' }
   const field = error.field || (error.code === 'DUPLICATE' ? fieldByResource[error.resource] : undefined)
   const errors = error.errors || (field ? { [field]: message } : undefined)
   return response.status(statuses[error.code] || 500).json({ message, ...(errors ? { errors } : {}) })
@@ -16,10 +16,10 @@ export function createMasterRouter({ service, requireAuth, requireSuperadmin } =
   const adminGuard = [requireAuth, requireSuperadmin].filter(Boolean)
 
   router.get('/master/desa', ...readGuard, async (_request, response) => response.json(await service.listActiveDesa()))
-  router.get('/master/desa/:desaId/rw', ...readGuard, async (request, response) => response.json(await service.listActiveRwByDesa(request.params.desaId)))
-  router.get('/master/tahapan', ...readGuard, async (_request, response) => response.json(await service.listActiveTahapan()))
+  router.get('/master/desa/:desaId/cluster', ...readGuard, async (request, response) => response.json(await service.listActiveClusterByDesa(request.params.desaId)))
+  router.get('/master/pekerjaan', ...readGuard, async (_request, response) => response.json(await service.listActivePekerjaan()))
 
-  for (const resource of ['desa', 'rw', 'tahapan']) {
+  for (const resource of ['desa', 'cluster', 'pekerjaan']) {
     router.get(`/admin/${resource}`, ...adminGuard, async (_request, response) => response.json(await service.listAdmin(resource)))
     router.post(`/admin/${resource}`, ...adminGuard, async (request, response) => {
       try {

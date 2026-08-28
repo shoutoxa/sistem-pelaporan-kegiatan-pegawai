@@ -5,8 +5,8 @@ const name = z.string().trim().min(1).max(150)
 
 export const masterSchemas = {
   desa: z.object({ namaDesa: name }),
-  rw: z.object({ desaId: id, nomorRw: z.string().trim().min(1).max(20) }),
-  tahapan: z.object({ namaTahapan: name, requiresNomorPerangkat: z.boolean(), instruksiDokumentasi: z.string().trim().max(500).nullable().optional() }),
+  cluster: z.object({ desaId: id, clusterName: z.string().trim().min(1).max(50) }),
+  pekerjaan: z.object({ namaPekerjaan: name, instruksiDokumentasi: z.string().trim().max(500).nullable().optional() }),
 }
 
 export const statusSchema = z.object({ isActive: z.boolean() })
@@ -15,12 +15,12 @@ export function normalizeSpaces(value) {
   return value.trim().replace(/\s+/g, ' ')
 }
 
-export function normalizeRw(value) {
-  const compact = normalizeSpaces(value).toUpperCase().replace(/^RW\s*/, '')
-  if (!/^\d{1,3}$/.test(compact)) {
-    const error = new Error('Nomor RW harus berformat seperti RW 01.')
+export function normalizeClusterName(value) {
+  const compact = normalizeSpaces(value)
+  if (!compact) {
+    const error = new Error('Nama Cluster tidak boleh kosong.')
     error.code = 'VALIDATION'
     throw error
   }
-  return `RW ${compact.padStart(2, '0')}`
+  return compact
 }

@@ -2,10 +2,10 @@ import { z } from 'zod'
 
 export const reportSchema = z.object({
   tanggalKegiatan: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  rwId: z.string().min(1),
-  tahapanId: z.string().min(1),
+  clusterId: z.string().min(1),
+  pekerjaanId: z.string().min(1),
   keterangan: z.string().trim().min(5).max(2000),
-  nomorPerangkat: z.string().trim().max(200).optional().default(''),
+  nomorPerangkat: z.string().trim().max(20).optional().default(''),
 })
 
 export function reportError(code, message = code) {
