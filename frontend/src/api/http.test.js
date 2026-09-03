@@ -17,4 +17,26 @@ describe('http client', () => {
       errors: { clusterId: 'RW tidak tersedia' },
     })
   })
+
+  it('retries on network failure (status undefined) before succeeding', async () => {
+    const fetchMock = vi.fn()
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ success: true }),
+      })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const res = await http.request('/api/test', { retries: 2 })
+    expect(res).toEqual({ success: true })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('throws network error after exhausting retries', async () => {
+    const fetchMock = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(http.request('/api/test', { retries: 1 })).rejects.toThrow('Failed to fetch')
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
 })

@@ -23,6 +23,15 @@ const pegawaiRouter = authService ? await createProductionPegawaiRouter({ authSe
 const exportRouter = authService ? await createProductionExportRouter({ authService }) : undefined
 const app = createApp({ authRouter, masterRouter, reportRouter, dashboardRouter: [dashboardRouter, pegawaiRouter, exportRouter].filter(Boolean) })
 
+if (hasDatabase) {
+  try {
+    const { prisma } = await import('./config/prisma.js')
+    await prisma.$queryRawUnsafe('SELECT 1')
+  } catch (error) {
+    console.warn('Peringatan: Warmup database awal terlewati:', error.message)
+  }
+}
+
 app.listen(runtimeConfig.port, () => {
   console.log(`Backend berjalan di http://localhost:${runtimeConfig.port}`)
 })
