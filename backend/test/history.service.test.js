@@ -42,4 +42,23 @@ describe('history service', () => {
     expect(JSON.stringify(where)).not.toContain('keterangan')
     expect(JSON.stringify(where)).not.toContain('nomorPerangkat')
   })
+
+  it('filters documentation by desa, cluster, and pekerjaan', async () => {
+    const findMany = vi.fn().mockResolvedValue([])
+    const prisma = { laporan: { findMany } }
+    const service = createHistoryService({ prisma, storage: {} })
+
+    await service.listDocumentation({ desaId: 'd1', pekerjaanId: 'p1' })
+    expect(findMany.mock.calls[0][0].where).toMatchObject({
+      pekerjaanId: 'p1',
+      cluster: { desaId: 'd1' },
+    })
+
+    await service.listDocumentation({ desaId: 'd1', clusterId: 'c1', pekerjaanId: 'p1' })
+    expect(findMany.mock.calls[1][0].where).toMatchObject({
+      clusterId: 'c1',
+      pekerjaanId: 'p1',
+    })
+    expect(findMany.mock.calls[1][0].where.cluster).toBeUndefined()
+  })
 })

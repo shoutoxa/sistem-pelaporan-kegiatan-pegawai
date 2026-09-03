@@ -20,6 +20,7 @@ const paths = {
   close: <><path d="M6 6l12 12M18 6L6 18"/></>,
   check: <path d="M20 6L9 17l-5-5"/>,
   info: <><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></>,
+  search: <><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></>,
 }
 
 export default function Icon({ name, size = 20, className = '', ...props }) {
