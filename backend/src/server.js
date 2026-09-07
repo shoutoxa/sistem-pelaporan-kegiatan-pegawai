@@ -8,6 +8,7 @@ import { createProductionReportRouter } from './modules/laporan/report.routes.js
 import { createProductionDashboardRouter } from './modules/dashboard/dashboard.routes.js'
 import { createProductionPegawaiRouter } from './modules/pegawai/pegawai.routes.js'
 import { createProductionExportRouter } from './modules/export/export.routes.js'
+import { createProductionFtthReportRouter } from './modules/integration/ftth-report.routes.js'
 
 const hasDatabase = process.env.DATABASE_URL && process.env.JWT_SECRET
 if (process.env.REQUIRE_FULL_CONFIG === 'true') assertFullConfig()
@@ -21,7 +22,8 @@ const reportRouter = authService && process.env.SUPABASE_URL && hasStorageKey
 const dashboardRouter = authService ? await createProductionDashboardRouter({ authService }) : undefined
 const pegawaiRouter = authService ? await createProductionPegawaiRouter({ authService }) : undefined
 const exportRouter = authService ? await createProductionExportRouter({ authService }) : undefined
-const app = createApp({ authRouter, masterRouter, reportRouter, dashboardRouter: [dashboardRouter, pegawaiRouter, exportRouter].filter(Boolean) })
+const ftthRouter = authService ? await createProductionFtthReportRouter({ authService }) : undefined
+const app = createApp({ authRouter, masterRouter, reportRouter, dashboardRouter: [dashboardRouter, pegawaiRouter, exportRouter, ftthRouter].filter(Boolean) })
 
 app.listen(runtimeConfig.port, () => {
   console.log(`Backend berjalan di http://localhost:${runtimeConfig.port}`)

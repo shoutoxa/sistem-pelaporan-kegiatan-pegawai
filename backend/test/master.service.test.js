@@ -19,8 +19,13 @@ function createFakePrisma() {
     pekerjaan: {
       findMany: async () => [{ id: 'p1', namaPekerjaan: 'Penggalian Lubang', isActive: true }],
       findFirst: async () => null,
+      findUnique: async () => ({ id: 'p1', namaPekerjaan: 'Penggalian Lubang', sumber: 'LOCAL', isActive: true }),
       create: async ({ data }) => ({ id: 'p2', ...data }),
       update: async ({ data }) => ({ id: 'p1', ...data }),
+    },
+    kategoriPekerjaan: {
+      findMany: async () => [{ id: 'k1', namaKategori: 'Implementasi', isActive: true }],
+      findFirst: async () => ({ id: 'k1', namaKategori: 'Implementasi', isActive: true }),
     },
   }
 }
@@ -32,6 +37,7 @@ describe('master data service', () => {
 
     await expect(service.listActiveDesa()).resolves.toEqual([{ id: 'd1', namaDesa: 'Dewasari', isActive: true }])
     await expect(service.listActiveClusterByDesa('d1')).resolves.toEqual([{ id: 'c1', desaId: 'd1', clusterName: 'RW 01', isActive: true }])
+    await expect(service.listActiveKategori()).resolves.toEqual([{ id: 'k1', namaKategori: 'Implementasi', isActive: true }])
     await expect(service.listActivePekerjaan()).resolves.toEqual([{ id: 'p1', namaPekerjaan: 'Penggalian Lubang', isActive: true }])
   })
 
@@ -62,5 +68,24 @@ describe('master data service', () => {
     const service = createMasterService({ prisma })
 
     await expect(service.setActive('pekerjaan', 'p1', false)).resolves.toMatchObject({ isActive: false })
+  })
+
+  it('filters active work by category for the employee form', async () => {
+    const prisma = createFakePrisma()
+    let receivedWhere
+    prisma.pekerjaan.findMany = async ({ where }) => { receivedWhere = where; return [] }
+    const service = createMasterService({ prisma })
+
+    await service.listActivePekerjaan('k1')
+
+    expect(receivedWhere).toEqual({ isActive: true, kategoriId: 'k1', kategori: { isActive: true } })
+  })
+
+  it('keeps FTTH-managed process rows read-only locally', async () => {
+    const prisma = createFakePrisma()
+    prisma.pekerjaan.findUnique = async () => ({ id: 'p1', sumber: 'FTTH_APP' })
+    const service = createMasterService({ prisma })
+
+    await expect(service.setActive('pekerjaan', 'p1', false)).rejects.toMatchObject({ code: 'READ_ONLY' })
   })
 })

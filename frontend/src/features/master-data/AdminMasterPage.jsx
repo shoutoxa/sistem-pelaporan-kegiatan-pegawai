@@ -11,6 +11,7 @@ const emptyForms = {
   cluster: { desaId: '', clusterName: '' },
   pekerjaan: {
     namaPekerjaan: '',
+    kategoriId: '',
     instruksiDokumentasi: '',
   },
 }
@@ -18,7 +19,9 @@ const emptyForms = {
 const labels = { desa: 'Desa', cluster: 'RW', pekerjaan: 'Pekerjaan' }
 
 export default function AdminMasterPage() {
-  const [data, setData] = useState({ desa: [], cluster: [], pekerjaan: [] })
+  const [data, setData] = useState({ desa: [], cluster: [], kategori: [], pekerjaan: [] })
+  const [integration, setIntegration] = useState({ configured: false, categories: 0, processes: 0, lastSyncedAt: null })
+  const [syncing, setSyncing] = useState(false)
   const [editor, setEditor] = useState(null)
   const [form, setForm] = useState(emptyForms.desa)
   const [state, setState] = useState('loading')
@@ -28,10 +31,12 @@ export default function AdminMasterPage() {
   const load = useCallback(async () => {
     setState('loading')
     try {
-      const [desa, cluster, pekerjaan] = await Promise.all(
-        ['desa', 'cluster', 'pekerjaan'].map(masterApi.fetchAdmin),
-      )
-      setData({ desa, cluster, pekerjaan })
+      const [desa, cluster, kategori, pekerjaan, integrationStatus] = await Promise.all([
+        ...['desa', 'cluster', 'kategori', 'pekerjaan'].map(masterApi.fetchAdmin),
+        masterApi.getFtthIntegrationStatus().catch(() => ({ configured: false, categories: 0, processes: 0, lastSyncedAt: null })),
+      ])
+      setData({ desa, cluster, kategori, pekerjaan })
+      setIntegration(integrationStatus)
       setState('ready')
     } catch (requestError) {
       setError(requestError.message || 'Master data tidak dapat dimuat.')
@@ -63,6 +68,7 @@ export default function AdminMasterPage() {
     if (resource === 'pekerjaan')
       setForm({
         namaPekerjaan: row.namaPekerjaan,
+        kategoriId: row.kategoriId || '',
         instruksiDokumentasi: row.instruksiDokumentasi || '',
       })
     setError('')
@@ -109,6 +115,21 @@ export default function AdminMasterPage() {
     }
   }
 
+  async function syncFtth() {
+    setSyncing(true)
+    setError('')
+    setMessage('')
+    try {
+      const result = await masterApi.syncFtth()
+      setMessage(`Sinkronisasi selesai: ${result.categories.total} kategori dan ${result.processes.total} pekerjaan diproses.`)
+      await load()
+    } catch (requestError) {
+      setError(requestError.message || 'Sinkronisasi API FTTH gagal.')
+    } finally {
+      setSyncing(false)
+    }
+  }
+
   return (
     <section className="page">
       <PageHeader
@@ -117,6 +138,24 @@ export default function AdminMasterPage() {
       />
       {message && <Notice tone="success">{message}</Notice>}
       {error && <Notice tone="error">{error}</Notice>}
+      <section className="data-section integration-card">
+        <div className="section-heading">
+          <div>
+            <h2>Integrasi Master FTTH</h2>
+            <p>
+              {integration.configured
+                ? `${integration.categories} kategori dan ${integration.processes} pekerjaan tersimpan dari API perusahaan.`
+                : 'Isi FTTH_API_KEY pada backend untuk mengaktifkan sinkronisasi.'}
+            </p>
+            {integration.lastSyncedAt && (
+              <small>Sinkron terakhir: {new Date(integration.lastSyncedAt).toLocaleString('id-ID')}</small>
+            )}
+          </div>
+          <button className="primary-button" type="button" disabled={!integration.configured || syncing} onClick={syncFtth}>
+            {syncing ? 'Menyinkronkan...' : 'Sinkronkan API FTTH'}
+          </button>
+        </div>
+      </section>
       {editor && (
         <form className="editor-card data-section" onSubmit={save} noValidate>
           <div className="section-heading">
@@ -184,7 +223,7 @@ export default function AdminMasterPage() {
             </div>
           )}
           {editor.resource === 'pekerjaan' && (
-            <JobFields value={form} onChange={setForm} />
+            <JobFields value={form} onChange={setForm} categories={data.kategori} />
           )}
           <div className="form-actions">
             <button
@@ -204,6 +243,15 @@ export default function AdminMasterPage() {
         />
       ) : (
         <div className="master-stack">
+          <MasterTable
+            title="Kategori Pekerjaan (FTTH)"
+            columns={[
+              { key: 'namaKategori', label: 'Nama Kategori' },
+              { key: 'deskripsi', label: 'Deskripsi', render: (row) => row.deskripsi || '-' },
+              { key: 'sumber', label: 'Sumber' },
+            ]}
+            rows={data.kategori}
+          />
           <MasterTable
             title="Desa"
             columns={[{ key: 'namaDesa', label: 'Nama Desa' }]}
@@ -232,6 +280,11 @@ export default function AdminMasterPage() {
             columns={[
               { key: 'namaPekerjaan', label: 'Nama Pekerjaan' },
               {
+                key: 'kategoriId',
+                label: 'Kategori',
+                render: (row) => row.kategori?.namaKategori || 'Belum dikategorikan',
+              },
+              {
                 key: 'instruksiDokumentasi',
                 label: 'Instruksi Dokumentasi',
                 render: (row) => row.instruksiDokumentasi || '-',
@@ -241,6 +294,7 @@ export default function AdminMasterPage() {
             onCreate={() => openCreate('pekerjaan')}
             onEdit={(row) => openEdit('pekerjaan', row)}
             onToggleActive={(row) => toggle('pekerjaan', row)}
+            isReadOnly={(row) => row.sumber?.startsWith('FTTH_')}
           />
         </div>
       )}

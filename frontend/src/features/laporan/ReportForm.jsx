@@ -24,6 +24,7 @@ function emptyReportForm() {
     tanggalKegiatan: jakartaToday(),
     desaId: '',
     clusterId: '',
+    kategoriId: '',
     pekerjaanId: '',
     keterangan: '',
     nomorPerangkat: '',
@@ -34,6 +35,7 @@ function hasDraftContent(form) {
   return form.tanggalKegiatan !== jakartaToday() || [
     form.desaId,
     form.clusterId,
+    form.kategoriId,
     form.pekerjaanId,
     form.keterangan,
     form.nomorPerangkat,
@@ -57,11 +59,12 @@ function readDraft(key) {
   }
 }
 
-export default function ReportForm({ user, villages, jobs: jobProp }) {
+export default function ReportForm({ user, villages, jobs: jobProp, categories: categoryProp }) {
   const navigate = useNavigate()
   const draftKey = `${DRAFT_PREFIX}:${user?.id || 'pegawai'}`
   const [initialDraft] = useState(() => readDraft(draftKey))
   const [jobs, setJobs] = useState(jobProp || [])
+  const [categories, setCategories] = useState(categoryProp || [])
   const [form, setForm] = useState(() => initialDraft || emptyReportForm())
   const [draftRestored, setDraftRestored] = useState(Boolean(initialDraft))
   const [files, setFiles] = useState([])
@@ -70,12 +73,27 @@ export default function ReportForm({ user, villages, jobs: jobProp }) {
   const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
-    if (!jobProp)
-      masterApi
-        .fetchPekerjaan()
-        .then(setJobs)
-        .catch(() => setJobs([]))
-  }, [jobProp])
+    if (jobProp && categoryProp) return
+    Promise.all([
+      categoryProp ? Promise.resolve(categoryProp) : masterApi.fetchKategori(),
+      jobProp ? Promise.resolve(jobProp) : masterApi.fetchPekerjaan(),
+    ])
+      .then(([categoryRows, jobRows]) => {
+        setCategories(Array.isArray(categoryRows) ? categoryRows : [])
+        setJobs(Array.isArray(jobRows) ? jobRows : [])
+        setForm((current) => {
+          if (current.kategoriId || !current.pekerjaanId) return current
+          const currentJob = jobRows.find((job) => job.id === current.pekerjaanId)
+          return currentJob?.kategoriId
+            ? { ...current, kategoriId: currentJob.kategoriId }
+            : current
+        })
+      })
+      .catch(() => {
+        setCategories(categoryProp || [])
+        setJobs(jobProp || [])
+      })
+  }, [categoryProp, jobProp])
 
   useEffect(() => {
     try {
@@ -89,6 +107,21 @@ export default function ReportForm({ user, villages, jobs: jobProp }) {
   const selectedJob = useMemo(
     () => jobs.find((job) => job.id === form.pekerjaanId),
     [jobs, form.pekerjaanId],
+  )
+  const availableCategories = useMemo(() => {
+    const rows = [...categories]
+    if (jobs.some((job) => !job.kategoriId)) {
+      rows.push({ id: 'uncategorized', namaKategori: 'Belum dikategorikan' })
+    }
+    return rows
+  }, [categories, jobs])
+  const visibleJobs = useMemo(
+    () => jobs.filter((job) => (
+      form.kategoriId === 'uncategorized'
+        ? !job.kategoriId
+        : job.kategoriId === form.kategoriId
+    )),
+    [form.kategoriId, jobs],
   )
 
   const clearFieldError = (key) =>
@@ -109,6 +142,7 @@ export default function ReportForm({ user, villages, jobs: jobProp }) {
       tanggalKegiatan: 'report-date',
       desaId: 'report-village',
       clusterId: 'report-cluster',
+      kategoriId: 'report-category',
       pekerjaanId: 'report-job',
       nomorPerangkat: 'report-device',
       keterangan: 'report-description',
@@ -141,6 +175,7 @@ export default function ReportForm({ user, villages, jobs: jobProp }) {
     const validationErrors = {}
     if (!form.desaId) validationErrors.desaId = 'Desa wajib dipilih.'
     if (!form.clusterId) validationErrors.clusterId = 'Cluster wajib dipilih.'
+    if (!form.kategoriId) validationErrors.kategoriId = 'Kategori pekerjaan wajib dipilih.'
     if (!form.pekerjaanId) validationErrors.pekerjaanId = 'Pekerjaan wajib dipilih.'
     if (form.keterangan.trim().length < 5)
       validationErrors.keterangan = 'Keterangan minimal 5 karakter.'
@@ -244,12 +279,46 @@ export default function ReportForm({ user, villages, jobs: jobProp }) {
               errors={fieldErrors}
             />
             <div className="field-grid">
+              <label htmlFor="report-category">
+                Kategori pekerjaan <b aria-hidden="true">*</b>
+                <select
+                  id="report-category"
+                  aria-label="Kategori pekerjaan"
+                  value={form.kategoriId}
+                  onChange={(event) => {
+                    clearFieldError('kategoriId')
+                    clearFieldError('pekerjaanId')
+                    setForm((current) => ({
+                      ...current,
+                      kategoriId: event.target.value,
+                      pekerjaanId: '',
+                    }))
+                  }}
+                  required
+                  aria-invalid={Boolean(fieldErrors.kategoriId)}
+                >
+                  <option value="">Pilih Kategori</option>
+                  {availableCategories
+                    .filter((category) => category.isActive !== false)
+                    .map((category) => (
+                      <option key={category.id} value={category.id}>
+                        {category.namaKategori}
+                      </option>
+                    ))}
+                </select>
+                {fieldErrors.kategoriId && (
+                  <small id="report-category-error" className="field-error" role="alert">
+                    {fieldErrors.kategoriId}
+                  </small>
+                )}
+              </label>
               <label htmlFor="report-job">
                 Pekerjaan <b aria-hidden="true">*</b>
                 <select
                   id="report-job"
                   aria-label="Pekerjaan"
                   value={form.pekerjaanId}
+                  disabled={!form.kategoriId}
                   onChange={(event) => {
                     clearFieldError('pekerjaanId')
                     clearFieldError('nomorPerangkat')
@@ -264,8 +333,8 @@ export default function ReportForm({ user, villages, jobs: jobProp }) {
                     fieldErrors.pekerjaanId ? 'report-job-error' : undefined
                   }
                 >
-                  <option value="">Pilih Pekerjaan</option>
-                  {jobs
+                  <option value="">{form.kategoriId ? 'Pilih Pekerjaan' : 'Pilih kategori terlebih dahulu'}</option>
+                  {visibleJobs
                     .filter((job) => job.isActive !== false)
                     .map((job) => (
                       <option key={job.id} value={job.id}>

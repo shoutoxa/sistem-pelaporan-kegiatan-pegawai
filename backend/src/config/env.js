@@ -1,4 +1,5 @@
 export const runtimeConfig = {
+  ftthReportsEnabled: process.env.FTTH_REPORTS_ENABLED === 'true' && process.env.NODE_ENV !== 'production',
   port: Number(process.env.PORT || 3000),
   frontendOrigin: process.env.FRONTEND_ORIGIN || "http://localhost:5173",
 };
