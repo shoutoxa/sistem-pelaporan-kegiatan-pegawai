@@ -13,6 +13,8 @@ const paths = {
   eyeOff: <><path d="M3 3l18 18M10.6 10.6a2 2 0 0 0 2.8 2.8M9.9 4.2A10.7 10.7 0 0 1 12 4c6.5 0 10 8 10 8a18.8 18.8 0 0 1-2.2 3.1M6.4 6.4C3.6 8.2 2 12 2 12s3.5 8 10 8c1.8 0 3.3-.6 4.6-1.4"/></>,
   arrowLeft: <><path d="M19 12H5M12 19l-7-7 7-7"/></>,
   chevronRight: <path d="M9 18l6-6-6-6"/>,
+  chevronLeft: <path d="M15 18l-6-6 6-6"/>,
+  externalLink: <><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6M10 14L21 3"/></>,
   plus: <><path d="M12 5v14M5 12h14"/></>,
   edit: <><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4z"/></>,
   power: <><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.8 0"/></>,

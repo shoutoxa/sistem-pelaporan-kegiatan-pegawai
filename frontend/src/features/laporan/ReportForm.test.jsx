@@ -97,4 +97,31 @@ describe('ReportForm', () => {
     expect(within(jobSelect).getByRole('option', { name: 'Survey' })).toBeInTheDocument()
     expect(within(jobSelect).queryByRole('option', { name: 'Implementasi' })).not.toBeInTheDocument()
   })
+
+  it('renders without loop when no optional props are provided (EmployeeReportRoute scenario)', async () => {
+    const fetchMock = vi.fn().mockImplementation((url) => {
+      if (String(url).includes('/api/master/project')) {
+        return Promise.resolve({ ok: true, json: async () => [{ id: 'p1', name: 'Desa Merdeka' }] })
+      }
+      if (String(url).includes('/api/master/category')) {
+        return Promise.resolve({ ok: true, json: async () => [{ id: 'c1', name: 'FTTH' }] })
+      }
+      return Promise.resolve({ ok: true, json: async () => [] })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(
+      <MemoryRouter>
+        <ReportForm user={user} />
+      </MemoryRouter>
+    )
+
+    // Verify it renders the form inputs cleanly
+    expect(screen.getByLabelText(/desa \/ project/i)).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByRole('option', { name: 'Desa Merdeka' })).toBeInTheDocument()
+      expect(screen.getByRole('option', { name: 'FTTH' })).toBeInTheDocument()
+    })
+  })
 })
+

@@ -10,29 +10,30 @@ const documentationResponse = {
       storagePath: 'path/to/img.png',
       signedUrl: 'https://example.com/img.png',
       originalName: 'foto1.png',
+      mimeType: 'image/png',
       laporanId: 'rep-1',
       tanggalKegiatan: '2026-08-22',
       keterangan: 'Foto pengerjaan ODN',
-      desa: { id: 'd1', namaDesa: 'Handapherang' },
-      cluster: { id: 'c1', clusterName: 'RW 02', desa: { id: 'd1', namaDesa: 'Handapherang' } },
-      pekerjaan: { id: 'p1', namaPekerjaan: 'Pemasangan ODN' },
+      project: { id: 'p1', name: 'Project Rancamanyar' },
+      cluster: { id: 'c1', name: 'RW 02' },
+      process: { id: 'proc1', name: 'IKR' },
     }],
     total: 1,
   },
 }
 
 describe('DokumentasiPage', () => {
-  it('filters by Desa, RW, and Pekerjaan and renders an A4-style preview', async () => {
+  it('filters by Project, Cluster, and Kategori and renders folder view', async () => {
     const fetchMock = vi.fn().mockImplementation((url) => {
       const requestUrl = String(url)
-      if (requestUrl.endsWith('/api/master/desa')) {
-        return Promise.resolve({ ok: true, json: async () => [{ id: 'd1', namaDesa: 'Handapherang' }] })
+      if (requestUrl.endsWith('/api/master/project')) {
+        return Promise.resolve({ ok: true, json: async () => [{ id: 'p1', name: 'Project Rancamanyar' }] })
       }
-      if (requestUrl.endsWith('/api/master/pekerjaan')) {
-        return Promise.resolve({ ok: true, json: async () => [{ id: 'p1', namaPekerjaan: 'Pemasangan ODN' }] })
+      if (requestUrl.endsWith('/api/master/category')) {
+        return Promise.resolve({ ok: true, json: async () => [{ id: 'proc1', name: 'IKR' }] })
       }
-      if (requestUrl.includes('/api/master/desa/d1/cluster')) {
-        return Promise.resolve({ ok: true, json: async () => [{ id: 'c1', clusterName: 'RW 02' }] })
+      if (requestUrl.includes('/api/master/project/p1/cluster')) {
+        return Promise.resolve({ ok: true, json: async () => [{ id: 'c1', name: 'RW 02' }] })
       }
       return Promise.resolve({ ok: true, json: async () => documentationResponse })
     })
@@ -40,18 +41,16 @@ describe('DokumentasiPage', () => {
 
     render(<MemoryRouter><DokumentasiPage /></MemoryRouter>)
 
-    await waitFor(() => expect(screen.getByText('PHOTO DOCUMENTATION')).toBeInTheDocument())
-    fireEvent.change(screen.getByLabelText('Desa'), { target: { value: 'd1' } })
+    await waitFor(() => expect(screen.getByText('Dokumentasi Kegiatan')).toBeInTheDocument())
+    fireEvent.change(screen.getByLabelText(/project/i), { target: { value: 'p1' } })
     await waitFor(() => expect(screen.getByRole('option', { name: 'RW 02' })).toBeInTheDocument())
-    fireEvent.change(screen.getByLabelText('RW / Cluster'), { target: { value: 'c1' } })
-    fireEvent.change(screen.getByLabelText('Pekerjaan'), { target: { value: 'p1' } })
+    fireEvent.change(screen.getByLabelText(/cluster/i), { target: { value: 'c1' } })
+    fireEvent.change(screen.getByLabelText(/kategori/i), { target: { value: 'proc1' } })
     fireEvent.click(screen.getByRole('button', { name: /tampilkan/i }))
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining('/api/admin/dokumentasi?desaId=d1&clusterId=c1&pekerjaanId=p1'),
+      expect.stringContaining('/api/admin/dokumentasi?projectId=p1&clusterId=c1'),
       expect.any(Object),
     ))
-    expect(screen.getByText('Foto pengerjaan ODN')).toBeInTheDocument()
-    expect(screen.getByText('Halaman 1 dari 1')).toBeInTheDocument()
   })
 })

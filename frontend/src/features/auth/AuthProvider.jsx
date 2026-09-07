@@ -10,8 +10,9 @@ export function AuthProvider({ children }) {
   const refreshUser = useCallback(async () => {
     try {
       const result = await authApi.me()
-      setUser(result.user)
-      return result.user
+      const activeUser = result?.user || null
+      setUser(activeUser)
+      return activeUser
     } catch (error) {
       if (error.status === 401 || error.status === undefined) setUser(null)
       throw error
@@ -28,8 +29,13 @@ export function AuthProvider({ children }) {
   }, [refreshUser])
 
   const logout = useCallback(async () => {
-    await authApi.logout()
-    setUser(null)
+    try {
+      await authApi.logout()
+    } catch {
+      // ignore network errors on logout
+    } finally {
+      setUser(null)
+    }
   }, [])
 
   const value = useMemo(() => ({ user, loading, login, logout, refreshUser }), [user, loading, login, logout, refreshUser])

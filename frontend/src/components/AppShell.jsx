@@ -10,8 +10,11 @@ export default function AppShell({ roleLabel, navItems, mobileFirst = false }) {
   const userAvatar = user?.fotoProfilUrl || user?.fotoProfil
 
   async function handleLogout() {
-    await logout()
-    navigate('/login')
+    try {
+      await logout()
+    } finally {
+      navigate('/login', { replace: true })
+    }
   }
 
   return (

@@ -53,9 +53,9 @@ export default function DashboardPage() {
       </section>
     )
 
-  const highestVillage = Math.max(
+  const highestProject = Math.max(
     1,
-    ...(data?.distribusiDesa || []).map((item) => item.jumlah),
+    ...(data?.distribusiProject || []).map((item) => item.jumlah),
   )
   const highestJob = Math.max(
     1,
@@ -119,7 +119,7 @@ export default function DashboardPage() {
                 <tr>
                   <th>Pegawai</th>
                   <th>Pekerjaan</th>
-                  <th>Lokasi</th>
+                  <th>Project / Cluster</th>
                   <th>Keterangan</th>
                   <th>Aksi</th>
                 </tr>
@@ -127,11 +127,11 @@ export default function DashboardPage() {
               <tbody>
                 {(data?.terbaru || []).slice(0, 5).map((item) => (
                   <tr key={item.id}>
-                    <td>{item.user?.nama || '-'}</td>
-                    <td>{item.pekerjaan?.namaPekerjaan || '-'}</td>
+                    <td>{item.user?.nama || item.user?.name || '-'}</td>
+                    <td>{item.process?.name || item.master_process?.name || '-'}</td>
                     <td>
-                      {item.cluster?.desa?.namaDesa || '-'} ·{' '}
-                      {item.cluster?.clusterName || '-'}
+                      {item.project?.name || item.project_name || '-'} ·{' '}
+                      {item.cluster?.name || item.cluster_name || '-'}
                     </td>
                     <td className="description-cell">
                       {item.keterangan || '-'}
@@ -162,19 +162,19 @@ export default function DashboardPage() {
           <article className="data-section">
             <div className="section-heading">
               <div>
-                <h2>Progres per Cluster / Desa</h2>
-                <p>Ringkasan akumulasi laporan harian per wilayah.</p>
+                <h2>Progres per Project</h2>
+                <p>Ringkasan akumulasi laporan harian per project.</p>
               </div>
             </div>
             <ul className="distribution-list">
-              {(data?.distribusiDesa || []).map((item) => (
-                <li key={item.namaDesa}>
+              {(data?.distribusiProject || []).map((item, index) => (
+                <li key={item.name || `project-${index}`}>
                   <div>
-                    <span>{item.namaDesa}</span>
+                    <span>{item.name}</span>
                     <span className="distribution-track">
                       <i
                         style={{
-                          width: `${Math.max(item.jumlah > 0 ? 8 : 0, (item.jumlah / highestVillage) * 100)}%`,
+                          width: `${Math.max(item.jumlah > 0 ? 8 : 0, (item.jumlah / highestProject) * 100)}%`,
                         }}
                       />
                     </span>
@@ -182,9 +182,9 @@ export default function DashboardPage() {
                   <strong>{item.jumlah}</strong>
                 </li>
               ))}
-              {!data?.distribusiDesa?.length && (
-                <li className="empty-state">
-                  Belum ada data progres wilayah.
+              {!data?.distribusiProject?.length && (
+                <li key="empty-project" className="empty-state">
+                  Belum ada data progres project.
                 </li>
               )}
             </ul>
@@ -198,10 +198,10 @@ export default function DashboardPage() {
               </div>
             </div>
             <ul className="distribution-list">
-              {(data?.distribusiPekerjaan || []).map((item) => (
-                <li key={item.namaPekerjaan}>
+              {(data?.distribusiPekerjaan || []).map((item, index) => (
+                <li key={item.name || `job-${index}`}>
                   <div>
-                    <span>{item.namaPekerjaan}</span>
+                    <span>{item.name}</span>
                     <span className="distribution-track">
                       <i
                         style={{
@@ -214,7 +214,7 @@ export default function DashboardPage() {
                 </li>
               ))}
               {!data?.distribusiPekerjaan?.length && (
-                <li className="empty-state">
+                <li key="empty-job" className="empty-state">
                   Belum ada data pekerjaan pengerjaan.
                 </li>
               )}

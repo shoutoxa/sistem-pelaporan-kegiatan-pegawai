@@ -3,7 +3,6 @@ import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { historyApi } from '../../api/history.js'
 import { masterApi } from '../../api/master.js'
 import { updateAdminReport, updateReport } from '../../api/reports.js'
-import LocationFields from '../master-data/LocationFields.jsx'
 import PageHeader from '../../components/PageHeader.jsx'
 import PageState from '../../components/PageState.jsx'
 import Notice from '../../components/Notice.jsx'
@@ -14,35 +13,60 @@ export default function EditReportPage() {
   const navigate = useNavigate()
   const isAdmin = location.pathname.startsWith('/admin')
   const [report, setReport] = useState(null)
+  const [projects, setProjects] = useState([])
+  const [clusters, setClusters] = useState([])
   const [categories, setCategories] = useState([])
-  const [jobs, setJobs] = useState([])
+  const [processes, setProcesses] = useState([])
   const [form, setForm] = useState(null)
   const [state, setState] = useState('loading')
   const [error, setError] = useState('')
   const [fieldErrors, setFieldErrors] = useState({})
   const [saving, setSaving] = useState(false)
+  const [loadingProject, setLoadingProject] = useState(false)
+  const [loadingCategory, setLoadingCategory] = useState(false)
 
   useEffect(() => {
-    Promise.all([historyApi.getDetail(id), masterApi.fetchKategori(), masterApi.fetchPekerjaan()])
-      .then(([detail, categoryRows, jobRows]) => {
-        if (!detail.data.canEdit) {
-          setReport(detail.data)
-          setState(detail.data.diterima ? 'locked' : 'expired')
-          return
-        }
+    Promise.all([historyApi.getDetail(id)])
+      .then(async ([detail]) => {
         const item = detail.data
         setReport(item)
-        const normalizedJobs = Array.isArray(jobRows) ? jobRows : (jobRows?.data || [])
-        setCategories(Array.isArray(categoryRows) ? categoryRows : [])
-        setJobs(normalizedJobs)
-        const selectedJob = normalizedJobs.find((job) => job.id === (item.pekerjaan?.id || item.pekerjaanId))
+        if (!item.canEdit) {
+          setState(item.status === 'APPROVED' ? 'locked' : 'expired')
+          return
+        }
+
+        const projectId = item.project?.id || item.project_id
+        const clusterId = item.cluster?.id || item.cluster_id
+        const categoryId = item.process?.master_category_id || item.master_category_id
+
+        try {
+          const [projectsData, categoriesData] = await Promise.all([
+            masterApi.fetchProject(),
+            masterApi.fetchCategory(),
+          ])
+          setProjects(Array.isArray(projectsData) ? projectsData : [])
+          setCategories(Array.isArray(categoriesData) ? categoriesData : [])
+
+          if (projectId) {
+            const clustersData = await masterApi.fetchClusterByProject(projectId)
+            setClusters(Array.isArray(clustersData) ? clustersData : [])
+          }
+
+          if (categoryId) {
+            const processesData = await masterApi.fetchProcessByCategory(categoryId)
+            setProcesses(Array.isArray(processesData) ? processesData : [])
+          }
+        } catch (e) {
+          // Non-blocking error for metadata
+        }
+
         setForm({
-          tanggalKegiatan: String(item.tanggalKegiatan).slice(0, 10),
-          desaId: item.cluster?.desa?.id || item.cluster?.desaId || '',
-          clusterId: item.cluster?.id || item.clusterId || '',
-          kategoriId: selectedJob?.kategoriId || item.pekerjaan?.kategoriId || 'uncategorized',
-          pekerjaanId: item.pekerjaan?.id || item.pekerjaanId || '',
-          nomorPerangkat: item.nomorPerangkat || '',
+          tanggalKegiatan: String(item.tanggal_kegiatan || item.tanggalKegiatan || '').slice(0, 10),
+          projectId: projectId || '',
+          clusterId: clusterId || '',
+          categoryId: categoryId || '',
+          processId: item.process?.id || item.process_id || '',
+          nomorPerangkat: item.nomor_perangkat || item.nomorPerangkat || '',
           keterangan: item.keterangan || '',
         })
         setState('ready')
@@ -53,27 +77,50 @@ export default function EditReportPage() {
       })
   }, [id])
 
-  const selectedJob = useMemo(
-    () => jobs.find((row) => row.id === form?.pekerjaanId),
-    [jobs, form?.pekerjaanId],
+  async function handleProjectChange(event) {
+    const projectId = event.target.value
+    setForm((current) => ({ ...current, projectId, clusterId: '' }))
+    setClusters([])
+    if (!projectId) return
+
+    setLoadingProject(true)
+    try {
+      const rows = await masterApi.fetchClusterByProject(projectId)
+      setClusters(Array.isArray(rows) ? rows : [])
+    } catch {
+      setClusters([])
+    } finally {
+      setLoadingProject(false)
+    }
+  }
+
+  async function handleCategoryChange(event) {
+    const categoryId = event.target.value
+    setForm((current) => ({ ...current, categoryId, processId: '' }))
+    setProcesses([])
+    if (!categoryId) return
+
+    setLoadingCategory(true)
+    try {
+      const rows = await masterApi.fetchProcessByCategory(categoryId)
+      setProcesses(Array.isArray(rows) ? rows : [])
+    } catch {
+      setProcesses([])
+    } finally {
+      setLoadingCategory(false)
+    }
+  }
+
+  const selectedProcess = useMemo(
+    () => processes.find((row) => row.id === form?.processId),
+    [processes, form?.processId],
   )
-  const availableCategories = useMemo(() => {
-    const rows = [...categories]
-    if (jobs.some((job) => !job.kategoriId)) rows.push({ id: 'uncategorized', namaKategori: 'Belum dikategorikan' })
-    return rows
-  }, [categories, jobs])
-  const visibleJobs = useMemo(
-    () => jobs.filter((job) => (
-      form?.kategoriId === 'uncategorized'
-        ? !job.kategoriId
-        : job.kategoriId === form?.kategoriId
-    )),
-    [form?.kategoriId, jobs],
-  )
+
   function setField(key, value) {
     setForm((current) => ({ ...current, [key]: value }))
     setFieldErrors((current) => ({ ...current, [key]: undefined }))
   }
+
   async function save(event) {
     event.preventDefault()
     setSaving(true)
@@ -82,9 +129,10 @@ export default function EditReportPage() {
     try {
       const saveReport = isAdmin ? updateAdminReport : updateReport
       await saveReport(id, {
-        tanggalKegiatan: form.tanggalKegiatan,
+        projectId: form.projectId,
         clusterId: form.clusterId,
-        pekerjaanId: form.pekerjaanId,
+        processId: form.processId,
+        tanggalKegiatan: form.tanggalKegiatan,
         nomorPerangkat: form.nomorPerangkat,
         keterangan: form.keterangan,
       })
@@ -127,7 +175,7 @@ export default function EditReportPage() {
         <PageState
           tone="error"
           title="Laporan terkunci"
-          message={isAdmin ? 'Buka kembali status penerimaan laporan sebelum mengoreksi data.' : 'Laporan sudah diterima oleh Superadmin dan tidak dapat diubah.'}
+          message={isAdmin ? 'Buka kembali status persetujuan laporan sebelum mengoreksi data.' : 'Laporan sudah disetujui dan tidak dapat diubah.'}
           action={
             <Link className="secondary-button" to={`${isAdmin ? '/admin' : '/pegawai'}/laporan/${id}`}>
               Kembali ke detail
@@ -167,70 +215,102 @@ export default function EditReportPage() {
               }
             />
           </label>
-          <label>
-            Kategori pekerjaan
+        </div>
+
+        <div className="field-grid">
+          <label htmlFor="edit-project">
+            Project
             <select
-              aria-label="Kategori pekerjaan"
-              value={form.kategoriId}
-              onChange={(event) => {
-                setForm((current) => ({
-                  ...current,
-                  kategoriId: event.target.value,
-                  pekerjaanId: '',
-                }))
-              }}
+              id="edit-project"
+              aria-label="Project"
+              value={form.projectId}
+              onChange={handleProjectChange}
             >
-              <option value="">Pilih Kategori</option>
-              {availableCategories.map((category) => (
-                <option key={category.id} value={category.id}>
-                  {category.namaKategori}
+              <option value="">Pilih Project</option>
+              {projects.map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.name}
                 </option>
               ))}
             </select>
           </label>
-          <label>
-            Pekerjaan
+
+          <label htmlFor="edit-cluster">
+            Cluster
             <select
-              aria-label="Pekerjaan"
-              value={form.pekerjaanId}
-              disabled={!form.kategoriId}
-              onChange={(event) => {
-                setField('pekerjaanId', event.target.value)
-              }}
+              id="edit-cluster"
+              aria-label="Cluster"
+              value={form.clusterId}
+              disabled={!form.projectId || loadingProject}
+              onChange={(event) => setField('clusterId', event.target.value)}
             >
-              <option value="">Pilih Pekerjaan</option>
-              {visibleJobs.map((job) => (
-                <option key={job.id} value={job.id}>
-                  {job.namaPekerjaan}
+              <option value="">
+                {loadingProject ? 'Memuat...' : form.projectId ? 'Pilih Cluster' : 'Pilih Project terlebih dahulu'}
+              </option>
+              {clusters.map((cluster) => (
+                <option key={cluster.id} value={cluster.id}>
+                  {cluster.name}
                 </option>
               ))}
             </select>
           </label>
         </div>
-        <LocationFields
-          value={form}
-          onChange={(location) =>
-            setForm((current) => ({ ...current, ...location }))
-          }
-          desaOptions={report?.cluster?.desa ? [report.cluster.desa] : []}
-          errors={fieldErrors}
-        />
+
+        <div className="field-grid">
+          <label htmlFor="edit-category">
+            Kategori
+            <select
+              id="edit-category"
+              aria-label="Kategori"
+              value={form.categoryId}
+              onChange={handleCategoryChange}
+            >
+              <option value="">Pilih Kategori</option>
+              {categories.map((category) => (
+                <option key={category.id} value={category.id}>
+                  {category.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label htmlFor="edit-process">
+            Pekerjaan
+            <select
+              id="edit-process"
+              aria-label="Pekerjaan"
+              value={form.processId}
+              disabled={!form.categoryId || loadingCategory}
+              onChange={(event) => setField('processId', event.target.value)}
+            >
+              <option value="">
+                {loadingCategory ? 'Memuat...' : form.categoryId ? 'Pilih Pekerjaan' : 'Pilih Kategori terlebih dahulu'}
+              </option>
+              {processes.map((process) => (
+                <option key={process.id} value={process.id}>
+                  {process.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
         <label>
           Nomor perangkat <small className="optional-tag">(Opsional)</small>
           <input
             aria-label="Nomor perangkat"
-            placeholder="Opsional / Kosongkan jika tidak ada"
+            placeholder="Opsional: ODP-001, Tiang-002, WO-003, PO-004"
             value={form.nomorPerangkat}
             onChange={(event) =>
               setField('nomorPerangkat', event.target.value)
             }
           />
         </label>
-        {selectedJob?.instruksiDokumentasi && (
+        {selectedProcess?.input_instruction && (
           <div className="stage-guidance" role="status">
             <span>
-              <strong>Panduan foto pekerjaan</strong>
-              <p>{selectedJob.instruksiDokumentasi}</p>
+              <strong>Panduan dokumentasi pekerjaan</strong>
+              <p>{selectedProcess.input_instruction}</p>
             </span>
           </div>
         )}
@@ -248,7 +328,7 @@ export default function EditReportPage() {
           )}
         </label>
         <p className="muted-copy">
-          {report.dokumentasi?.length || 0} foto dokumentasi tetap
+          {(report.dokumentasi?.length || report.dokumentasi_laporan?.length || 0)} file dokumentasi tetap
           dipertahankan.
         </p>
         <div className="form-actions">

@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
 import HistoryPage from './HistoryPage.jsx'
@@ -15,4 +15,46 @@ describe('HistoryPage', () => {
     expect(screen.getByRole('table')).toHaveClass('employee-history-table')
     expect(screen.getByRole('link', { name: /edit/i })).toHaveAttribute('href', '/pegawai/laporan/r1/edit')
   })
+
+  it('opens attachment directly from history table without opening detail', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        data: {
+          items: [
+            {
+              id: 'r1',
+              tanggalKegiatan: '2026-08-22',
+              keterangan: 'Kegiatan selesai',
+              dokumentasi: [{ id: 'f1', file_url: '/uploads/foto1.png', original_name: 'foto1.png' }],
+              cluster: { clusterName: 'RW 01' },
+              pekerjaan: { namaPekerjaan: 'ODN' },
+            },
+          ],
+          total: 1,
+          page: 1,
+          limit: 20,
+        },
+      }),
+    }))
+
+    render(
+      <MemoryRouter>
+        <HistoryPage />
+      </MemoryRouter>
+    )
+
+    await waitFor(() => expect(screen.getByText('Kegiatan selesai')).toBeInTheDocument())
+    const lampiranBtn = screen.getByRole('button', { name: /1 foto/i })
+    expect(lampiranBtn).toBeInTheDocument()
+
+    fireEvent.click(lampiranBtn)
+    expect(screen.getByRole('dialog', { name: /lampiran dokumentasi/i })).toBeInTheDocument()
+    expect(screen.getByText(/foto1\.png/)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /buka tab baru/i })).toHaveAttribute(
+      'href',
+      'https://ftth.digitak.id/uploads/foto1.png'
+    )
+  })
 })
+

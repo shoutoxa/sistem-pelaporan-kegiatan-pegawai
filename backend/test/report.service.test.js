@@ -128,4 +128,23 @@ describe('report service', () => {
     prisma.laporan.findUnique.mockResolvedValue({ id: 'report-1', diterima: false })
     await expect(service.updateReportByAdmin({ reportId: 'report-1', fields: { keterangan: 'Koreksi admin' } })).resolves.toMatchObject({ id: 'report-1' })
   })
+
+  it('filters documentation strictly by report ID in FTTH mode', async () => {
+    const ftth = {
+      getReportById: vi.fn().mockResolvedValue({
+        id: 'rep-abc',
+        user_id: 'user-1',
+        dokumentasi: [
+          { id: 'doc-1', laporan_id: 'rep-abc', file_url: '/uploads/mine.jpg' },
+          { id: 'doc-2', laporan_id: 'rep-xyz', file_url: '/uploads/other.jpg' },
+        ],
+      }),
+    }
+    const service = createReportService({ ftthApi: ftth })
+    const detail = await service.getReportDetail({ actor: { id: 'user-1', role: 'PEGAWAI' }, reportId: 'rep-abc' })
+    expect(detail.dokumentasi).toHaveLength(1)
+    expect(detail.dokumentasi[0].id).toBe('doc-1')
+    expect(detail.dokumentasi[0].signedUrl).toBe('https://ftth.digitak.id/uploads/mine.jpg')
+  })
 })
+

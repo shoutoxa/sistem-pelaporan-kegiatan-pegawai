@@ -61,4 +61,46 @@ describe('history service', () => {
     })
     expect(findMany.mock.calls[1][0].where.cluster).toBeUndefined()
   })
+
+  it('strictly scopes documentation to the specific report in FTTH mode', async () => {
+    const ftthApi = {
+      getReportById: vi.fn().mockResolvedValue({
+        id: 'report-100',
+        user_id: 'u1',
+        dokumentasi: [
+          { id: 'doc-1', laporan_id: 'report-100', file_url: '/uploads/doc1.png' },
+          { id: 'doc-2', laporan_id: 'report-999', file_url: '/uploads/doc2.png' },
+        ],
+      }),
+      getDocumentation: vi.fn().mockResolvedValue([
+        { id: 'doc-3', laporan_id: 'report-999', file_url: '/uploads/doc3.png' },
+      ]),
+    }
+    const service = createHistoryService({ ftthApi })
+    const result = await service.getReportDetail({ actor: { id: 'u1', role: 'PEGAWAI' }, reportId: 'report-100' })
+
+    expect(result.dokumentasi).toHaveLength(1)
+    expect(result.dokumentasi[0].id).toBe('doc-1')
+    expect(result.dokumentasi[0].signedUrl).toBe('https://ftth.digitak.id/uploads/doc1.png')
+  })
+
+  it('filters fallback documentation by reportId in FTTH mode', async () => {
+    const ftthApi = {
+      getReportById: vi.fn().mockResolvedValue({
+        id: 'report-200',
+        user_id: 'u1',
+        dokumentasi: [],
+      }),
+      getDocumentation: vi.fn().mockResolvedValue([
+        { id: 'doc-correct', laporan_id: 'report-200', file_url: '/uploads/correct.png' },
+        { id: 'doc-wrong', laporan_id: 'report-other', file_url: '/uploads/wrong.png' },
+      ]),
+    }
+    const service = createHistoryService({ ftthApi })
+    const result = await service.getReportDetail({ actor: { id: 'u1', role: 'PEGAWAI' }, reportId: 'report-200' })
+
+    expect(result.dokumentasi).toHaveLength(1)
+    expect(result.dokumentasi[0].id).toBe('doc-correct')
+  })
 })
+

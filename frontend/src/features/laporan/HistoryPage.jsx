@@ -1,28 +1,70 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { historyApi } from '../../api/history.js'
+import { masterApi } from '../../api/master.js'
+import { resolveFileUrl } from '../../utils/fileUrl.js'
 import PageHeader from '../../components/PageHeader.jsx'
 import PageState from '../../components/PageState.jsx'
 import Icon from '../../components/Icon.jsx'
-import { masterApi } from '../../api/master.js'
+
+function isImageFile(item) {
+  return (
+    item?.mime_type?.startsWith('image/') ||
+    item?.mimeType?.startsWith('image/') ||
+    /\.(jpe?g|png|webp|gif|svg)(\?.*)?$/i.test(
+      item?.original_name || item?.originalName || item?.signedUrl || item?.storagePath || item?.file_url || ''
+    )
+  )
+}
 
 export default function HistoryPage() {
   const [result, setResult] = useState({ items: [], total: 0 })
   const [state, setState] = useState('loading')
   const [filters, setFilters] = useState({
     tanggal: '',
-    pekerjaanId: '',
+    processId: '',
     page: 1,
     limit: 20,
   })
-  const [jobs, setJobs] = useState([])
+  const [categories, setCategories] = useState([])
   const [requestVersion, setRequestVersion] = useState(0)
+  const [previewModal, setPreviewModal] = useState(null)
+
+  useEffect(() => {
+    if (!previewModal) return
+    function handleKeyDown(e) {
+      if (e.key === 'Escape') {
+        setPreviewModal(null)
+      } else if (e.key === 'ArrowLeft' && previewModal.docs.length > 1) {
+        setPreviewModal((prev) =>
+          prev
+            ? {
+                ...prev,
+                activeIndex:
+                  (prev.activeIndex - 1 + prev.docs.length) % prev.docs.length,
+              }
+            : null
+        )
+      } else if (e.key === 'ArrowRight' && previewModal.docs.length > 1) {
+        setPreviewModal((prev) =>
+          prev
+            ? {
+                ...prev,
+                activeIndex: (prev.activeIndex + 1) % prev.docs.length,
+              }
+            : null
+        )
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [previewModal])
 
   useEffect(() => {
     masterApi
-      .fetchPekerjaan()
-      .then((rows) => setJobs(Array.isArray(rows) ? rows : []))
-      .catch(() => setJobs([]))
+      .fetchCategory()
+      .then((rows) => setCategories(Array.isArray(rows) ? rows : []))
+      .catch(() => setCategories([]))
   }, [])
 
   useEffect(() => {
@@ -32,7 +74,7 @@ export default function HistoryPage() {
       .listMine(filters)
       .then((response) => {
         if (!active) return
-        setResult(response.data)
+        setResult(response.data || response)
         setState('ready')
       })
       .catch(() => {
@@ -67,6 +109,7 @@ export default function HistoryPage() {
     1,
     Math.ceil(result.total / (result.limit || filters.limit)),
   )
+
   return (
     <section className="page">
       <PageHeader
@@ -97,29 +140,29 @@ export default function HistoryPage() {
             />
           </label>
           <label>
-            Pekerjaan
+            Kategori
             <select
-              aria-label="Pekerjaan histori"
-              value={filters.pekerjaanId}
+              aria-label="Kategori histori"
+              value={filters.processId}
               onChange={(event) =>
                 setFilters((current) => ({
                   ...current,
-                  pekerjaanId: event.target.value,
+                  processId: event.target.value,
                   page: 1,
                 }))
               }
             >
-              <option value="">Semua Pekerjaan</option>
-              {jobs.map((job) => (
-                <option key={job.id} value={job.id}>
-                  {job.namaPekerjaan}
+              <option value="">Semua Kategori</option>
+              {categories.map((cat) => (
+                <option key={cat.id} value={cat.id}>
+                  {cat.name}
                 </option>
               ))}
             </select>
           </label>
         </div>
-        {(filters.tanggal || filters.pekerjaanId) && (
-          <button className="text-button" type="button" onClick={() => setFilters((current) => ({ ...current, tanggal: '', pekerjaanId: '', page: 1 }))}>
+        {(filters.tanggal || filters.processId) && (
+          <button className="text-button" type="button" onClick={() => setFilters((current) => ({ ...current, tanggal: '', processId: '', page: 1 }))}>
             Hapus filter
           </button>
         )}
@@ -137,12 +180,12 @@ export default function HistoryPage() {
             <thead>
               <tr>
                 <th>Kegiatan & kirim</th>
-                <th>Lokasi</th>
+                <th>Project / Cluster</th>
                 <th>Pekerjaan</th>
                 <th>Perangkat</th>
                 <th>Keterangan</th>
-                <th>Foto</th>
-                <th>Status edit</th>
+                <th>File</th>
+                <th>Status</th>
                 <th>Aksi</th>
               </tr>
             </thead>
@@ -150,10 +193,10 @@ export default function HistoryPage() {
               {result.items.map((item) => (
                 <tr key={item.id}>
                   <td data-label="Tanggal">
-                    {String(item.tanggalKegiatan).slice(0, 10)}
+                    {String(item.tanggal_kegiatan || item.tanggalKegiatan || '').slice(0, 10)}
                     <small className="table-subline">
-                      {item.createdAt
-                        ? new Date(item.createdAt).toLocaleTimeString('id-ID', {
+                      {item.created_at || item.createdAt
+                        ? new Date(item.created_at || item.createdAt).toLocaleTimeString('id-ID', {
                             hour: '2-digit',
                             minute: '2-digit',
                           })
@@ -161,19 +204,41 @@ export default function HistoryPage() {
                     </small>
                   </td>
                   <td data-label="Lokasi">
-                    {item.cluster?.desa?.namaDesa} · {item.cluster?.clusterName}
+                    {item.project?.name || item.project_name || item.cluster?.desa?.namaDesa || item.desa?.namaDesa || item.rw?.desa?.namaDesa || '-'} · {item.cluster?.name || item.cluster?.clusterName || item.cluster_name || item.rw?.nomorRw || '-'}
                   </td>
                   <td data-label="Pekerjaan">
-                    <strong>{item.pekerjaan?.namaPekerjaan}</strong>
+                    <strong>{item.process?.name || item.master_process?.name || item.pekerjaan?.namaPekerjaan || item.pekerjaan?.name || '-'}</strong>
                   </td>
-                  <td data-label="Perangkat">{item.nomorPerangkat || '-'}</td>
+                  <td data-label="Perangkat">{item.nomor_perangkat || item.nomorPerangkat || '-'}</td>
                   <td data-label="Keterangan" className="description-cell">{item.keterangan}</td>
-                  <td data-label="Dokumentasi">{item.dokumentasi?.length || 0} foto</td>
-                  <td data-label="Status edit">
-                    <span
-                      className={`status-badge ${item.canEdit ? 'active' : 'inactive'}`}
-                    >
-                      {item.canEdit ? 'Dapat diedit' : 'Terkunci'}
+                  <td data-label="Dokumentasi">
+                    {(() => {
+                      const docs = (item.dokumentasi || item.dokumentasi_laporan || []).filter(
+                        (d) => !d.laporan_id || d.laporan_id === item.id
+                      )
+                      if (!docs.length) {
+                        return <span className="text-muted">0 foto</span>
+                      }
+                      return (
+                        <button
+                          type="button"
+                          className="attachment-quick-btn"
+                          onClick={() => setPreviewModal({ report: item, docs, activeIndex: 0 })}
+                          title="Buka lampiran dokumentasi"
+                        >
+                          <Icon name="photo" size={15} />
+                          <span>{docs.length} foto</span>
+                        </button>
+                      )
+                    })()}
+                  </td>
+                  <td data-label="Status">
+                    <span className={`status-badge ${
+                      item.status === 'APPROVED' ? 'active' :
+                      item.status === 'REJECTED' ? 'rejected' : 'pending'
+                    }`}>
+                      {item.status === 'APPROVED' ? 'Disetujui' :
+                       item.status === 'REJECTED' ? 'Ditolak' : 'Menunggu'}
                     </span>
                   </td>
                   <td data-label="Aksi">
@@ -230,6 +295,133 @@ export default function HistoryPage() {
           </button>
         </div>
       </section>
+
+      {previewModal && previewModal.docs.length > 0 && (() => {
+        const activeDoc = previewModal.docs[previewModal.activeIndex] || previewModal.docs[0]
+        const fileUrl = resolveFileUrl(activeDoc.signedUrl || activeDoc.file_url || activeDoc.storagePath)
+        const isImg = isImageFile(activeDoc)
+        const fileName = activeDoc.original_name || activeDoc.originalName || 'Lampiran'
+        const reportTitle =
+          previewModal.report.process?.name ||
+          previewModal.report.master_process?.name ||
+          previewModal.report.pekerjaan?.namaPekerjaan ||
+          'Laporan Kegiatan'
+        const reportLoc =
+          previewModal.report.cluster?.name ||
+          previewModal.report.cluster?.clusterName ||
+          previewModal.report.cluster_name ||
+          ''
+
+        return (
+          <div
+            className="media-lightbox-overlay"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Lampiran Dokumentasi Laporan"
+            onClick={() => setPreviewModal(null)}
+          >
+            <div
+              className="media-lightbox-modal"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="media-lightbox-header">
+                <div className="media-lightbox-title">
+                  <h3>
+                    {reportTitle} {reportLoc ? `· ${reportLoc}` : ''}
+                  </h3>
+                  <small>
+                    Berkas {previewModal.activeIndex + 1} dari {previewModal.docs.length} — {fileName}
+                  </small>
+                </div>
+                <div className="media-lightbox-actions">
+                  <a
+                    href={fileUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="secondary-button icon-label"
+                    download={fileName}
+                  >
+                    <Icon name="externalLink" size={16} />
+                    Buka Tab Baru
+                  </a>
+                  <button
+                    type="button"
+                    className="lightbox-close-button"
+                    onClick={() => setPreviewModal(null)}
+                    aria-label="Tutup pratinjau"
+                  >
+                    <Icon name="close" size={20} />
+                  </button>
+                </div>
+              </div>
+
+              <div className="media-lightbox-body">
+                {isImg ? (
+                  <div className="media-lightbox-img-container">
+                    <img
+                      src={fileUrl}
+                      alt={fileName}
+                    />
+                  </div>
+                ) : (
+                  <div className="media-lightbox-doc">
+                    <div className="doc-icon-huge">
+                      {activeDoc.mime_type === 'application/pdf' ? '📄' :
+                       activeDoc.mime_type?.includes('spreadsheet') ? '📊' :
+                       activeDoc.mime_type?.includes('kmz') ? '🗺️' : '📎'}
+                    </div>
+                    <p>{fileName}</p>
+                    <a
+                      href={fileUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="primary-button icon-label"
+                    >
+                      <Icon name="externalLink" size={16} />
+                      Unduh / Buka Dokumen
+                    </a>
+                  </div>
+                )}
+              </div>
+
+              {previewModal.docs.length > 1 && (
+                <div className="media-lightbox-footer">
+                  <button
+                    type="button"
+                    className="secondary-button icon-label"
+                    onClick={() =>
+                      setPreviewModal((prev) => ({
+                        ...prev,
+                        activeIndex:
+                          (prev.activeIndex - 1 + prev.docs.length) % prev.docs.length,
+                      }))
+                    }
+                  >
+                    <Icon name="chevronLeft" size={16} />
+                    Sebelumnya
+                  </button>
+                  <span className="media-lightbox-counter">
+                    {previewModal.activeIndex + 1} / {previewModal.docs.length}
+                  </span>
+                  <button
+                    type="button"
+                    className="secondary-button icon-label"
+                    onClick={() =>
+                      setPreviewModal((prev) => ({
+                        ...prev,
+                        activeIndex: (prev.activeIndex + 1) % prev.docs.length,
+                      }))
+                    }
+                  >
+                    Selanjutnya
+                    <Icon name="chevronRight" size={16} />
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )
+      })()}
     </section>
   )
 }

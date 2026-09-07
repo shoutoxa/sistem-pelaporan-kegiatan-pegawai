@@ -5,32 +5,44 @@ import { masterApi } from '../../api/master.js'
 import PageHeader from '../../components/PageHeader.jsx'
 import PageState from '../../components/PageState.jsx'
 import Icon from '../../components/Icon.jsx'
+import { resolveFileUrl } from '../../utils/fileUrl.js'
 
-const emptyFilters = { desaId: '', clusterId: '', pekerjaanId: '' }
+const emptyFilters = { projectId: '', clusterId: '', processId: '' }
 const photosPerPage = 6
+
+function getFileIcon(mimeType) {
+  if (!mimeType) return '📎'
+  if (mimeType.startsWith('image/')) return '🖼'
+  if (mimeType === 'application/pdf') return '📄'
+  if (mimeType.includes('spreadsheet') || mimeType.includes('excel')) return '📊'
+  if (mimeType.includes('kmz') || mimeType.includes('kml')) return '🗺️'
+  return '📎'
+}
 
 export default function DokumentasiPage() {
   const [data, setData] = useState({ items: [], total: 0 })
   const [state, setState] = useState('loading')
   const [filters, setFilters] = useState(emptyFilters)
   const [appliedFilters, setAppliedFilters] = useState(emptyFilters)
-  const [desaOptions, setDesaOptions] = useState([])
+  const [projectOptions, setProjectOptions] = useState([])
   const [clusterOptions, setClusterOptions] = useState([])
-  const [pekerjaanOptions, setPekerjaanOptions] = useState([])
+  const [processOptions, setProcessOptions] = useState([])
   const [loadingCluster, setLoadingCluster] = useState(false)
+  const [expandedProjects, setExpandedProjects] = useState(new Set())
+  const [expandedCategories, setExpandedCategories] = useState(new Set())
 
   useEffect(() => {
     let active = true
-    Promise.all([masterApi.fetchDesa(), masterApi.fetchPekerjaan()])
-      .then(([desa, pekerjaan]) => {
+    Promise.all([masterApi.fetchProject(), masterApi.fetchCategory()])
+      .then(([projects, categories]) => {
         if (!active) return
-        setDesaOptions(Array.isArray(desa) ? desa : [])
-        setPekerjaanOptions(Array.isArray(pekerjaan) ? pekerjaan : [])
+        setProjectOptions(Array.isArray(projects) ? projects : [])
+        setProcessOptions(Array.isArray(categories) ? categories : [])
       })
       .catch(() => {
         if (!active) return
-        setDesaOptions([])
-        setPekerjaanOptions([])
+        setProjectOptions([])
+        setProcessOptions([])
       })
     return () => { active = false }
   }, [])
@@ -42,7 +54,7 @@ export default function DokumentasiPage() {
       .listDocumentation(appliedFilters)
       .then((response) => {
         if (!active) return
-        setData(response.data)
+        setData(response.data || response)
         setState('ready')
       })
       .catch(() => {
@@ -51,20 +63,34 @@ export default function DokumentasiPage() {
     return () => { active = false }
   }, [appliedFilters])
 
-  async function handleDesaChange(event) {
-    const desaId = event.target.value
-    setFilters((current) => ({ ...current, desaId, clusterId: '' }))
+  async function handleProjectChange(event) {
+    const projectId = event.target.value
+    setFilters((current) => ({ ...current, projectId, clusterId: '' }))
     setClusterOptions([])
-    if (!desaId) return
+    if (!projectId) return
 
     setLoadingCluster(true)
     try {
-      const rows = await masterApi.fetchClusterByDesa(desaId)
+      const rows = await masterApi.fetchClusterByProject(projectId)
       setClusterOptions(Array.isArray(rows) ? rows : [])
     } catch {
       setClusterOptions([])
     } finally {
       setLoadingCluster(false)
+    }
+  }
+
+  async function handleCategoryChange(event) {
+    const categoryId = event.target.value
+    setFilters((current) => ({ ...current, processId: '' }))
+    setProcessOptions([])
+    if (!categoryId) return
+
+    try {
+      const rows = await masterApi.fetchProcessByCategory(categoryId)
+      setProcessOptions(Array.isArray(rows) ? rows : [])
+    } catch {
+      setProcessOptions([])
     }
   }
 
@@ -77,45 +103,64 @@ export default function DokumentasiPage() {
     setFilters(emptyFilters)
     setAppliedFilters(emptyFilters)
     setClusterOptions([])
+    setProcessOptions([])
   }
 
-  const documentPages = useMemo(() => {
-    const groups = new Map()
+  function toggleProject(projectName) {
+    setExpandedProjects((prev) => {
+      const next = new Set(prev)
+      if (next.has(projectName)) next.delete(projectName)
+      else next.add(projectName)
+      return next
+    })
+  }
+
+  function toggleCategory(categoryName) {
+    setExpandedCategories((prev) => {
+      const next = new Set(prev)
+      if (next.has(categoryName)) next.delete(categoryName)
+      else next.add(categoryName)
+      return next
+    })
+  }
+
+  const groupedData = useMemo(() => {
+    const projectMap = new Map()
+    const categoryMap = new Map()
 
     for (const item of data.items) {
-      const desaName = item.cluster?.desa?.namaDesa || item.desa?.namaDesa || 'Tanpa Desa'
-      const clusterName = item.cluster?.clusterName || 'Tanpa RW'
-      const pekerjaanName = item.pekerjaan?.namaPekerjaan || 'Tanpa Pekerjaan'
-      const key = `${desaName}|${clusterName}|${pekerjaanName}`
-      if (!groups.has(key)) groups.set(key, { desaName, clusterName, pekerjaanName, photos: [] })
-      groups.get(key).photos.push(item)
+      const projectName = item.project?.name || 'Tanpa Project'
+      const categoryName = item.process?.master_category?.name || item.category?.name || 'Tanpa Kategori'
+      const clusterName = item.cluster?.name || 'Tanpa Cluster'
+      const processName = item.process?.name || item.master_process?.name || 'Tanpa Pekerjaan'
+      const processId = item.process?.id || item.master_process?.id
+      const docType = item.mimeType?.startsWith('image/') ? 'foto' : 'dokumen'
+
+      if (!projectMap.has(projectName)) projectMap.set(projectName, new Map())
+      const categoryInProject = projectMap.get(projectName)
+      if (!categoryInProject.has(categoryName)) categoryInProject.set(categoryName, new Map())
+      const clusterInCategory = categoryInProject.get(categoryName)
+      if (!clusterInCategory.has(clusterName)) clusterInCategory.set(clusterName, new Map())
+      const processInCluster = clusterInCategory.get(clusterName)
+      const docKey = `${processName}|${processId}`
+      if (!processInCluster.has(docKey)) processInCluster.set(docKey, { processName, processId, docs: [], docType })
+      processInCluster.get(docKey).docs.push(item)
     }
 
-    return [...groups.values()].flatMap((group) => {
-      const pages = []
-      for (let index = 0; index < group.photos.length; index += photosPerPage) {
-        pages.push({
-          ...group,
-          photos: group.photos.slice(index, index + photosPerPage),
-          part: Math.floor(index / photosPerPage) + 1,
-          totalParts: Math.ceil(group.photos.length / photosPerPage),
-        })
-      }
-      return pages
-    })
+    return { projectMap, total: data.items.length }
   }, [data.items])
 
   const selectedNames = useMemo(() => ({
-    desa: desaOptions.find((item) => item.id === appliedFilters.desaId)?.namaDesa || 'Semua Desa',
-    cluster: clusterOptions.find((item) => item.id === appliedFilters.clusterId)?.clusterName || 'Semua RW',
-    pekerjaan: pekerjaanOptions.find((item) => item.id === appliedFilters.pekerjaanId)?.namaPekerjaan || 'Semua Pekerjaan',
-  }), [appliedFilters, clusterOptions, desaOptions, pekerjaanOptions])
+    project: projectOptions.find((item) => item.id === appliedFilters.projectId)?.name || 'Semua Project',
+    cluster: clusterOptions.find((item) => item.id === appliedFilters.clusterId)?.name || 'Semua Cluster',
+    process: processOptions.find((item) => item.id === appliedFilters.processId)?.name || 'Semua Pekerjaan',
+  }), [appliedFilters, clusterOptions, projectOptions, processOptions])
 
   return (
     <section className="page documentation-page">
       <PageHeader
         title="Dokumentasi Kegiatan"
-        description="Pilih lokasi dan pekerjaan, periksa preview, lalu cetak atau simpan sebagai PDF."
+        description="Jelajahi dokumentasi kegiatan berdasarkan Project dan Kategori."
       />
 
       <section className="data-section documentation-filter-card no-print">
@@ -126,41 +171,41 @@ export default function DokumentasiPage() {
           </div>
         </div>
         <form className="documentation-filters" onSubmit={applyFilters}>
-          <label htmlFor="documentation-desa">
-            Desa
-            <select id="documentation-desa" value={filters.desaId} onChange={handleDesaChange}>
-              <option value="">Semua Desa</option>
-              {desaOptions.filter((item) => item.isActive !== false).map((item) => (
-                <option key={item.id} value={item.id}>{item.namaDesa}</option>
+          <label htmlFor="documentation-project">
+            Project
+            <select id="documentation-project" value={filters.projectId} onChange={handleProjectChange}>
+              <option value="">Semua Project</option>
+              {projectOptions.map((item) => (
+                <option key={item.id} value={item.id}>{item.name}</option>
               ))}
             </select>
           </label>
           <label htmlFor="documentation-cluster">
-            RW / Cluster
+            Cluster
             <select
               id="documentation-cluster"
               value={filters.clusterId}
-              disabled={!filters.desaId || loadingCluster}
+              disabled={!filters.projectId || loadingCluster}
               onChange={(event) => setFilters((current) => ({ ...current, clusterId: event.target.value }))}
             >
               <option value="">
-                {loadingCluster ? 'Memuat RW...' : filters.desaId ? 'Semua RW' : 'Pilih Desa terlebih dahulu'}
+                {loadingCluster ? 'Memuat Cluster...' : filters.projectId ? 'Semua Cluster' : 'Pilih Project terlebih dahulu'}
               </option>
-              {clusterOptions.filter((item) => item.isActive !== false).map((item) => (
-                <option key={item.id} value={item.id}>{item.clusterName}</option>
+              {clusterOptions.map((item) => (
+                <option key={item.id} value={item.id}>{item.name}</option>
               ))}
             </select>
           </label>
-          <label htmlFor="documentation-pekerjaan">
-            Pekerjaan
+          <label htmlFor="documentation-process">
+            Kategori
             <select
-              id="documentation-pekerjaan"
-              value={filters.pekerjaanId}
-              onChange={(event) => setFilters((current) => ({ ...current, pekerjaanId: event.target.value }))}
+              id="documentation-process"
+              value={filters.processId}
+              onChange={handleCategoryChange}
             >
-              <option value="">Semua Pekerjaan</option>
-              {pekerjaanOptions.filter((item) => item.isActive !== false).map((item) => (
-                <option key={item.id} value={item.id}>{item.namaPekerjaan}</option>
+              <option value="">Semua Kategori</option>
+              {processOptions.map((item) => (
+                <option key={item.id} value={item.id}>{item.name}</option>
               ))}
             </select>
           </label>
@@ -177,7 +222,7 @@ export default function DokumentasiPage() {
       </section>
 
       {state === 'loading' && (
-        <PageState title="Menyiapkan dokumentasi" message="Mengambil foto sesuai filter yang dipilih." />
+        <PageState title="Menyiapkan dokumentasi" message="Mengambil dokumentasi sesuai filter yang dipilih." />
       )}
 
       {state === 'error' && (
@@ -188,70 +233,110 @@ export default function DokumentasiPage() {
         <section className="documentation-preview-panel">
           <div className="preview-toolbar no-print">
             <div>
-              <span className="preview-eyebrow">Preview dokumen</span>
-              <h2>{selectedNames.desa} · {selectedNames.cluster}</h2>
-              <p>{selectedNames.pekerjaan} · {data.total} foto · {documentPages.length} halaman</p>
+              <span className="preview-eyebrow">Folder dokumentasi</span>
+              <h2>{selectedNames.project} · {selectedNames.cluster}</h2>
+              <p>{selectedNames.process} · {data.total} file</p>
             </div>
-            <button
-              className="primary-button icon-label"
-              type="button"
-              disabled={documentPages.length === 0}
-              onClick={() => window.print()}
-            >
-              <Icon name="download" />
-              Cetak / Simpan PDF
-            </button>
           </div>
 
-          {documentPages.length === 0 ? (
+          {data.items.length === 0 ? (
             <PageState
               title="Dokumentasi tidak ditemukan"
-              message="Belum ada foto untuk kombinasi Desa, RW, dan Pekerjaan yang dipilih."
+              message="Belum ada dokumentasi untuk kombinasi Project, Cluster, dan Kategori yang dipilih."
             />
           ) : (
-            <div className="pdf-preview-stage printable-area">
-              {documentPages.map((documentPage, pageIndex) => (
-                <article
-                  key={`${documentPage.desaName}-${documentPage.clusterName}-${documentPage.pekerjaanName}-${documentPage.part}`}
-                  className="documentation-sheet"
-                >
-                  <header className="documentation-sheet-header">
-                    <div className="document-brand">
-                      <span aria-hidden="true">SP</span>
-                      <div><strong>Sistem Pelaporan</strong><small>Kegiatan Pegawai</small></div>
-                    </div>
-                    <strong className="document-type">PHOTO DOCUMENTATION</strong>
-                  </header>
-                  <dl className="document-information">
-                    <div><dt>Lokasi</dt><dd>{documentPage.desaName} · {documentPage.clusterName}</dd></div>
-                    <div><dt>Pekerjaan</dt><dd>{documentPage.pekerjaanName}</dd></div>
-                  </dl>
-                  <div className="document-photo-grid">
-                    {documentPage.photos.map((item) => (
-                      <figure key={item.id} className="document-photo-item">
-                        <figcaption>{item.originalName || documentPage.pekerjaanName}</figcaption>
-                        <div className="document-photo-frame">
-                          <img
-                            src={item.signedUrl || item.storagePath}
-                            alt={`${documentPage.pekerjaanName} di ${documentPage.desaName} ${documentPage.clusterName}`}
-                          />
-                        </div>
-                        <div className="document-photo-meta">
-                          <span>{String(item.tanggalKegiatan || '').slice(0, 10)}</span>
-                          {item.keterangan && <p>{item.keterangan}</p>}
-                          <Link className="table-link no-print" to={`/admin/laporan/${item.laporanId}`}>
-                            Detail laporan <Icon name="chevronRight" size={14} />
-                          </Link>
-                        </div>
-                      </figure>
-                    ))}
+            <div className="folder-explorer">
+              {[...groupedData.projectMap.entries()].map(([projectName, categories]) => {
+                const isProjectExpanded = expandedProjects.has(projectName)
+                return (
+                  <div key={projectName} className="folder-project">
+                    <button
+                      className="folder-project-header"
+                      onClick={() => toggleProject(projectName)}
+                      aria-expanded={isProjectExpanded}
+                    >
+                      <span className="folder-icon">{isProjectExpanded ? '📂' : '📁'}</span>
+                      <span className="folder-name">{projectName}</span>
+                      <span className="folder-count">{[...categories.values()].reduce((acc, clusters) => acc + [...clusters.values()].reduce((a, processes) => a + [...processes.values()].reduce((aa, p) => aa + p.docs.length, 0), 0), 0)} file</span>
+                    </button>
+                    {isProjectExpanded && (
+                      <div className="folder-categories">
+                        {[...categories.entries()].map(([categoryName, clusters]) => {
+                          const isCategoryExpanded = expandedCategories.has(`${projectName}|${categoryName}`)
+                          return (
+                            <div key={categoryName} className="folder-category">
+                              <button
+                                className="folder-category-header"
+                                onClick={() => toggleCategory(`${projectName}|${categoryName}`)}
+                                aria-expanded={isCategoryExpanded}
+                              >
+                                <span className="folder-icon">{isCategoryExpanded ? '📂' : '📁'}</span>
+                                <span className="folder-name">{categoryName}</span>
+                              </button>
+                              {isCategoryExpanded && (
+                                <div className="folder-clusters">
+                                  {[...clusters.entries()].map(([clusterName, processes]) => (
+                                    <div key={clusterName} className="folder-cluster">
+                                      <div className="folder-cluster-header">
+                                        <span className="folder-icon">📂</span>
+                                        <span className="folder-name">{clusterName}</span>
+                                      </div>
+                                      <div className="folder-files">
+                                        {[...processes.values()].map(({ processName, docs, docType }) => (
+                                          <div key={processName} className="folder-process">
+                                            <div className="folder-process-header">
+                                              <span className="folder-icon">{docType === 'foto' ? '📷' : '📄'}</span>
+                                              <span className="folder-name">{processName}</span>
+                                              <span className="folder-count">{docs.length} {docType === 'foto' ? 'foto' : 'file'}</span>
+                                            </div>
+                                            <div className="folder-docs-grid">
+                                              {docs.map((item) => (
+                                                <figure key={item.id} className="folder-doc-item">
+                                                  {item.mimeType?.startsWith('image/') ? (
+                                                    <img
+                                                      src={resolveFileUrl(item.signedUrl || item.storagePath || item.file_url)}
+                                                      alt={item.originalName || processName}
+                                                    />
+                                                  ) : (
+                                                    <div className="file-icon-large">{getFileIcon(item.mimeType)}</div>
+                                                  )}
+                                                  <figcaption>
+                                                    <strong>{item.originalName || processName}</strong>
+                                                    <small>
+                                                      {(item.fileSize / 1_000_000).toFixed(2)} MB · {String(item.tanggalKegiatan || '').slice(0, 10)}
+                                                    </small>
+                                                  </figcaption>
+                                                  <div className="folder-doc-actions">
+                                                    <a
+                                                      href={resolveFileUrl(item.signedUrl || item.storagePath || item.file_url)}
+                                                      target="_blank"
+                                                      rel="noopener noreferrer"
+                                                      className="table-link"
+                                                    >
+                                                      Buka <Icon name="chevronRight" size={14} />
+                                                    </a>
+                                                    <Link className="table-link" to={`/admin/laporan/${item.laporanId}`}>
+                                                      Laporan <Icon name="chevronRight" size={14} />
+                                                    </Link>
+                                                  </div>
+                                                </figure>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
                   </div>
-                  <footer>
-                    <span>{documentPage.totalParts > 1 ? `${documentPage.pekerjaanName} (${documentPage.part}/${documentPage.totalParts})` : documentPage.pekerjaanName}</span>
-                    <span>Halaman {pageIndex + 1} dari {documentPages.length}</span>
-                  </footer>
-                </article>
-              ))}
+                )
+              })}
             </div>
           )}
         </section>

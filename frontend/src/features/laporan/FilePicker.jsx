@@ -1,10 +1,31 @@
 import { useEffect, useId, useRef, useState } from "react";
 
+const IMAGE_MIME = ["image/jpeg", "image/png", "image/webp"];
+const DOC_MIME = [
+  "application/pdf",
+  "application/vnd.google-earth.kmz",
+  "application/vnd.google-earth.kml+xml",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.ms-excel",
+  "application/zip",
+];
+const ALL_MIME = [...IMAGE_MIME, ...DOC_MIME];
+
+function getFileIcon(mimeType) {
+  if (mimeType.startsWith("image/")) return "🖼";
+  if (mimeType === "application/pdf") return "📄";
+  if (mimeType.includes("spreadsheet") || mimeType.includes("excel")) return "📊";
+  if (mimeType.includes("kmz") || mimeType.includes("kml")) return "🗺️";
+  if (mimeType === "application/zip") return "📦";
+  return "📎";
+}
+
 export default function FilePicker({
   files,
   onChange,
   maxFiles = 5,
   maxBytes = 10_000_000,
+  acceptTypes = "all",
 }) {
   const [error, setError] = useState("");
   const [dragging, setDragging] = useState(false);
@@ -12,6 +33,9 @@ export default function FilePicker({
   const urlsRef = useRef(urls);
   const cameraInputId = useId();
   const galleryInputId = "report-gallery-input";
+
+  const allowedTypes = acceptTypes === "image" ? IMAGE_MIME : ALL_MIME;
+  const acceptString = acceptTypes === "image" ? "image/*" : ".pdf,.kmz,.kml,.xlsx,.xls,.zip,image/*";
 
   useEffect(() => {
     urlsRef.current = urls;
@@ -27,19 +51,18 @@ export default function FilePicker({
   function addFiles(fileList) {
     const selected = Array.from(fileList || []);
     if (selected.length + files.length > maxFiles) {
-      setError(`Maksimal ${maxFiles} foto.`);
+      setError(`Maksimal ${maxFiles} file.`);
       return;
     }
-    const invalid = selected.find(
-      (file) => !["image/jpeg", "image/png", "image/webp"].includes(file.type),
-    );
+    const invalid = selected.find((file) => !allowedTypes.includes(file.type));
     if (invalid) {
-      setError("Format foto harus JPG, PNG, atau WEBP.");
+      const typeLabel = acceptTypes === "image" ? "JPG, PNG, atau WEBP" : "JPG, PNG, PDF, KMZ, KML, XLSX, atau ZIP";
+      setError(`Format file tidak diizinkan. Gunakan ${typeLabel}.`);
       return;
     }
     const oversized = selected.find((file) => file.size > maxBytes);
     if (oversized) {
-      setError("Ukuran setiap foto maksimal 10 MB.");
+      setError(`Ukuran setiap file maksimal ${(maxBytes / 1_000_000).toFixed(0)} MB.`);
       return;
     }
     setError("");
@@ -87,15 +110,17 @@ export default function FilePicker({
         <span className="upload-icon" aria-hidden="true">↑</span>
         <div className="upload-copy">
           <strong>
-            Tambahkan foto kegiatan dari kamera atau galeri
+            Tambahkan file dari kamera atau galeri
           </strong>
           <small>
-            JPG, PNG, atau WEBP · Maks. 10 MB per foto · 1–{maxFiles} foto
+            {acceptTypes === "image"
+              ? "JPG, PNG, atau WEBP · Maks. 20 MB per file · 1–10 file"
+              : "JPG, PNG, PDF, KMZ, KML, XLSX, ZIP · Maks. 20 MB per file · 1–10 file"}
           </small>
         </div>
         <div className="upload-actions">
           <label className="secondary-button" htmlFor={cameraInputId}>Ambil foto</label>
-          <label className="primary-button" htmlFor={galleryInputId}>Pilih galeri</label>
+          <label className="primary-button" htmlFor={galleryInputId}>Pilih file</label>
         </div>
         <input
           className="sr-only"
@@ -111,14 +136,14 @@ export default function FilePicker({
           id={galleryInputId}
           aria-label="Dokumentasi"
           type="file"
-          accept="image/jpeg,image/png,image/webp"
+          accept={acceptString}
           multiple
           onChange={handleChange}
         />
       </div>
       <div className="file-picker-meta">
         <span>
-          {files.length} dari {maxFiles} foto dipilih
+          {files.length} dari {maxFiles} file dipilih
         </span>
       </div>
       {error && (
@@ -129,12 +154,16 @@ export default function FilePicker({
       <div className="preview-list">
         {files.map((file) => (
           <figure key={`${file.name}-${file.lastModified}`}>
-            <img src={urls.get(file)} alt={`Pratinjau ${file.name}`} />
+            {file.type.startsWith("image/") ? (
+              <img src={urls.get(file)} alt={`Pratinjau ${file.name}`} />
+            ) : (
+              <div className="file-icon-preview">{getFileIcon(file.type)}</div>
+            )}
             <figcaption>
               <strong>{file.name}</strong>
               <small>
                 {(file.size / 1_000_000).toFixed(2)} MB ·{" "}
-                {file.type.replace("image/", "").toUpperCase()}
+                {file.type.replace(/[a-z.\-]+/, "").toUpperCase() || file.type.split("/")[1]?.toUpperCase()}
               </small>
             </figcaption>
             <button

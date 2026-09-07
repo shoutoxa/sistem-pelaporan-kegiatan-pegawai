@@ -5,6 +5,87 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>frontend</title>
+    <script>
+      (function () {
+        function isIgnored(err) {
+          if (!err) return false;
+          var str = String((err && (err.message || err.stack)) || err);
+          return str.indexOf('startTime') !== -1 || str.indexOf('reportAllChanges') !== -1;
+        }
+
+        if (typeof window !== 'undefined') {
+          var origRIC = window.requestIdleCallback;
+          if (typeof origRIC === 'function') {
+            window.requestIdleCallback = function (callback, options) {
+              return origRIC.call(window, function (deadline) {
+                try {
+                  return callback(deadline);
+                } catch (e) {
+                  if (isIgnored(e)) return;
+                  throw e;
+                }
+              }, options);
+            };
+          }
+
+          var origST = window.setTimeout;
+          window.setTimeout = function (callback, delay) {
+            var args = Array.prototype.slice.call(arguments, 2);
+            if (typeof callback === 'function') {
+              return origST.call(window, function () {
+                try {
+                  return callback.apply(this, arguments);
+                } catch (e) {
+                  if (isIgnored(e)) return;
+                  throw e;
+                }
+              }, delay);
+            }
+            return origST.apply(window, arguments);
+          };
+
+          var origRAF = window.requestAnimationFrame;
+          if (typeof origRAF === 'function') {
+            window.requestAnimationFrame = function (callback) {
+              return origRAF.call(window, function (time) {
+                try {
+                  return callback(time);
+                } catch (e) {
+                  if (isIgnored(e)) return;
+                  throw e;
+                }
+              });
+            };
+          }
+
+          window.onerror = function (msg, url, line, col, error) {
+            if (isIgnored(msg) || isIgnored(error)) {
+              return true;
+            }
+          };
+
+          window.addEventListener(
+            'error',
+            function (event) {
+              if (isIgnored(event.message) || isIgnored(event.error)) {
+                event.preventDefault();
+                event.stopPropagation();
+                if (typeof event.stopImmediatePropagation === 'function') {
+                  event.stopImmediatePropagation();
+                }
+              }
+            },
+            true
+          );
+
+          window.addEventListener('unhandledrejection', function (event) {
+            if (isIgnored(event.reason && (event.reason.message || event.reason.stack)) || isIgnored(event.reason)) {
+              event.preventDefault();
+            }
+          });
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

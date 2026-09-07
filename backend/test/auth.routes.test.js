@@ -30,4 +30,28 @@ describe('auth routes', () => {
     expect(response.status).toBe(401)
     expect(response.body).toEqual({ message: 'Username atau password tidak valid.' })
   })
+
+  it('returns user: null with 200 OK when unauthenticated to avoid console 401 noise', async () => {
+    const authService = {
+      readSession: async () => null,
+      verifyToken: async () => null,
+    }
+    const response = await request(createApp({ authRouter: createAuthRouter({ authService }) }))
+      .get('/api/auth/me')
+
+    expect(response.status).toBe(200)
+    expect(response.body).toEqual({ user: null })
+  })
+
+  it('returns authenticated user when valid session cookie exists', async () => {
+    const authService = {
+      readSession: async () => ({ id: 'u1', role: 'SUPERADMIN', nama: 'Admin', username: 'admin' }),
+    }
+    const response = await request(createApp({ authRouter: createAuthRouter({ authService }) }))
+      .get('/api/auth/me')
+      .set('Cookie', ['session=valid-token'])
+
+    expect(response.status).toBe(200)
+    expect(response.body.user).toEqual({ id: 'u1', role: 'SUPERADMIN', nama: 'Admin', username: 'admin' })
+  })
 })

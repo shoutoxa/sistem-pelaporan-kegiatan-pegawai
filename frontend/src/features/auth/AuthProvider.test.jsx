@@ -17,4 +17,12 @@ describe('AuthProvider', () => {
     await waitFor(() => expect(screen.getByText('PEGAWAI')).toBeInTheDocument())
     expect(fetch).toHaveBeenCalledWith('http://localhost:3000/api/auth/me', expect.objectContaining({ credentials: 'include' }))
   })
+
+  it('sets user to null and finishes loading when /api/auth/me returns { user: null }', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ user: null }) }))
+
+    render(<MemoryRouter><AuthProvider><Probe /></AuthProvider></MemoryRouter>)
+
+    await waitFor(() => expect(screen.getByText('anonymous')).toBeInTheDocument())
+  })
 })
