@@ -23,6 +23,15 @@ const app = createApp({
   dashboardRouter: [dashboardRouter, pegawaiRouter, exportRouter].filter(Boolean),
 })
 
+if (hasDatabase) {
+  try {
+    const { prisma } = await import('./config/prisma.js')
+    await prisma.$queryRawUnsafe('SELECT 1')
+  } catch (error) {
+    console.warn('Peringatan: Warmup database awal terlewati:', error.message)
+  }
+}
+
 app.listen(runtimeConfig.port, () => {
   console.log(`Backend berjalan di http://localhost:${runtimeConfig.port}`)
   console.log('Auth: environment variables (ADMIN_USERNAME, ADMIN_PASSWORD)')

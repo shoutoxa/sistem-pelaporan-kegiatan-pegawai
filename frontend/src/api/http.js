@@ -10,7 +10,7 @@ export const http = {
 
     while (true) {
       try {
-        const response = await fetch(API_URL + path, {
+        const response = await fetch(`${API_URL}${path}`, {
           ...options,
           credentials: 'include',
           headers: isFormData ? options.headers : { 'Content-Type': 'application/json', ...(options.headers || {}) },
