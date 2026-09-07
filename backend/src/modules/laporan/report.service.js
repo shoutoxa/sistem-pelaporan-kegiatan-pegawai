@@ -30,7 +30,13 @@ export function createReportService({ prisma, storage, clock = () => new Date() 
 
     const [cluster, pekerjaan] = await Promise.all([
       prisma.cluster.findFirst({ where: { id: parsed.data.clusterId, isActive: true, desa: { isActive: true } } }),
-      prisma.pekerjaan.findFirst({ where: { id: parsed.data.pekerjaanId, isActive: true } }),
+      prisma.pekerjaan.findFirst({
+        where: {
+          id: parsed.data.pekerjaanId,
+          isActive: true,
+          OR: [{ kategoriId: null }, { kategori: { isActive: true } }],
+        },
+      }),
     ])
     if (!cluster) throw reportError('REFERENCE_INVALID', 'Cluster tidak aktif atau tidak ditemukan.')
     if (!pekerjaan) throw reportError('REFERENCE_INVALID', 'Pekerjaan tidak aktif atau tidak ditemukan.')
@@ -117,7 +123,13 @@ export function createReportService({ prisma, storage, clock = () => new Date() 
       data.clusterId = fields.clusterId
     }
     if (fields.pekerjaanId !== undefined) {
-      const pekerjaan = await prisma.pekerjaan.findFirst({ where: { id: fields.pekerjaanId, isActive: true } })
+      const pekerjaan = await prisma.pekerjaan.findFirst({
+        where: {
+          id: fields.pekerjaanId,
+          isActive: true,
+          OR: [{ kategoriId: null }, { kategori: { isActive: true } }],
+        },
+      })
       if (!pekerjaan) throw reportError('REFERENCE_INVALID', 'Pekerjaan tidak aktif atau tidak ditemukan.')
       data.pekerjaanId = fields.pekerjaanId
     }

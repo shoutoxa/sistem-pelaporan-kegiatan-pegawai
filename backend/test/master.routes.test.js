@@ -25,6 +25,24 @@ describe('master data routes', () => {
     expect(response.status).toBe(403)
   })
 
+  it('keeps FTTH project reads behind Superadmin middleware', async () => {
+    const service = { listFtthResource: async () => [{ id: 'project-1' }] }
+    const deny = (_request, response) => response.status(403).json({ error: 'Anda tidak memiliki akses.' })
+    const response = await request(createApp({ masterRouter: createMasterRouter({ service, requireSuperadmin: deny }) }))
+      .get('/api/admin/integration/ftth/projects')
+
+    expect(response.status).toBe(403)
+  })
+
+  it('exposes FTTH sync only through the injected Superadmin middleware', async () => {
+    const service = { syncFtth: async () => ({ categories: { total: 3 }, processes: { total: 14 } }) }
+    const deny = (_request, response) => response.status(403).json({ error: 'Anda tidak memiliki akses.' })
+    const response = await request(createApp({ masterRouter: createMasterRouter({ service, requireSuperadmin: deny }) }))
+      .post('/api/admin/integration/ftth/sync')
+
+    expect(response.status).toBe(403)
+  })
+
   it('returns the canonical conflict response for duplicate master data', async () => {
     const service = { create: async () => { const error = new Error('Nama Desa sudah digunakan.'); error.code = 'DUPLICATE'; error.errors = { namaDesa: 'Nama Desa sudah digunakan.' }; throw error } }
     const response = await request(createApp({ masterRouter: createMasterRouter({ service }) }))

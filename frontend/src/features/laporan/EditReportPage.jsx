@@ -14,6 +14,7 @@ export default function EditReportPage() {
   const navigate = useNavigate()
   const isAdmin = location.pathname.startsWith('/admin')
   const [report, setReport] = useState(null)
+  const [categories, setCategories] = useState([])
   const [jobs, setJobs] = useState([])
   const [form, setForm] = useState(null)
   const [state, setState] = useState('loading')
@@ -22,8 +23,8 @@ export default function EditReportPage() {
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    Promise.all([historyApi.getDetail(id), masterApi.fetchPekerjaan()])
-      .then(([detail, jobRows]) => {
+    Promise.all([historyApi.getDetail(id), masterApi.fetchKategori(), masterApi.fetchPekerjaan()])
+      .then(([detail, categoryRows, jobRows]) => {
         if (!detail.data.canEdit) {
           setReport(detail.data)
           setState(detail.data.diterima ? 'locked' : 'expired')
@@ -31,11 +32,15 @@ export default function EditReportPage() {
         }
         const item = detail.data
         setReport(item)
-        setJobs(Array.isArray(jobRows) ? jobRows : (jobRows?.data || []))
+        const normalizedJobs = Array.isArray(jobRows) ? jobRows : (jobRows?.data || [])
+        setCategories(Array.isArray(categoryRows) ? categoryRows : [])
+        setJobs(normalizedJobs)
+        const selectedJob = normalizedJobs.find((job) => job.id === (item.pekerjaan?.id || item.pekerjaanId))
         setForm({
           tanggalKegiatan: String(item.tanggalKegiatan).slice(0, 10),
           desaId: item.cluster?.desa?.id || item.cluster?.desaId || '',
           clusterId: item.cluster?.id || item.clusterId || '',
+          kategoriId: selectedJob?.kategoriId || item.pekerjaan?.kategoriId || 'uncategorized',
           pekerjaanId: item.pekerjaan?.id || item.pekerjaanId || '',
           nomorPerangkat: item.nomorPerangkat || '',
           keterangan: item.keterangan || '',
@@ -51,6 +56,19 @@ export default function EditReportPage() {
   const selectedJob = useMemo(
     () => jobs.find((row) => row.id === form?.pekerjaanId),
     [jobs, form?.pekerjaanId],
+  )
+  const availableCategories = useMemo(() => {
+    const rows = [...categories]
+    if (jobs.some((job) => !job.kategoriId)) rows.push({ id: 'uncategorized', namaKategori: 'Belum dikategorikan' })
+    return rows
+  }, [categories, jobs])
+  const visibleJobs = useMemo(
+    () => jobs.filter((job) => (
+      form?.kategoriId === 'uncategorized'
+        ? !job.kategoriId
+        : job.kategoriId === form?.kategoriId
+    )),
+    [form?.kategoriId, jobs],
   )
   function setField(key, value) {
     setForm((current) => ({ ...current, [key]: value }))
@@ -150,16 +168,38 @@ export default function EditReportPage() {
             />
           </label>
           <label>
+            Kategori pekerjaan
+            <select
+              aria-label="Kategori pekerjaan"
+              value={form.kategoriId}
+              onChange={(event) => {
+                setForm((current) => ({
+                  ...current,
+                  kategoriId: event.target.value,
+                  pekerjaanId: '',
+                }))
+              }}
+            >
+              <option value="">Pilih Kategori</option>
+              {availableCategories.map((category) => (
+                <option key={category.id} value={category.id}>
+                  {category.namaKategori}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
             Pekerjaan
             <select
               aria-label="Pekerjaan"
               value={form.pekerjaanId}
+              disabled={!form.kategoriId}
               onChange={(event) => {
                 setField('pekerjaanId', event.target.value)
               }}
             >
               <option value="">Pilih Pekerjaan</option>
-              {jobs.map((job) => (
+              {visibleJobs.map((job) => (
                 <option key={job.id} value={job.id}>
                   {job.namaPekerjaan}
                 </option>

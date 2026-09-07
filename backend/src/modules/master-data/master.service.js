@@ -8,7 +8,7 @@ function masterError(code, message = code) {
   return error
 }
 
-export function createMasterService({ prisma }) {
+export function createMasterService({ prisma, ftthSyncService, ftthClient }) {
   function modelFor(resource) {
     if (!models[resource]) throw masterError('NOT_FOUND', 'Master data tidak dikenal.')
     return prisma[models[resource]]
@@ -22,15 +22,38 @@ export function createMasterService({ prisma }) {
     return prisma.cluster.findMany({ where: { desaId, isActive: true, desa: { isActive: true } }, orderBy: { clusterName: 'asc' } })
   }
 
-  async function listActivePekerjaan() {
-    return prisma.pekerjaan.findMany({ where: { isActive: true }, orderBy: { namaPekerjaan: 'asc' } })
+  async function listActiveKategori() {
+    return prisma.kategoriPekerjaan.findMany({
+      where: { isActive: true },
+      orderBy: { namaKategori: 'asc' },
+    })
+  }
+
+  async function listActivePekerjaan(kategoriId) {
+    return prisma.pekerjaan.findMany({
+      where: { isActive: true, ...(kategoriId ? { kategoriId, kategori: { isActive: true } } : {}) },
+      include: { kategori: true },
+      orderBy: [{ sortOrder: 'asc' }, { namaPekerjaan: 'asc' }],
+    })
   }
 
   async function listAdmin(resource) {
     return modelFor(resource).findMany({
       orderBy: resource === 'cluster' ? { clusterName: 'asc' } : resource === 'desa' ? { namaDesa: 'asc' } : { namaPekerjaan: 'asc' },
       ...(resource === 'cluster' ? { include: { desa: true } } : {}),
+      ...(resource === 'pekerjaan' ? { include: { kategori: true } } : {}),
     })
+  }
+
+  async function listAdminKategori() {
+    return prisma.kategoriPekerjaan.findMany({ orderBy: { namaKategori: 'asc' } })
+  }
+
+  async function listFtthResource(resource, query) {
+    if (!ftthClient?.configured) throw masterError('INTEGRATION_NOT_CONFIGURED', 'Integrasi FTTH belum dikonfigurasi.')
+    const methods = { projects: ftthClient.listProjects, clusters: ftthClient.listClusters, 'cluster-processes': ftthClient.listClusterProcesses, users: ftthClient.listUsers }
+    if (!methods[resource]) throw masterError('NOT_FOUND', 'Resource FTTH tidak dikenal.')
+    return methods[resource](query)
   }
 
   async function create(resource, input) {
@@ -50,25 +73,60 @@ export function createMasterService({ prisma }) {
     }
     if (resource === 'pekerjaan') {
       data.namaPekerjaan = normalizeSpaces(data.namaPekerjaan)
+      if (data.kategoriId) {
+        const category = await prisma.kategoriPekerjaan.findFirst({ where: { id: data.kategoriId, isActive: true } })
+        if (!category) throw masterError('INACTIVE_PARENT', 'Kategori pekerjaan tidak aktif atau tidak ditemukan.')
+      }
       if (await prisma.pekerjaan.findFirst({ where: { namaPekerjaan: data.namaPekerjaan } })) throw masterError('DUPLICATE', 'Nama Pekerjaan sudah digunakan.')
     }
     return modelFor(resource).create({ data })
   }
 
   async function update(resource, id, input) {
+    if (resource === 'pekerjaan') {
+      const existing = await prisma.pekerjaan.findUnique({ where: { id } })
+      if (existing?.sumber?.startsWith('FTTH_')) {
+        throw masterError('READ_ONLY', 'Pekerjaan dari API FTTH hanya dapat diperbarui melalui sinkronisasi.')
+      }
+    }
     const parsed = masterSchemas[resource]?.safeParse(input)
     if (!parsed?.success) throw masterError('VALIDATION', 'Data master tidak valid.')
     const data = { ...parsed.data }
     if (resource === 'desa') data.namaDesa = normalizeSpaces(data.namaDesa)
     if (resource === 'cluster') data.clusterName = normalizeClusterName(data.clusterName)
-    if (resource === 'pekerjaan') data.namaPekerjaan = normalizeSpaces(data.namaPekerjaan)
+    if (resource === 'pekerjaan') {
+      data.namaPekerjaan = normalizeSpaces(data.namaPekerjaan)
+      if (data.kategoriId) {
+        const category = await prisma.kategoriPekerjaan.findFirst({ where: { id: data.kategoriId, isActive: true } })
+        if (!category) throw masterError('INACTIVE_PARENT', 'Kategori pekerjaan tidak aktif atau tidak ditemukan.')
+      }
+    }
     return modelFor(resource).update({ where: { id }, data })
   }
 
   async function setActive(resource, id, isActive) {
     if (typeof isActive !== 'boolean') throw masterError('VALIDATION', 'Status aktif harus boolean.')
+    if (resource === 'pekerjaan') {
+      const existing = await prisma.pekerjaan.findUnique({ where: { id } })
+      if (existing?.sumber?.startsWith('FTTH_')) {
+        throw masterError('READ_ONLY', 'Status pekerjaan dari API FTTH mengikuti sistem perusahaan.')
+      }
+    }
     return modelFor(resource).update({ where: { id }, data: { isActive } })
   }
 
-  return { listActiveDesa, listActiveClusterByDesa, listActivePekerjaan, listAdmin, create, update, setActive }
+  return {
+    listActiveDesa,
+    listActiveClusterByDesa,
+    listActiveKategori,
+    listActivePekerjaan,
+    listAdmin,
+    listAdminKategori,
+    integrationStatus: () => ftthSyncService?.status() || Promise.resolve({ configured: false, categories: 0, processes: 0, lastSyncedAt: null }),
+    syncFtth: () => ftthSyncService?.sync() || Promise.reject(masterError('INTEGRATION_NOT_CONFIGURED', 'Integrasi FTTH belum dikonfigurasi.')),
+    listFtthResource,
+    create,
+    update,
+    setActive,
+  }
 }

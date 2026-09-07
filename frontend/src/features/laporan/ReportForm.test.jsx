@@ -1,11 +1,12 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import ReportForm from './ReportForm.jsx'
 
 const user = { id: 'u1', nama: 'Ayu Pegawai', role: 'PEGAWAI' }
 const villages = [{ id: 'd1', namaDesa: 'Dewasari' }]
-const jobs = [{ id: 'j1', namaPekerjaan: 'Pemasangan ODN', instruksiDokumentasi: 'Foto perangkat dan label nomor harus terbaca.' }, { id: 'j2', namaPekerjaan: 'Absensi Mulai' }]
+const categories = [{ id: 'k1', namaKategori: 'Implementasi' }]
+const jobs = [{ id: 'j1', kategoriId: 'k1', namaPekerjaan: 'Pemasangan ODN', instruksiDokumentasi: 'Foto perangkat dan label nomor harus terbaca.' }, { id: 'j2', kategoriId: 'k1', namaPekerjaan: 'Absensi Mulai' }]
 
 describe('ReportForm', () => {
   beforeEach(() => localStorage.clear())
@@ -15,11 +16,12 @@ describe('ReportForm', () => {
       .mockResolvedValueOnce({ ok: true, json: async () => [{ id: 'c1', clusterName: 'RW 01' }] })
       .mockResolvedValueOnce({ ok: true, status: 201, json: async () => ({ data: { id: 'report-1' } }) })
     vi.stubGlobal('fetch', fetchMock)
-    render(<MemoryRouter initialEntries={['/pegawai/laporan/new']}><Routes><Route path="/pegawai/laporan/new" element={<ReportForm user={user} villages={villages} jobs={jobs} />} /><Route path="/pegawai/laporan/:id" element={<p>success</p>} /></Routes></MemoryRouter>)
+    render(<MemoryRouter initialEntries={['/pegawai/laporan/new']}><Routes><Route path="/pegawai/laporan/new" element={<ReportForm user={user} villages={villages} jobs={jobs} categories={categories} />} /><Route path="/pegawai/laporan/:id" element={<p>success</p>} /></Routes></MemoryRouter>)
 
     fireEvent.change(screen.getByLabelText(/desa/i), { target: { value: 'd1' } })
     await waitFor(() => expect(screen.getByRole('option', { name: 'RW 01' })).toBeInTheDocument())
-    fireEvent.change(screen.getByLabelText(/pekerjaan/i), { target: { value: 'j1' } })
+    fireEvent.change(screen.getByLabelText(/kategori pekerjaan/i), { target: { value: 'k1' } })
+    fireEvent.change(screen.getByLabelText(/^pekerjaan$/i), { target: { value: 'j1' } })
     expect(screen.getByLabelText(/nomor perangkat/i)).not.toBeRequired()
     fireEvent.change(screen.getByLabelText(/rw/i), { target: { value: 'c1' } })
     fireEvent.change(screen.getByLabelText(/keterangan/i), { target: { value: 'Kegiatan lapangan selesai' } })
@@ -39,12 +41,13 @@ describe('ReportForm', () => {
       .mockResolvedValueOnce({ ok: true, json: async () => [{ id: 'c1', clusterName: 'RW 01' }] })
       .mockResolvedValueOnce({ ok: false, status: 400, json: async () => ({ message: 'Data laporan tidak valid', errors: { clusterId: 'Cluster tidak tersedia', keterangan: 'Keterangan perlu diperjelas' } }) })
     vi.stubGlobal('fetch', fetchMock)
-    render(<MemoryRouter><ReportForm user={user} villages={villages} jobs={jobs} /></MemoryRouter>)
+    render(<MemoryRouter><ReportForm user={user} villages={villages} jobs={jobs} categories={categories} /></MemoryRouter>)
 
     fireEvent.change(screen.getByLabelText(/desa/i), { target: { value: 'd1' } })
     await waitFor(() => expect(screen.getByRole('option', { name: 'RW 01' })).toBeInTheDocument())
+    fireEvent.change(screen.getByLabelText(/kategori pekerjaan/i), { target: { value: 'k1' } })
     fireEvent.change(screen.getByLabelText(/rw/i), { target: { value: 'c1' } })
-    fireEvent.change(screen.getByLabelText(/pekerjaan/i), { target: { value: 'j2' } })
+    fireEvent.change(screen.getByLabelText(/^pekerjaan$/i), { target: { value: 'j2' } })
     fireEvent.change(screen.getByLabelText(/keterangan/i), { target: { value: 'Kegiatan lapangan selesai' } })
     fireEvent.change(screen.getByLabelText(/dokumentasi/i), { target: { files: [new File(['photo'], 'photo.jpg', { type: 'image/jpeg' })] } })
     fireEvent.click(screen.getByRole('button', { name: /kirim laporan/i }))
@@ -60,18 +63,38 @@ describe('ReportForm', () => {
       tanggalKegiatan: '2026-08-22',
       desaId: 'd1',
       clusterId: 'c1',
+      kategoriId: 'k1',
       pekerjaanId: 'j1',
       keterangan: 'Pemasangan selesai di sisi utara',
       nomorPerangkat: 'ODN-22',
     }))
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => [{ id: 'c1', clusterName: 'RW 01' }] }))
 
-    render(<MemoryRouter><ReportForm user={user} villages={villages} jobs={jobs} /></MemoryRouter>)
+    render(<MemoryRouter><ReportForm user={user} villages={villages} jobs={jobs} categories={categories} /></MemoryRouter>)
 
     expect(screen.getByRole('status', { name: /draf laporan/i })).toHaveTextContent(/draf sebelumnya dipulihkan/i)
     expect(screen.getByLabelText(/keterangan/i)).toHaveValue('Pemasangan selesai di sisi utara')
     expect(screen.getByLabelText(/nomor perangkat/i)).toHaveValue('ODN-22')
     expect(screen.getByText('Foto perangkat dan label nomor harus terbaca.')).toBeInTheDocument()
     await waitFor(() => expect(screen.getByRole('option', { name: 'RW 01' })).toBeInTheDocument())
+  })
+
+  it('shows only work belonging to the selected category', () => {
+    const categorizedJobs = [
+      { id: 'j1', kategoriId: 'k1', namaPekerjaan: 'Implementasi' },
+      { id: 'j2', kategoriId: 'k2', namaPekerjaan: 'Survey' },
+    ]
+    const categoryRows = [
+      { id: 'k1', namaKategori: 'Implementasi' },
+      { id: 'k2', namaKategori: 'Sitac' },
+    ]
+    render(<MemoryRouter><ReportForm user={user} villages={villages} jobs={categorizedJobs} categories={categoryRows} /></MemoryRouter>)
+
+    expect(screen.getByLabelText(/^pekerjaan$/i)).toBeDisabled()
+    fireEvent.change(screen.getByLabelText(/kategori pekerjaan/i), { target: { value: 'k2' } })
+
+    const jobSelect = screen.getByLabelText(/^pekerjaan$/i)
+    expect(within(jobSelect).getByRole('option', { name: 'Survey' })).toBeInTheDocument()
+    expect(within(jobSelect).queryByRole('option', { name: 'Implementasi' })).not.toBeInTheDocument()
   })
 })

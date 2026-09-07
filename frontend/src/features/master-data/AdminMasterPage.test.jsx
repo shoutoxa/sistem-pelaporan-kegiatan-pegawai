@@ -8,7 +8,9 @@ describe('AdminMasterPage', () => {
       if (options.method === 'POST') return { ok: true, json: async () => ({ id: 'd2', namaDesa: 'Pamalayan', isActive: true }) }
       if (String(url).endsWith('/api/admin/desa')) return { ok: true, json: async () => [{ id: 'd1', namaDesa: 'Dewasari', isActive: true }] }
       if (String(url).endsWith('/api/admin/cluster')) return { ok: true, json: async () => [] }
+      if (String(url).endsWith('/api/admin/kategori')) return { ok: true, json: async () => [] }
       if (String(url).endsWith('/api/admin/pekerjaan')) return { ok: true, json: async () => [] }
+      if (String(url).endsWith('/api/admin/integration/ftth/status')) return { ok: true, json: async () => ({ configured: false, categories: 0, processes: 0, lastSyncedAt: null }) }
       throw new Error(`Unexpected request: ${url}`)
     })
     vi.stubGlobal('fetch', fetchMock)
