@@ -23,4 +23,28 @@ describe('AdminMasterPage', () => {
 
     await waitFor(() => expect(fetchMock.mock.calls.some(([url, options]) => String(url).endsWith('/api/admin/desa') && options.method === 'POST' && options.body.includes('Pamalayan'))).toBe(true))
   })
+
+  it('displays category name for pekerjaan instead of "Belum dikategorikan"', async () => {
+    const fetchMock = vi.fn(async (url) => {
+      if (String(url).endsWith('/api/admin/desa')) return { ok: true, json: async () => [] }
+      if (String(url).endsWith('/api/admin/cluster')) return { ok: true, json: async () => [] }
+      if (String(url).endsWith('/api/admin/kategori')) return { ok: true, json: async () => [{ id: 'cat-1', namaKategori: 'IKR & Distribusi' }] }
+      if (String(url).endsWith('/api/admin/pekerjaan')) return {
+        ok: true,
+        json: async () => [{ id: 'proc-1', namaPekerjaan: 'Penarikan Dropcore', master_category_id: 'cat-1', kategoriId: 'cat-1' }]
+      }
+      if (String(url).endsWith('/api/admin/integration/ftth/status')) return { ok: true, json: async () => ({ configured: true }) }
+      return { ok: true, json: async () => [] }
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<AdminMasterPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Penarikan Dropcore')).toBeInTheDocument()
+      expect(screen.getAllByText('IKR & Distribusi')).toHaveLength(2)
+      expect(screen.queryByText('Belum dikategorikan')).not.toBeInTheDocument()
+    })
+  })
 })
+

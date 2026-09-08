@@ -53,6 +53,14 @@ export default function AdminMasterPage() {
     [data.desa],
   )
 
+  const categoryNames = useMemo(
+    () =>
+      Object.fromEntries(
+        data.kategori.map((item) => [item.id, item.namaKategori || item.name]),
+      ),
+    [data.kategori],
+  )
+
   function openCreate(resource) {
     setEditor({ resource, id: null })
     setForm({ ...emptyForms[resource] })
@@ -62,13 +70,13 @@ export default function AdminMasterPage() {
 
   function openEdit(resource, row) {
     setEditor({ resource, id: row.id })
-    if (resource === 'desa') setForm({ namaDesa: row.namaDesa })
+    if (resource === 'desa') setForm({ namaDesa: row.namaDesa || row.name })
     if (resource === 'cluster')
-      setForm({ desaId: row.desaId, clusterName: row.clusterName })
+      setForm({ desaId: row.desaId, clusterName: row.clusterName || row.name })
     if (resource === 'pekerjaan')
       setForm({
-        namaPekerjaan: row.namaPekerjaan,
-        kategoriId: row.kategoriId || '',
+        namaPekerjaan: row.namaPekerjaan || row.name,
+        kategoriId: row.kategoriId || row.master_category_id || row.categoryId || '',
         instruksiDokumentasi: row.instruksiDokumentasi || '',
       })
     setError('')
@@ -278,11 +286,22 @@ export default function AdminMasterPage() {
           <MasterTable
             title="Pekerjaan"
             columns={[
-              { key: 'namaPekerjaan', label: 'Nama Pekerjaan' },
+              { key: 'namaPekerjaan', label: 'Nama Pekerjaan', render: (row) => row.namaPekerjaan || row.name },
               {
                 key: 'kategoriId',
                 label: 'Kategori',
-                render: (row) => row.kategori?.namaKategori || 'Belum dikategorikan',
+                render: (row) => {
+                  const catId = row.kategoriId || row.master_category_id || row.categoryId
+                  return (
+                    row.kategori?.namaKategori ||
+                    row.kategori?.name ||
+                    row.category?.name ||
+                    row.category?.namaKategori ||
+                    row.namaKategori ||
+                    (catId && categoryNames[catId]) ||
+                    'Belum dikategorikan'
+                  )
+                },
               },
               {
                 key: 'instruksiDokumentasi',

@@ -13,7 +13,7 @@ export default function JobFields({ value, onChange, errors = {}, categories = [
           {categories
             .filter((category) => category.isActive !== false || category.id === value.kategoriId)
             .map((category) => (
-              <option key={category.id} value={category.id}>{category.namaKategori}</option>
+              <option key={category.id} value={category.id}>{category.namaKategori || category.name}</option>
             ))}
         </select>
       </label>

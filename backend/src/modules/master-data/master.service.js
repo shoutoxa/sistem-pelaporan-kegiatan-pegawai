@@ -29,9 +29,28 @@ function transformCluster(item) {
   }
 }
 
-function transformProcess(item) {
+function transformProcess(item, categoryMap = {}) {
   if (!item) return null
-  const kategoriId = item.master_category_id || item.category_id || item.category?.id || item.kategoriId || item.kategori_id
+  const kategoriId =
+    item.master_category_id ||
+    item.category_id ||
+    item.category?.id ||
+    item.MasterCategory?.id ||
+    item.kategoriId ||
+    item.kategori_id
+  const catObj =
+    item.category ||
+    item.kategori ||
+    item.MasterCategory ||
+    item.master_category ||
+    (kategoriId ? categoryMap[kategoriId] : null)
+  const catName =
+    catObj?.name ||
+    catObj?.namaKategori ||
+    catObj?.nama ||
+    item.category_name ||
+    item.master_category_name ||
+    (kategoriId && categoryMap[kategoriId] ? (categoryMap[kategoriId].name || categoryMap[kategoriId].namaKategori) : null)
   return {
     id: item.id,
     name: item.name,
@@ -39,9 +58,13 @@ function transformProcess(item) {
     kategoriId,
     categoryId: kategoriId,
     master_category_id: kategoriId,
-    category: item.category,
-    instruksiDokumentasi: item.input_instruction || '',
+    category: catObj || (catName ? { id: kategoriId, name: catName } : null),
+    kategori: catName ? { id: kategoriId, namaKategori: catName } : null,
+    namaKategori: catName || null,
+    instruksiDokumentasi: item.input_instruction || item.instruksiDokumentasi || '',
     isActive: item.is_active !== false,
+    source: item.source || 'app',
+    sumber: item.source || 'app',
     original: item,
   }
 }
@@ -98,24 +121,22 @@ export function createMasterService({ ftthApi: injectedFtthApi } = {}) {
 
   async function listActiveProcessByCategory(categoryId) {
     try {
-      const response = await ftth.getMasterProcesses({ master_category_id: categoryId })
+      const [response, catRes] = await Promise.all([
+        ftth.getMasterProcesses({ master_category_id: categoryId }),
+        ftth.getMasterCategories().catch(() => []),
+      ])
       const items = Array.isArray(response) ? response : (response.data || [])
+      const categories = Array.isArray(catRes) ? catRes : (catRes.data || [])
+      const catMap = Object.fromEntries(categories.map((c) => [c.id, c]))
 
       if (categoryId) {
-        let categories = []
-        try {
-          const catRes = await ftth.getMasterCategories()
-          categories = Array.isArray(catRes) ? catRes : (catRes.data || [])
-        } catch {
-          // ignore
-        }
         const targetCategory = categories.find(
           (c) => c.id === categoryId || (c.name && c.name.toLowerCase() === String(categoryId).toLowerCase())
         )
 
         const filtered = items.filter((item) => {
           const itemCatId = item.master_category_id || item.category_id || item.category?.id
-          const itemCatName = (item.category?.name || '').toLowerCase()
+          const itemCatName = (item.category?.name || item.MasterCategory?.name || '').toLowerCase()
           if (itemCatId && itemCatId === categoryId) return true
           if (targetCategory) {
             if (itemCatId && itemCatId === targetCategory.id) return true
@@ -125,10 +146,10 @@ export function createMasterService({ ftthApi: injectedFtthApi } = {}) {
           return false
         })
 
-        return filtered.map(transformProcess)
+        return filtered.map((item) => transformProcess(item, catMap))
       }
 
-      return items.map(transformProcess)
+      return items.map((item) => transformProcess(item, catMap))
     } catch (error) {
       console.error('Error fetching processes from FTTH:', error.message)
       throw masterError('FTTH_ERROR', 'Gagal mengambil data proses dari FTTH: ' + error.message)
@@ -150,9 +171,14 @@ export function createMasterService({ ftthApi: injectedFtthApi } = {}) {
     if (resource === 'category' || resource === 'kategori') return listActiveCategory()
     if (resource === 'process' || resource === 'pekerjaan') {
       try {
-        const response = await ftth.getMasterProcesses()
-        const items = Array.isArray(response) ? response : (response.data || [])
-        return items.map(transformProcess)
+        const [processesRes, categoriesRes] = await Promise.all([
+          ftth.getMasterProcesses().catch(() => []),
+          ftth.getMasterCategories().catch(() => []),
+        ])
+        const items = Array.isArray(processesRes) ? processesRes : (processesRes.data || [])
+        const cats = Array.isArray(categoriesRes) ? categoriesRes : (categoriesRes.data || [])
+        const catMap = Object.fromEntries(cats.map((c) => [c.id, c]))
+        return items.map((item) => transformProcess(item, catMap))
       } catch (error) {
         console.error('Error fetching processes from FTTH:', error.message)
         throw masterError('FTTH_ERROR', 'Gagal mengambil data proses dari FTTH: ' + error.message)
