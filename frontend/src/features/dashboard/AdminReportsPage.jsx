@@ -4,6 +4,7 @@ import { dashboardApi } from '../../api/dashboard.js'
 import PageHeader from '../../components/PageHeader.jsx'
 import Icon from '../../components/Icon.jsx'
 import PageState from '../../components/PageState.jsx'
+import FtthReportPanel from '../integration/FtthReportPanel.jsx'
 
 export default function AdminReportsPage() {
   const [page, setPage] = useState(1)
@@ -11,6 +12,9 @@ export default function AdminReportsPage() {
   const [search, setSearch] = useState('')
   const [result, setResult] = useState({ items: [], total: 0 })
   const [state, setState] = useState('loading')
+  const [error, setError] = useState('')
+  const [selected, setSelected] = useState(null)
+  const [reload, setReload] = useState(0)
 
   useEffect(() => {
     let active = true
@@ -23,13 +27,13 @@ export default function AdminReportsPage() {
           setState('ready')
         }
       })
-      .catch(() => {
-        if (active) setState('error')
+      .catch((error) => {
+        if (active) { setState('error'); setError(error.message) }
       })
     return () => {
       active = false
     }
-  }, [page, search])
+  }, [page, search, reload])
 
   const totalPages = Math.max(
     1,
@@ -42,13 +46,15 @@ export default function AdminReportsPage() {
         title="Laporan"
         description="Seluruh laporan kegiatan harian pegawai yang tercatat pada sistem."
       />
-      <section className="filter-bar" aria-label="Pencarian laporan">
+      {result.source === 'ftth' && <p className="notice">Sumber: API perusahaan. Laporan lokal lama tetap tersimpan terpisah.</p>}
+      <section className="filter-bar report-search-bar" aria-label="Pencarian laporan">
         <label htmlFor="report-search">
           Cari laporan
           <input
             id="report-search"
             type="search"
-            placeholder="Pegawai, lokasi/RW, atau pekerjaan..."
+            placeholder="Pegawai, project/cluster, atau pekerjaan..."
+            maxLength={200}
             value={search}
             onChange={(event) => {
               setSearch(event.target.value)
@@ -56,7 +62,9 @@ export default function AdminReportsPage() {
             }}
           />
         </label>
+        <button className="secondary-button" disabled={state === 'loading'} onClick={() => setReload((value) => value + 1)}><Icon name="refresh" size={18} />Muat ulang</button>
       </section>
+      {selected && <FtthReportPanel key={selected} id={selected} onClose={() => setSelected(null)} onChanged={() => setReload((value) => value + 1)} />}
       <section className="data-section table-panel">
         <div className="section-heading">
           <div>
@@ -68,7 +76,7 @@ export default function AdminReportsPage() {
           <PageState
             tone="error"
             title="Laporan tidak dapat dimuat"
-            message="Periksa koneksi server, lalu coba kembali."
+            message={error || 'Periksa koneksi server, lalu coba kembali.'}
           />
         ) : (
           <div
@@ -101,25 +109,25 @@ export default function AdminReportsPage() {
                     </td>
                     <td>{item.pekerjaan?.namaPekerjaan || '-'}</td>
                     <td>
-                      <span className={`status-badge ${item.diterima ? 'active' : 'pending'}`}>
-                        {item.diterima ? 'Diterima' : 'Menunggu'}
+                      <span className={`status-badge ${item.status === 'REJECTED' ? 'inactive' : item.diterima ? 'active' : 'pending'}`}>
+                        {item.status === 'REJECTED' ? 'Perlu revisi' : item.diterima ? 'Diterima' : 'Menunggu'}
                       </span>
                     </td>
                     <td className="description-cell">{item.keterangan}</td>
                     <td>
-                      <Link
+                      {result.source === 'ftth' ? <button className="secondary-button" onClick={() => setSelected(item.id)}>Detail</button> : <Link
                         className="table-link"
                         to={`/admin/laporan/${item.id}`}
                       >
                         Detail <Icon name="chevronRight" size={16} />
-                      </Link>
+                      </Link>}
                     </td>
                   </tr>
                 ))}
                 {result.items.length === 0 && state !== 'loading' && (
                   <tr>
                     <td className="empty-cell" colSpan="7">
-                      Belum ada laporan yang tercatat pada sistem.
+                      {search ? 'Tidak ada laporan yang cocok. Coba nama pegawai, lokasi, atau pekerjaan lain.' : 'Belum ada laporan yang tercatat pada sistem.'}
                     </td>
                   </tr>
                 )}
@@ -135,7 +143,7 @@ export default function AdminReportsPage() {
         <div className="pagination">
           <button
             className="secondary-button"
-            disabled={page <= 1}
+            disabled={state === 'loading' || page <= 1}
             onClick={() => setPage((current) => current - 1)}
           >
             Sebelumnya
@@ -145,7 +153,7 @@ export default function AdminReportsPage() {
           </span>
           <button
             className="secondary-button"
-            disabled={page >= totalPages}
+            disabled={state === 'loading' || page >= totalPages}
             onClick={() => setPage((current) => current + 1)}
           >
             Berikutnya

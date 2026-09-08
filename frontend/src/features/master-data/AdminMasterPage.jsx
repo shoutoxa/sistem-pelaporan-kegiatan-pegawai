@@ -5,6 +5,7 @@ import JobFields from './JobFields.jsx'
 import PageHeader from '../../components/PageHeader.jsx'
 import Notice from '../../components/Notice.jsx'
 import PageState from '../../components/PageState.jsx'
+import { http } from '../../api/http.js'
 
 const emptyForms = {
   desa: { namaDesa: '' },
@@ -19,8 +20,9 @@ const emptyForms = {
 const labels = { desa: 'Desa', cluster: 'RW', pekerjaan: 'Pekerjaan' }
 
 export default function AdminMasterPage() {
+  const [remote, setRemote] = useState(null)
   const [data, setData] = useState({ desa: [], cluster: [], kategori: [], pekerjaan: [] })
-  const [integration, setIntegration] = useState({ configured: false, categories: 0, processes: 0, lastSyncedAt: null })
+  const [integration, setIntegration] = useState({ configured: false, categories: 0, processes: 0, lastSyncedAt: null, migration: { master: 'local', users: 'local', reports: 'local', documentation: 'local' } })
   const [syncing, setSyncing] = useState(false)
   const [editor, setEditor] = useState(null)
   const [form, setForm] = useState(emptyForms.desa)
@@ -31,9 +33,17 @@ export default function AdminMasterPage() {
   const load = useCallback(async () => {
     setState('loading')
     try {
+      const { source } = await http.request('/api/admin/master-source')
+      if (source === 'ftth') {
+        setRemote(await http.request('/api/admin/master-ftth'))
+        setError('')
+        setState('ready')
+        return
+      }
+      setRemote(null)
       const [desa, cluster, kategori, pekerjaan, integrationStatus] = await Promise.all([
         ...['desa', 'cluster', 'kategori', 'pekerjaan'].map(masterApi.fetchAdmin),
-        masterApi.getFtthIntegrationStatus().catch(() => ({ configured: false, categories: 0, processes: 0, lastSyncedAt: null })),
+        masterApi.getFtthIntegrationStatus().catch(() => ({ configured: false, categories: 0, processes: 0, lastSyncedAt: null, migration: { master: 'local', users: 'local', reports: 'local', documentation: 'local' } })),
       ])
       setData({ desa, cluster, kategori, pekerjaan })
       setIntegration(integrationStatus)
@@ -130,6 +140,22 @@ export default function AdminMasterPage() {
     }
   }
 
+  if (state === 'loading') return <section className="page"><PageState title="Menyiapkan master data" message="Memuat sumber data yang dikonfigurasi." /></section>
+  if (remote) return <section className="page">
+    <PageHeader title="Master Data" description="Project, Cluster, Kategori, dan Pekerjaan dari sistem perusahaan." />
+    <Notice>Data dikelola melalui FTTH. Perubahan master dilakukan pada sistem perusahaan; data lokal lama tetap tersimpan terpisah.</Notice>
+    {error && <Notice tone="error">{error}</Notice>}
+    <button className="secondary-button" disabled={state === 'loading'} onClick={load}>Muat ulang</button>
+    <div className="master-stack">
+      <MasterTable title="Project" columns={[{ key: 'name', label: 'Nama Project' }, { key: 'id', label: 'ID Project' }]} rows={remote.projects} />
+      <MasterTable title="Cluster" columns={[{ key: 'name', label: 'Nama Cluster' }, { key: 'projectName', label: 'Project' }, { key: 'id', label: 'ID Cluster' }]} rows={remote.clusters} />
+      <MasterTable title="Kategori" columns={[{ key: 'name', label: 'Nama Kategori' }]} rows={remote.categories} />
+      <MasterTable title="Pekerjaan" columns={[{ key: 'name', label: 'Nama Pekerjaan' }, { key: 'categoryName', label: 'Kategori' }]} rows={remote.processes} />
+    </div>
+  </section>
+
+  if (state === 'error') return <section className="page"><PageHeader title="Master Data" /><Notice tone="error">{error}</Notice><button onClick={load}>Coba lagi</button></section>
+
   return (
     <section className="page">
       <PageHeader
@@ -150,6 +176,7 @@ export default function AdminMasterPage() {
             {integration.lastSyncedAt && (
               <small>Sinkron terakhir: {new Date(integration.lastSyncedAt).toLocaleString('id-ID')}</small>
             )}
+            <small>Sumber tahap migrasi: Master {integration.migration?.master || 'local'} · Pegawai {integration.migration?.users || 'local'} · Laporan {integration.migration?.reports || 'local'} · Dokumentasi {integration.migration?.documentation || 'local'}</small>
           </div>
           <button className="primary-button" type="button" disabled={!integration.configured || syncing} onClick={syncFtth}>
             {syncing ? 'Menyinkronkan...' : 'Sinkronkan API FTTH'}

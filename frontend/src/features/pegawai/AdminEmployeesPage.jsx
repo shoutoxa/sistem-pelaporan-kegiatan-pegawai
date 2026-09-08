@@ -14,6 +14,7 @@ const emptyForm = {
 }
 
 export default function AdminEmployeesPage() {
+  const [source, setSource] = useState('local')
   const [rows, setRows] = useState([])
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
@@ -30,9 +31,11 @@ export default function AdminEmployeesPage() {
 
   const load = () => {
     setState('loading')
+    setError('')
     return http
       .request('/api/admin/pegawai')
       .then((body) => {
+        setSource(body.source || 'local')
         setRows(body.data || [])
         setState('ready')
       })
@@ -136,6 +139,24 @@ export default function AdminEmployeesPage() {
       setUploadingPhotoId('')
     }
   }
+
+  if (state === 'loading') return <section className="page"><PageState title="Memuat pegawai" message="Mengambil data akun." /></section>
+  if (state === 'error') return <section className="page"><Notice tone="error">{error}</Notice><button onClick={load}>Coba lagi</button></section>
+  if (source === 'ftth') return <section className="page employee-page">
+    <PageHeader title="Pegawai" description="Daftar akun perusahaan, termasuk administrator dan teknisi sesuai role FTTH." />
+    <Notice>Data akun dan penugasan cluster berasal dari FTTH. Pengaturan akun, wajib lapor, dan penugasan dikelola melalui sistem perusahaan.</Notice>
+    {error && <Notice tone="error">{error}</Notice>}
+    {message && <Notice tone="success">{message}</Notice>}
+    <button className="secondary-button" onClick={load}>Muat ulang</button>
+    <div className="table-wrap"><table><caption className="sr-only">Akun FTTH</caption>
+      <thead><tr>{['Nama', 'Username', 'Role FTTH', 'Nomor HP', 'Status', 'Wajib lapor', 'Foto profil'].map(label => <th key={label}>{label}</th>)}</tr></thead>
+      <tbody>{rows.map(row => <tr key={row.id}>
+        <td>{row.nama}</td><td>{row.username}</td><td>{row.role}</td><td>{row.nomorHp || '—'}</td>
+        <td>{row.isActive ? 'Aktif' : 'Nonaktif'}</td><td>{row.wajibLapor === null ? 'Belum tersedia' : row.wajibLapor ? 'Ya' : 'Tidak'}</td>
+        <td><label>Upload foto {row.nama}<input type="file" accept="image/jpeg,image/png,image/webp" disabled={Boolean(uploadingPhotoId)} onChange={event => { handlePhotoUpload(row, event.target.files?.[0]); event.target.value = '' }} /></label></td>
+      </tr>)}{!rows.length && <tr><td colSpan={7}>Belum ada akun di FTTH.</td></tr>}</tbody>
+    </table></div>
+  </section>
 
   return (
     <section className="page employee-page">

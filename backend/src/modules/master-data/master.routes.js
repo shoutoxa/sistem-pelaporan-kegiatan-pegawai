@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import { statusSchema } from './master.schemas.js'
+import { runtimeConfig } from '../../config/env.js'
 
 function sendError(error, response) {
   const statuses = {
@@ -20,10 +21,17 @@ function sendError(error, response) {
   return response.status(statuses[error.code] || 500).json({ message, ...(errors ? { errors } : {}) })
 }
 
-export function createMasterRouter({ service, requireAuth, requireSuperadmin } = {}) {
+export function createMasterRouter({ service, requireAuth, requireSuperadmin, migration = {}, ftthMaster } = {}) {
   const router = Router()
   const readGuard = [requireAuth].filter(Boolean)
   const adminGuard = [requireAuth, requireSuperadmin].filter(Boolean)
+  const localWrite = (_request, response, next) => migration.master === 'ftth'
+    ? response.status(403).json({ message: 'Master Data dikelola di FTTH. Perubahan master lokal dinonaktifkan.' }) : next()
+  router.get('/admin/master-source', ...adminGuard, (_request, response) => response.json({ source: migration.master || 'local' }))
+  router.get('/admin/master-ftth', ...adminGuard, async (_request, response) => {
+    if (migration.master !== 'ftth') return response.status(409).json({ message: 'Sumber Master Data masih lokal.' })
+    try { return response.json(await ftthMaster.snapshot()) } catch (error) { return sendError(error, response) }
+  })
 
   router.get('/master/desa', ...readGuard, async (_request, response) => response.json(await service.listActiveDesa()))
   router.get('/master/desa/:desaId/cluster', ...readGuard, async (request, response) => response.json(await service.listActiveClusterByDesa(request.params.desaId)))
@@ -31,9 +39,9 @@ export function createMasterRouter({ service, requireAuth, requireSuperadmin } =
   router.get('/master/pekerjaan', ...readGuard, async (request, response) => response.json(await service.listActivePekerjaan(request.query.kategoriId)))
   router.get('/admin/kategori', ...adminGuard, async (_request, response) => response.json(await service.listAdminKategori()))
   router.get('/admin/integration/ftth/status', ...adminGuard, async (_request, response) => {
-    try { return response.json(await service.integrationStatus()) } catch (error) { return sendError(error, response) }
+    try { return response.json({ ...await service.integrationStatus(), migration: { ...migration } }) } catch (error) { return sendError(error, response) }
   })
-  router.post('/admin/integration/ftth/sync', ...adminGuard, async (_request, response) => {
+  router.post('/admin/integration/ftth/sync', ...adminGuard, localWrite, async (_request, response) => {
     try { return response.json(await service.syncFtth()) } catch (error) { return sendError(error, response) }
   })
   for (const resource of ['projects', 'clusters', 'cluster-processes', 'users']) {
@@ -44,16 +52,16 @@ export function createMasterRouter({ service, requireAuth, requireSuperadmin } =
 
   for (const resource of ['desa', 'cluster', 'pekerjaan']) {
     router.get(`/admin/${resource}`, ...adminGuard, async (_request, response) => response.json(await service.listAdmin(resource)))
-    router.post(`/admin/${resource}`, ...adminGuard, async (request, response) => {
+    router.post(`/admin/${resource}`, ...adminGuard, localWrite, async (request, response) => {
       try {
         const result = await service.create(resource, request.body)
         return response.status(201).json(result)
       } catch (error) { return sendError(error, response) }
     })
-    router.put(`/admin/${resource}/:id`, ...adminGuard, async (request, response) => {
+    router.put(`/admin/${resource}/:id`, ...adminGuard, localWrite, async (request, response) => {
       try { return response.json(await service.update(resource, request.params.id, request.body)) } catch (error) { return sendError(error, response) }
     })
-    router.patch(`/admin/${resource}/:id/status`, ...adminGuard, async (request, response) => {
+    router.patch(`/admin/${resource}/:id/status`, ...adminGuard, localWrite, async (request, response) => {
       try {
         const parsed = statusSchema.safeParse(request.body)
         if (!parsed.success) return response.status(400).json({ message: 'Status aktif harus boolean.', errors: { isActive: 'Status aktif harus boolean.' } })
@@ -76,12 +84,14 @@ export async function createProductionMasterRouter({ authService } = {}) {
     import('../integration/ftth-sync.service.js'),
   ])
   const ftthClient = createFtthClient()
+  const { createFtthMasterService } = await import('../integration/ftth-master.service.js')
   const ftthSyncService = createFtthSyncService({ prisma, client: ftthClient })
   const service = createMasterService({ prisma, ftthSyncService, ftthClient })
   const sessionService = authService || await (await import('../auth/auth.routes.js')).createProductionAuthService()
   return createMasterRouter({
     service,
+    ftthMaster: createFtthMasterService(ftthClient),
     requireAuth: requireAuth({ authService: sessionService }),
-    requireSuperadmin: requireRole('SUPERADMIN'),
+    requireSuperadmin: requireRole('SUPERADMIN'), migration: runtimeConfig.migration,
   })
 }

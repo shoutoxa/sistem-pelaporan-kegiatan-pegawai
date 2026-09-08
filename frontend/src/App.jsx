@@ -12,10 +12,10 @@ import HistoryPage from './features/laporan/HistoryPage.jsx'
 import ReportDetailPage from './features/laporan/ReportDetailPage.jsx'
 import DashboardPage from './features/dashboard/DashboardPage.jsx'
 import AdminReportsPage from './features/dashboard/AdminReportsPage.jsx'
-import DokumentasiPage from './features/dashboard/DokumentasiPage.jsx'
+import DocumentationRoute from './features/integration/FtthDocumentationPage.jsx'
 import AdminEmployeesPage from './features/pegawai/AdminEmployeesPage.jsx'
 import EditReportPage from './features/laporan/EditReportPage.jsx'
-import FtthPage from './features/integration/FtthPage.jsx'
+import EmployeeReportSource from './features/integration/EmployeeReportSource.jsx'
 
 export default function App() {
   return (
@@ -29,8 +29,7 @@ export default function App() {
             <Route path="/pegawai" element={<EmployeeLayout />}>
               <Route index element={<Navigate to="laporan/new" replace />} />
               <Route path="laporan/new" element={<EmployeeReportRoute />} />
-              <Route path="histori" element={<HistoryPage />} />
-              <Route path="ftth" element={<FtthPage />} />
+              <Route path="histori" element={<EmployeeReportSource mode="history"><HistoryPage /></EmployeeReportSource>} />
               <Route path="laporan/:id" element={<ReportDetailPage />} />
               <Route path="laporan/:id/edit" element={<EditReportPage />} />
             </Route>
@@ -42,10 +41,9 @@ export default function App() {
               <Route path="laporan" element={<AdminReportsPage />} />
               <Route path="laporan/:id" element={<ReportDetailPage />} />
               <Route path="laporan/:id/edit" element={<EditReportPage />} />
-              <Route path="dokumentasi" element={<DokumentasiPage />} />
+              <Route path="dokumentasi" element={<DocumentationRoute />} />
               <Route path="pegawai" element={<AdminEmployeesPage />} />
               <Route path="master" element={<AdminMasterPage />} />
-              <Route path="ftth" element={<FtthPage />} />
             </Route>
           </Route>
           <Route path="*" element={<NotFoundPage />} />
@@ -57,5 +55,5 @@ export default function App() {
 
 function EmployeeReportRoute() {
   const { user } = useAuth()
-  return <ReportForm user={user} />
+  return <EmployeeReportSource mode="form"><ReportForm user={user} /></EmployeeReportSource>
 }

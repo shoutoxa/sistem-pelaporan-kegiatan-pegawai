@@ -7,7 +7,7 @@ const SESSION_COOKIE = 'session'
 const sessionCookieOptions = {
   httpOnly: true,
   sameSite: 'lax',
-  secure: false,
+  secure: process.env.NODE_ENV === 'production',
   maxAge: 8 * 60 * 60 * 1000,
 }
 
@@ -21,19 +21,21 @@ export function createAuthRouter({ authService }) {
 
     try {
       const result = await authService.login(parsed.data)
-      response.cookie(SESSION_COOKIE, result.token, sessionCookieOptions)
+      response.cookie(SESSION_COOKIE, result.token, { ...sessionCookieOptions, ...(result.maxAge ? { maxAge: result.maxAge } : {}) })
       return response.json({ user: result.user })
     } catch (error) {
       if (error.code === 'INVALID_CREDENTIALS') return response.status(401).json({ message: 'Username atau password tidak valid.' })
+      if (error.code === 'MAPPING_REQUIRED') return response.status(409).json({ message: 'Akun FTTH belum memiliki pemetaan lokal aktif dengan role yang sesuai. Hubungi admin.' })
+      if (error.code === 'AUTH_UNAVAILABLE') return response.status(502).json({ message: 'Login FTTH belum dapat diverifikasi. Coba kembali nanti.' })
       return response.status(500).json({ message: 'Terjadi kesalahan pada server.' })
     }
   })
 
   router.get('/me', requireAuth({ authService }), (request, response) => response.json({ user: request.user }))
 
-  router.post('/logout', async (_request, response) => {
-    await authService.logout()
-    response.clearCookie(SESSION_COOKIE, { httpOnly: true, sameSite: 'lax', secure: false })
+  router.post('/logout', async (request, response) => {
+    await authService.logout(request.cookies?.session)
+    response.clearCookie(SESSION_COOKIE, { httpOnly: true, sameSite: 'lax', secure: sessionCookieOptions.secure })
     return response.status(204).send()
   })
 
@@ -41,6 +43,16 @@ export function createAuthRouter({ authService }) {
 }
 
 export async function createProductionAuthService() {
+  if (process.env.FTTH_AUTH_SOURCE === 'ftth') {
+    const { createFtthAuthService } = await import('./ftth-auth.service.js')
+    const { readMigrationConfig } = await import('../../config/env.js')
+    if (Object.values(readMigrationConfig()).every((source) => source === 'ftth')) {
+      return createFtthAuthService({ identitySource: 'ftth' })
+    }
+    const { prisma } = await import('../../config/prisma.js')
+    return createFtthAuthService({ findMapping: (externalUserId) => prisma.ftthIdentity.findUnique({ where: { externalUserId }, include: { user: true } }) })
+  }
+  if (process.env.FTTH_AUTH_SOURCE && process.env.FTTH_AUTH_SOURCE !== 'local') throw new Error('FTTH_AUTH_SOURCE harus local atau ftth.')
   const [{ prisma }, bcrypt, jwt, { createSupabaseStorage }] = await Promise.all([
     import('../../config/prisma.js'),
     import('bcryptjs'),
