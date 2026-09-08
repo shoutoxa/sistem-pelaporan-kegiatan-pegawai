@@ -205,10 +205,13 @@ export function createMasterService({ ftthApi: injectedFtthApi } = {}) {
 
   async function update(resource, id, data) {
     if (resource === 'process' || resource === 'pekerjaan') {
-      const payload = {
-        description: data.description || data.deskripsi,
-        is_active: data.isActive !== undefined ? data.isActive : data.is_active,
-      }
+      const payload = {}
+      if (data.name || data.namaPekerjaan) payload.name = data.name || data.namaPekerjaan
+      if (data.description !== undefined || data.deskripsi !== undefined) payload.description = data.description ?? data.deskripsi
+      if (data.master_category_id || data.categoryId || data.kategoriId) payload.master_category_id = data.master_category_id || data.categoryId || data.kategoriId
+      if (data.input_instruction !== undefined || data.instruksiDokumentasi !== undefined) payload.input_instruction = data.input_instruction ?? data.instruksiDokumentasi
+      if (data.isActive !== undefined || data.is_active !== undefined) payload.is_active = data.isActive !== undefined ? data.isActive : data.is_active
+
       const res = await ftth.updateMasterProcess(id, payload)
       return { message: 'Master pekerjaan berhasil diperbarui di FTTH Core.', data: res }
     }
