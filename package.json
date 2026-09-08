@@ -6,17 +6,12 @@
     "backend"
   ],
   "scripts": {
-    "supabase:local:start": "node scripts/start-supabase-local.mjs",
-    "supabase:local:stop": "npx --yes supabase@2.116.0 stop",
-    "supabase:local:status": "npx --yes supabase@2.116.0 status",
-    "dev:local": "node scripts/run-local.mjs dev",
-    "db:local:migrate": "node scripts/run-local.mjs migrate",
-    "db:local:seed": "node scripts/run-local.mjs seed",
-    "storage:local": "node scripts/run-local.mjs storage",
     "dev": "concurrently \"npm:dev:backend\" \"npm:dev:frontend\"",
     "dev:backend": "npm run dev -w backend",
     "dev:frontend": "npm run dev -w frontend",
-    "test": "npm run test -w backend && npm run test -w frontend",
+    "test": "npm run test:backend && npm run test:frontend",
+    "test:backend": "npm run test -w backend",
+    "test:frontend": "npm run test -w frontend -- --run",
     "build": "npm run build -w frontend"
   },
   "devDependencies": {

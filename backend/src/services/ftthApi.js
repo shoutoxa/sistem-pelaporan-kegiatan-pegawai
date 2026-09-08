@@ -38,6 +38,8 @@ function buildQuery(params) {
 }
 
 export const ftthApi = {
+  login: (credentials) => ftthRequest('/auth/login', { method: 'POST', body: JSON.stringify(credentials) }),
+  logout: (token) => ftthRequest('/auth/logout', { method: 'POST', headers: token ? { Authorization: `Bearer ${token}` } : {} }).catch(() => null),
   getProjects: () => ftthRequest('/integration/projects'),
   getProjectById: (id) => ftthRequest('/integration/projects/' + id),
   getClusters: (params = {}) => ftthRequest('/integration/clusters' + buildQuery(params)),

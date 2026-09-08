@@ -22,6 +22,7 @@ function getFileIcon(mimeType) {
 export default function DokumentasiPage() {
   const [data, setData] = useState({ items: [], total: 0 })
   const [state, setState] = useState('loading')
+  const [viewMode, setViewMode] = useState('folder')
   const [filters, setFilters] = useState(emptyFilters)
   const [appliedFilters, setAppliedFilters] = useState(emptyFilters)
   const [projectOptions, setProjectOptions] = useState([])
@@ -150,6 +151,32 @@ export default function DokumentasiPage() {
     return { projectMap, total: data.items.length }
   }, [data.items])
 
+  const documentPages = useMemo(() => {
+    const groups = new Map()
+
+    for (const item of data.items) {
+      const projectName = item.project?.name || item.cluster?.desa?.namaDesa || item.desa?.namaDesa || 'Tanpa Project'
+      const clusterName = item.cluster?.name || item.cluster?.clusterName || 'Tanpa Cluster'
+      const processName = item.process?.name || item.master_process?.name || item.pekerjaan?.namaPekerjaan || 'Tanpa Pekerjaan'
+      const key = `${projectName}|${clusterName}|${processName}`
+      if (!groups.has(key)) groups.set(key, { projectName, clusterName, processName, photos: [] })
+      groups.get(key).photos.push(item)
+    }
+
+    return [...groups.values()].flatMap((group) => {
+      const pages = []
+      for (let index = 0; index < group.photos.length; index += photosPerPage) {
+        pages.push({
+          ...group,
+          photos: group.photos.slice(index, index + photosPerPage),
+          part: Math.floor(index / photosPerPage) + 1,
+          totalParts: Math.ceil(group.photos.length / photosPerPage),
+        })
+      }
+      return pages
+    })
+  }, [data.items])
+
   const selectedNames = useMemo(() => ({
     project: projectOptions.find((item) => item.id === appliedFilters.projectId)?.name || 'Semua Project',
     cluster: clusterOptions.find((item) => item.id === appliedFilters.clusterId)?.name || 'Semua Cluster',
@@ -160,7 +187,7 @@ export default function DokumentasiPage() {
     <section className="page documentation-page">
       <PageHeader
         title="Dokumentasi Kegiatan"
-        description="Jelajahi dokumentasi kegiatan berdasarkan Project dan Kategori."
+        description="Jelajahi dokumentasi kegiatan berdasarkan Project dan Kategori dalam tampilan Folder atau Lembar PDF."
       />
 
       <section className="data-section documentation-filter-card no-print">
@@ -233,9 +260,47 @@ export default function DokumentasiPage() {
         <section className="documentation-preview-panel">
           <div className="preview-toolbar no-print">
             <div>
-              <span className="preview-eyebrow">Folder dokumentasi</span>
+              <span className="preview-eyebrow">
+                {viewMode === 'folder' ? 'Folder Dokumentasi' : 'Preview Dokumen PDF'}
+              </span>
               <h2>{selectedNames.project} · {selectedNames.cluster}</h2>
-              <p>{selectedNames.process} · {data.total} file</p>
+              <p>
+                {selectedNames.process} · {data.total} file
+                {viewMode === 'pdf' ? ` · ${documentPages.length} halaman` : ''}
+              </p>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+              <div className="view-mode-toggle no-print" role="tablist">
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={viewMode === 'folder'}
+                  className={viewMode === 'folder' ? 'active-mode' : ''}
+                  onClick={() => setViewMode('folder')}
+                >
+                  📁 Tampilan Folder
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={viewMode === 'pdf'}
+                  className={viewMode === 'pdf' ? 'active-mode' : ''}
+                  onClick={() => setViewMode('pdf')}
+                >
+                  📄 Format PDF / Cetak
+                </button>
+              </div>
+              {viewMode === 'pdf' && (
+                <button
+                  className="primary-button icon-label"
+                  type="button"
+                  disabled={documentPages.length === 0}
+                  onClick={() => window.print()}
+                >
+                  <Icon name="download" />
+                  Cetak / Simpan PDF
+                </button>
+              )}
             </div>
           </div>
 
@@ -244,7 +309,7 @@ export default function DokumentasiPage() {
               title="Dokumentasi tidak ditemukan"
               message="Belum ada dokumentasi untuk kombinasi Project, Cluster, dan Kategori yang dipilih."
             />
-          ) : (
+          ) : viewMode === 'folder' ? (
             <div className="folder-explorer">
               {[...groupedData.projectMap.entries()].map(([projectName, categories]) => {
                 const isProjectExpanded = expandedProjects.has(projectName)
@@ -315,7 +380,7 @@ export default function DokumentasiPage() {
                                                     >
                                                       Buka <Icon name="chevronRight" size={14} />
                                                     </a>
-                                                    <Link className="table-link" to={`/admin/laporan/${item.laporanId}`}>
+                                                    <Link className="table-link" to={`/admin/laporan/${item.laporanId || item.laporan_id}`}>
                                                       Laporan <Icon name="chevronRight" size={14} />
                                                     </Link>
                                                   </div>
@@ -337,6 +402,60 @@ export default function DokumentasiPage() {
                   </div>
                 )
               })}
+            </div>
+          ) : (
+            <div className="pdf-preview-stage printable-area">
+              {documentPages.map((documentPage, pageIndex) => (
+                <article
+                  key={`${documentPage.projectName}-${documentPage.clusterName}-${documentPage.processName}-${documentPage.part}`}
+                  className="documentation-sheet"
+                >
+                  <header className="documentation-sheet-header">
+                    <div className="document-brand">
+                      <span aria-hidden="true">SP</span>
+                      <div>
+                        <strong>Sistem Pelaporan</strong>
+                        <small>Kegiatan Pegawai</small>
+                      </div>
+                    </div>
+                    <strong className="document-type">PHOTO DOCUMENTATION</strong>
+                  </header>
+                  <dl className="document-information">
+                    <div>
+                      <dt>Lokasi</dt>
+                      <dd>{documentPage.projectName} · {documentPage.clusterName}</dd>
+                    </div>
+                    <div>
+                      <dt>Pekerjaan</dt>
+                      <dd>{documentPage.processName}</dd>
+                    </div>
+                  </dl>
+                  <div className="document-photo-grid">
+                    {documentPage.photos.map((item) => (
+                      <figure key={item.id} className="document-photo-item">
+                        <figcaption>{item.originalName || documentPage.processName}</figcaption>
+                        <div className="document-photo-frame">
+                          <img
+                            src={resolveFileUrl(item.signedUrl || item.storagePath || item.file_url)}
+                            alt={`${documentPage.processName} di ${documentPage.projectName} ${documentPage.clusterName}`}
+                          />
+                        </div>
+                        <div className="document-photo-meta">
+                          <span>{String(item.tanggalKegiatan || item.created_at || '').slice(0, 10)}</span>
+                          {item.keterangan && <p>{item.keterangan}</p>}
+                          <Link className="table-link no-print" to={`/admin/laporan/${item.laporanId || item.laporan_id}`}>
+                            Detail laporan <Icon name="chevronRight" size={14} />
+                          </Link>
+                        </div>
+                      </figure>
+                    ))}
+                  </div>
+                  <footer>
+                    <span>{documentPage.totalParts > 1 ? `${documentPage.processName} (${documentPage.part}/${documentPage.totalParts})` : documentPage.processName}</span>
+                    <span>Halaman {pageIndex + 1} dari {documentPages.length}</span>
+                  </footer>
+                </article>
+              ))}
             </div>
           )}
         </section>

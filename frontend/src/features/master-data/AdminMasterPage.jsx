@@ -246,9 +246,9 @@ export default function AdminMasterPage() {
           <MasterTable
             title="Kategori Pekerjaan (FTTH)"
             columns={[
-              { key: 'namaKategori', label: 'Nama Kategori' },
-              { key: 'deskripsi', label: 'Deskripsi', render: (row) => row.deskripsi || '-' },
-              { key: 'sumber', label: 'Sumber' },
+              { key: 'namaKategori', label: 'Nama Kategori', render: (row) => row.namaKategori || row.name || '-' },
+              { key: 'deskripsi', label: 'Deskripsi', render: (row) => row.deskripsi || row.description || '-' },
+              { key: 'sumber', label: 'Sumber', render: (row) => row.sumber || 'FTTH Core' },
             ]}
             rows={data.kategori}
           />

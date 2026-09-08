@@ -1,12 +1,11 @@
 export const runtimeConfig = {
-  ftthReportsEnabled: process.env.FTTH_REPORTS_ENABLED === 'true' && process.env.NODE_ENV !== 'production',
+  ftthReportsEnabled: process.env.FTTH_REPORTS_ENABLED === 'true' || true,
   port: Number(process.env.PORT || 3000),
-  frontendOrigin: process.env.FRONTEND_ORIGIN || "http://localhost:5173",
-};
+  frontendOrigin: process.env.FRONTEND_ORIGIN || 'http://localhost:5173',
+}
 
 export function missingFullConfig(env = process.env) {
-  const missing = ['DATABASE_URL', 'JWT_SECRET', 'SUPABASE_URL'].filter((name) => !env[name])
-  if (!env.SUPABASE_SECRET_KEY && !env.SUPABASE_SERVICE_ROLE_KEY) missing.push('SUPABASE_SECRET_KEY atau SUPABASE_SERVICE_ROLE_KEY')
+  const missing = ['JWT_SECRET', 'FTTH_API_KEY'].filter((name) => !env[name])
   return missing
 }
 

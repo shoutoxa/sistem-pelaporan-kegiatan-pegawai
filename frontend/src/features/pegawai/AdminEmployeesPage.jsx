@@ -33,7 +33,8 @@ export default function AdminEmployeesPage() {
     return http
       .request('/api/admin/pegawai')
       .then((body) => {
-        setRows(body.data || [])
+        const list = Array.isArray(body.data) ? body.data : []
+        setRows(list.filter((u) => u.role !== 'SUPERADMIN' && u.role !== 'administrator'))
         setState('ready')
       })
       .catch((requestError) => {

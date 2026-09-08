@@ -1,115 +1,15 @@
-import { ftthApi } from '../../services/ftthApi.js'
+import { ftthApi as defaultFtthApi } from '../../services/ftthApi.js'
 
-function historyError(code, message) { const error = new Error(message); error.code = code; return error }
+function historyError(code, message) {
+  const error = new Error(message)
+  error.code = code
+  return error
+}
 
-export function createHistoryService({ prisma, storage, clock = () => new Date(), ftthApi: injectedFtthApi }) {
-  const ftth = injectedFtthApi || ftthApi
-  if (prisma) {
-    async function listOwnReports({ actor, page = 1, limit = 20, tanggal, pekerjaanId }) {
-      const safePage = Math.max(1, Number(page) || 1)
-      const safeLimit = Math.min(100, Math.max(1, Number(limit) || 20))
-      const where = { userId: actor.id }
-      if (tanggal) where.tanggalKegiatan = new Date(`${tanggal}T00:00:00.000Z`)
-      if (pekerjaanId) where.pekerjaanId = pekerjaanId
-      const [items, total] = await Promise.all([
-        prisma.laporan.findMany({ where, include: { cluster: { include: { desa: true } }, pekerjaan: true, dokumentasi: true }, orderBy: { createdAt: 'desc' }, skip: (safePage - 1) * safeLimit, take: safeLimit }),
-        prisma.laporan.count({ where }),
-      ])
-      const now = clock().getTime()
-      return {
-        items: await Promise.all(items.map(async (item) => {
-          const editableUntil = new Date(new Date(item.createdAt).getTime() + 24 * 60 * 60 * 1000)
-          const dokumentasi = await Promise.all(
-            (item.dokumentasi || []).map(async (doc) => ({
-              ...doc,
-              signedUrl: (await storage?.createSignedUrl?.(doc.storagePath, 600)) || `/api/files/${doc.storagePath}`,
-            }))
-          )
-          return { ...item, dokumentasi, editableUntil: editableUntil.toISOString(), canEdit: !item.diterima && now <= editableUntil.getTime() }
-        })),
-        total,
-        page: safePage,
-        limit: safeLimit,
-      }
-    }
+export function createHistoryService({ storage, clock = () => new Date(), ftthApi: injectedFtthApi } = {}) {
+  const ftth = injectedFtthApi || defaultFtthApi
 
-    async function getReportDetail({ actor, reportId }) {
-      const where = actor.role === 'SUPERADMIN' ? { id: reportId } : { id: reportId, userId: actor.id }
-      const report = await prisma.laporan.findFirst({ where, include: { user: true, cluster: { include: { desa: true } }, pekerjaan: true, dokumentasi: true } })
-      if (!report || (actor.role !== 'SUPERADMIN' && report.userId !== actor.id)) throw historyError('NOT_FOUND', 'Laporan tidak ditemukan.')
-      const dokumentasi = await Promise.all((report.dokumentasi || []).map(async (item) => ({ ...item, signedUrl: await storage?.createSignedUrl?.(item.storagePath, 600) || item.storagePath })))
-      return { ...report, dokumentasi }
-    }
-
-    async function listAdminReports(filters = {}) {
-      const { page = 1, limit = 20, from, to, pegawaiId, desaId, clusterId, pekerjaanId, search } = filters
-      const safePage = Math.max(1, Number(page) || 1)
-      const safeLimit = Math.min(100, Math.max(1, Number(limit) || 20))
-      const where = {}
-      if (pegawaiId) where.userId = pegawaiId
-      if (clusterId) where.clusterId = clusterId
-      if (pekerjaanId) where.pekerjaanId = pekerjaanId
-      if (desaId) where.cluster = { desaId }
-      if (from || to) where.tanggalKegiatan = { ...(from ? { gte: new Date(`${from}T00:00:00.000Z`) } : {}), ...(to ? { lte: new Date(`${to}T00:00:00.000Z`) } : {}) }
-      const keyword = typeof search === 'string' ? search.trim() : ''
-      if (keyword) {
-        where.OR = [
-          { user: { nama: { contains: keyword, mode: 'insensitive' } } },
-          { cluster: { clusterName: { contains: keyword, mode: 'insensitive' } } },
-          { cluster: { desa: { namaDesa: { contains: keyword, mode: 'insensitive' } } } },
-          { pekerjaan: { namaPekerjaan: { contains: keyword, mode: 'insensitive' } } },
-        ]
-      }
-      const [items, total] = await Promise.all([
-        prisma.laporan.findMany({ where, include: { user: true, cluster: { include: { desa: true } }, pekerjaan: true, dokumentasi: true }, orderBy: { createdAt: 'desc' }, skip: (safePage - 1) * safeLimit, take: safeLimit }),
-        prisma.laporan.count({ where }),
-      ])
-      return { items, total, page: safePage, limit: safeLimit }
-    }
-
-    async function listDocumentation(filters = {}) {
-      const { desaId, clusterId, pekerjaanId } = filters
-      const where = { dokumentasi: { some: {} } }
-      if (pekerjaanId) where.pekerjaanId = pekerjaanId
-      if (clusterId) where.clusterId = clusterId
-      else if (desaId) where.cluster = { desaId }
-      const reports = await prisma.laporan.findMany({
-        where,
-        include: {
-          cluster: { include: { desa: true } },
-          pekerjaan: true,
-          dokumentasi: true,
-        },
-      })
-      const items = reports.flatMap((report) => (report.dokumentasi || []).map((doc) => {
-        const cleanPath = String(doc.storagePath || '').replace(/^\/+/, '')
-        return {
-          ...doc,
-          originalName: doc.originalName,
-          mimeType: doc.mimeType,
-          fileSize: doc.fileSize,
-          storagePath: cleanPath,
-          signedUrl: '/api/files/' + cleanPath,
-          laporanId: report.id,
-          tanggalKegiatan: report.tanggalKegiatan,
-          project: report.cluster?.desa ? { id: report.cluster.desa.id, name: report.cluster.desa.namaDesa } : null,
-          cluster: report.cluster ? { id: report.cluster.id, name: report.cluster.clusterName } : null,
-          process: report.pekerjaan ? { id: report.pekerjaan.id, name: report.pekerjaan.namaPekerjaan, master_category_id: report.pekerjaan.kategoriId } : null,
-          laporan: {
-            id: report.id,
-            tanggalKegiatan: report.tanggalKegiatan,
-            cluster: report.cluster,
-            pekerjaan: report.pekerjaan,
-          },
-        }
-      }))
-      return items
-    }
-
-    return { listOwnReports, getReportDetail, listAdminReports, listDocumentation }
-  }
-
-  async function listOwnReports({ actor, page = 1, limit = 20, tanggal, processId }) {
+  async function listOwnReports({ actor, page = 1, limit = 20, tanggal, processId, pekerjaanId }) {
     const safePage = Math.max(1, Number(page) || 1)
     const safeLimit = Math.min(100, Math.max(1, Number(limit) || 20))
     const filters = {
@@ -118,7 +18,8 @@ export function createHistoryService({ prisma, storage, clock = () => new Date()
       offset: (safePage - 1) * safeLimit,
     }
     if (tanggal) filters.tanggal_kegiatan = tanggal
-    if (processId) filters.process_id = processId
+    const targetProcessId = processId || pekerjaanId
+    if (targetProcessId) filters.process_id = targetProcessId
 
     const response = await ftth.getReports(filters)
     const items = response.data || response || []
@@ -151,7 +52,7 @@ export function createHistoryService({ prisma, storage, clock = () => new Date()
       }),
       total,
       page: safePage,
-      limit: safeLimit
+      limit: safeLimit,
     }
   }
 
@@ -163,7 +64,7 @@ export function createHistoryService({ prisma, storage, clock = () => new Date()
 
     let rawDocs = report.dokumentasi || report.dokumentasi_laporan || []
     if (!Array.isArray(rawDocs) || rawDocs.length === 0) {
-      const docsResponse = await ftth.getDocumentation({ laporan_id: reportId }).catch(() => [])
+      const docsResponse = typeof ftth.getDocumentation === 'function' ? await ftth.getDocumentation({ laporan_id: reportId }).catch(() => []) : []
       const docsList = docsResponse.data || docsResponse || []
       rawDocs = (Array.isArray(docsList) ? docsList : [docsList]).filter(
         (item) => (item.laporan_id || item.laporanId) === reportId
@@ -200,71 +101,110 @@ export function createHistoryService({ prisma, storage, clock = () => new Date()
     if (clusterId) ftFilters.cluster_id = clusterId
     if (projectId) ftFilters.project_id = projectId
     if (processId) ftFilters.process_id = processId
-    if (from || to) {
-      if (from) ftFilters.from = from
-      if (to) ftFilters.to = to
-    }
+    if (from) ftFilters.from = from
+    if (to) ftFilters.to = to
     if (search) ftFilters.search = search
 
     const response = await ftth.getReports(ftFilters)
     const items = response.data || response || []
     const total = response.total || items.length || 0
-    return { items, total, page: safePage, limit: safeLimit }
+
+    const now = clock().getTime()
+    return {
+      items: items.map((item) => {
+        const createdAtTime = new Date(item.created_at || item.createdAt || now).getTime()
+        const validCreatedAt = isNaN(createdAtTime) ? now : createdAtTime
+        const editableUntil = new Date(validCreatedAt + 24 * 60 * 60 * 1000)
+        const rawDocs = (item.dokumentasi || item.dokumentasi_laporan || []).filter(
+          (d) => !d.laporan_id || d.laporan_id === item.id
+        )
+        const dokumentasi = rawDocs.map((doc) => {
+          let signedUrl = doc.file_url || doc.storagePath
+          if (doc.file_url && doc.file_url.startsWith('/uploads/')) {
+            signedUrl = 'https://ftth.digitak.id' + doc.file_url
+          } else if (signedUrl && !signedUrl.startsWith('http')) {
+            signedUrl = '/api/files/' + signedUrl.replace(/^\/+/, '')
+          }
+          return { ...doc, signedUrl }
+        })
+        return {
+          ...item,
+          user: item.user || { id: item.user_id, nama: item.user_name },
+          cluster: item.cluster || { id: item.cluster_id, clusterName: item.cluster_name, desa: { namaDesa: item.project_name } },
+          pekerjaan: item.master_process || item.process || { id: item.process_id, namaPekerjaan: item.process_name },
+          dokumentasi,
+          editableUntil: editableUntil.toISOString(),
+          canEdit: item.status !== 'APPROVED' && now <= editableUntil.getTime(),
+        }
+      }),
+      total,
+      page: safePage,
+      limit: safeLimit,
+    }
   }
 
   async function listDocumentation(filters = {}) {
-    const { projectId, clusterId, processId } = filters
-    const ftFilters = {}
-    if (clusterId) ftFilters.cluster_id = clusterId
-    if (projectId) ftFilters.project_id = projectId
-    if (processId) ftFilters.process_id = processId
+    const { page = 1, limit = 20, from, to, pegawaiId, projectId, clusterId, categoryId, processId } = filters
+    const reportFilters = {}
+    if (pegawaiId) reportFilters.user_id = pegawaiId
+    if (clusterId) reportFilters.cluster_id = clusterId
+    if (projectId) reportFilters.project_id = projectId
+    if (processId) reportFilters.process_id = processId
+    if (from) reportFilters.from = from
+    if (to) reportFilters.to = to
 
-    const reportsResponse = await ftth.getReports(ftFilters)
+    const reportsResponse = await ftth.getReports(reportFilters).catch(() => [])
     const reports = reportsResponse.data || reportsResponse || []
-    const items = []
-
-    for (const report of (Array.isArray(reports) ? reports : [reports])) {
-      let docs = report.dokumentasi || report.dokumentasi_laporan || []
-      if (!Array.isArray(docs) || docs.length === 0) {
-        const docsResponse = await ftth.getDocumentation({ laporan_id: report.id }).catch(() => [])
-        const docsList = docsResponse.data || docsResponse || []
-        docs = (Array.isArray(docsList) ? docsList : [docsList]).filter(
-          (d) => (d.laporan_id || d.laporanId) === report.id
-        )
-      } else {
-        docs = docs.filter((d) => !d.laporan_id || d.laporan_id === report.id)
-      }
-
-      for (const doc of docs) {
-        let signedUrl = doc.file_url
-        if (doc.file_url && doc.file_url.startsWith('/uploads/')) {
-          signedUrl = 'https://ftth.digitak.id' + doc.file_url
-        } else if (storage?.createSignedUrl && doc.file_url && !doc.file_url.startsWith('http')) {
-          try { signedUrl = await storage.createSignedUrl(doc.file_url, 600) } catch { /* use original */ }
-        } else if (doc.file_url && !doc.file_url.startsWith('http')) {
-          signedUrl = '/api/files/' + doc.file_url.replace(/^\/+/, '')
-        }
-        items.push({
-          id: doc.id,
-          storagePath: doc.file_url,
-          signedUrl: signedUrl || doc.file_url,
-          originalName: doc.original_name,
-          mimeType: doc.mime_type,
-          fileSize: doc.file_size,
-          createdAt: doc.created_at || doc.createdAt,
-          laporanId: report.id,
-          tanggalKegiatan: report.tanggal_kegiatan || report.tanggalKegiatan,
-          keterangan: report.keterangan,
-          status: report.status,
-          pegawai: report.user,
-          project: report.project,
-          cluster: report.cluster,
-          process: report.master_process || report.process,
-        })
-      }
+    const reportMap = new Map()
+    for (const r of reports) {
+      reportMap.set(r.id, r)
     }
 
-    return { items, total: items.length }
+    const docsResponse = await ftth.getDocumentation().catch(() => [])
+    let docs = docsResponse.data || docsResponse || []
+
+    const relevantDocs = docs.filter((d) => {
+      const parentReport = reportMap.get(d.laporan_id || d.laporanId)
+      if (!parentReport) return false
+      if (categoryId) {
+        const catId = parentReport.master_process?.master_category_id || parentReport.master_process?.category_id || parentReport.master_category_id
+        if (catId !== categoryId) return false
+      }
+      return true
+    })
+
+    const safePage = Math.max(1, Number(page) || 1)
+    const safeLimit = Math.min(100, Math.max(1, Number(limit) || 20))
+    const paged = relevantDocs.slice((safePage - 1) * safeLimit, safePage * safeLimit)
+
+    return {
+      items: await Promise.all(
+        paged.map(async (doc) => {
+          const parentReport = reportMap.get(doc.laporan_id || doc.laporanId)
+          let signedUrl = doc.file_url || doc.storagePath
+          if (doc.file_url && doc.file_url.startsWith('/uploads/')) {
+            signedUrl = 'https://ftth.digitak.id' + doc.file_url
+          } else if (storage?.createSignedUrl && doc.file_url && !doc.file_url.startsWith('http')) {
+            try { signedUrl = await storage.createSignedUrl(doc.file_url, 600) } catch { /* ignore */ }
+          } else if (signedUrl && !signedUrl.startsWith('http')) {
+            signedUrl = '/api/files/' + signedUrl.replace(/^\/+/, '')
+          }
+          return {
+            ...doc,
+            signedUrl,
+            laporan: parentReport ? {
+              ...parentReport,
+              user: parentReport.user || { id: parentReport.user_id, nama: parentReport.user_name },
+              cluster: parentReport.cluster || { id: parentReport.cluster_id, clusterName: parentReport.cluster_name, desa: { namaDesa: parentReport.project_name } },
+              pekerjaan: parentReport.master_process || parentReport.process || { id: parentReport.process_id, namaPekerjaan: parentReport.process_name },
+            } : null,
+          }
+        })
+      ),
+      total: relevantDocs.length,
+      page: safePage,
+      limit: safeLimit,
+    }
   }
 
   return { listOwnReports, getReportDetail, listAdminReports, listDocumentation }

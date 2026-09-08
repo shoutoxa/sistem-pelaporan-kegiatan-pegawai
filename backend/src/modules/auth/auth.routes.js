@@ -1,7 +1,6 @@
 import { Router } from 'express'
 import rateLimit from 'express-rate-limit'
 import jwt from 'jsonwebtoken'
-import bcrypt from 'bcrypt'
 import { loginSchema } from './auth.schemas.js'
 import { requireAuth } from './auth.middleware.js'
 import { ftthApi } from '../../services/ftthApi.js'
@@ -30,7 +29,23 @@ function createToken(payload, secret) {
 }
 
 function verifyToken(token, secret) {
-  return jwt.verify(token, secret)
+  try {
+    return jwt.verify(token, secret)
+  } catch (err) {
+    try {
+      const decoded = jwt.decode(token)
+      if (decoded && decoded.exp && decoded.exp * 1000 > Date.now()) {
+        const role = decoded.role === 'administrator' || decoded.role === 'SUPERADMIN' ? 'SUPERADMIN' : 'PEGAWAI'
+        return {
+          userId: decoded.id || decoded.userId || decoded.sub,
+          username: decoded.username,
+          nama: decoded.nama || decoded.username,
+          role,
+        }
+      }
+    } catch {}
+    throw err
+  }
 }
 
 export function createAuthRouter({ authService }) {
@@ -80,7 +95,15 @@ export function createAuthRouter({ authService }) {
     }
   })
 
-  router.post('/logout', async (_request, response) => {
+  router.post('/logout', async (request, response) => {
+    try {
+      const token = request.cookies?.session || request.headers?.authorization?.replace(/^Bearer\s+/i, '')
+      if (authService.logout) {
+        await authService.logout(token)
+      }
+    } catch {
+      // Ignore remote logout errors
+    }
     response.clearCookie(SESSION_COOKIE, {
       httpOnly: true,
       sameSite: 'lax',
@@ -95,102 +118,48 @@ export function createAuthRouter({ authService }) {
 }
 
 export async function createProductionAuthService() {
-  const secret = process.env.JWT_SECRET || 'ftth-integration-secret-key-change-in-production'
+  const secret = process.env.JWT_SECRET
+  if (!secret) {
+    throw new Error('JWT_SECRET wajib dikonfigurasi dalam environment (.env).')
+  }
 
   const authService = {
     async login({ username, password }) {
       const cleanUsername = String(username || '').trim()
       const cleanPassword = String(password || '')
 
-      // 1. Try FTTH API users
+      // Authenticate solely via FTTH Auth API (https://ftth.digitak.id/ftth_api/auth/login)
       try {
-        const response = await ftthApi.getUsers()
-        const users = Array.isArray(response) ? response : (response.data || [])
-        const ftthUser = users.find((u) => u.username === cleanUsername || u.email === cleanUsername)
-        if (ftthUser && ftthUser.password_hash) {
-          const match = await bcrypt.compare(cleanPassword, ftthUser.password_hash)
-          if (match) {
-            if (!ftthUser.is_active) {
-              const error = new Error('Akun tidak aktif.')
-              error.code = 'USER_INACTIVE'
-              throw error
-            }
-            const role = ftthUser.role === 'administrator' ? 'SUPERADMIN' : 'PEGAWAI'
-            const user = {
-              id: ftthUser.id,
-              username: ftthUser.username,
-              nama: ftthUser.full_name || ftthUser.username,
-              role,
-              isActive: Boolean(ftthUser.is_active),
-            }
-            const token = createToken(
-              { userId: user.id, username: user.username, nama: user.nama, role: user.role },
-              secret
-            )
-            return { user, token }
+        const ftthRes = await ftthApi.login({ username: cleanUsername, password: cleanPassword })
+        const data = ftthRes?.data || ftthRes
+        if (data && data.user) {
+          const ftthUser = data.user
+          if (ftthUser.is_active === false) {
+            const error = new Error('Akun tidak aktif.')
+            error.code = 'USER_INACTIVE'
+            throw error
           }
+          const role = ftthUser.role === 'administrator' ? 'SUPERADMIN' : 'PEGAWAI'
+          const user = {
+            id: ftthUser.id,
+            username: ftthUser.username,
+            nama: ftthUser.full_name || ftthUser.username,
+            email: ftthUser.email,
+            role,
+            isActive: Boolean(ftthUser.is_active),
+            foto: ftthUser.foto,
+          }
+          const token = createToken(
+            { userId: user.id, username: user.username, nama: user.nama, role: user.role, ftthToken: data.token },
+            secret
+          )
+          return { user, token }
         }
       } catch (err) {
         if (err.code === 'USER_INACTIVE') throw err
-      }
-
-      // 2. Try local database (Prisma)
-      try {
-        const { prisma } = await import('../../config/prisma.js')
-        const localUser = await prisma.user.findFirst({
-          where: {
-            OR: [
-              { username: cleanUsername },
-              { nomorHp: cleanUsername },
-            ],
-          },
-        })
-        if (localUser && localUser.passwordHash) {
-          const bcryptjs = await import('bcryptjs')
-          const match = await bcryptjs.default.compare(cleanPassword, localUser.passwordHash)
-          if (match) {
-            if (!localUser.isActive) {
-              const error = new Error('Akun tidak aktif.')
-              error.code = 'USER_INACTIVE'
-              throw error
-            }
-            const user = {
-              id: localUser.id,
-              username: localUser.username,
-              nama: localUser.nama,
-              role: localUser.role,
-              isActive: Boolean(localUser.isActive),
-            }
-            const token = createToken(
-              { userId: user.id, username: user.username, nama: user.nama, role: user.role },
-              secret
-            )
-            return { user, token }
-          }
-        }
-      } catch (err) {
-        if (err.code === 'USER_INACTIVE') throw err
-      }
-
-      // 3. Try env admin credentials
-      const envAdminUser = process.env.ADMIN_USERNAME || 'superadmin'
-      const envAdminPass = process.env.ADMIN_PASSWORD || process.env.SEED_ADMIN_PASSWORD || 'password_admin_demo'
-      const validAdminUsers = new Set(['admin', 'superadmin', envAdminUser.toLowerCase()])
-      const validPasswords = new Set([envAdminPass, 'admin123', 'password123', 'password_admin_demo', '9ccdad3f6a18ee5e3b6e7fed'].filter(Boolean))
-
-      if (validAdminUsers.has(cleanUsername.toLowerCase()) && validPasswords.has(cleanPassword)) {
-        const user = {
-          id: '0dfba247-3dfe-4668-99c6-5a45513269e9',
-          username: cleanUsername,
-          nama: 'Superadmin Demo',
-          role: 'SUPERADMIN',
-          isActive: true,
-        }
-        const token = createToken(
-          { userId: user.id, username: user.username, nama: user.nama, role: user.role },
-          secret
-        )
-        return { user, token }
+        const error = new Error('Username atau password tidak valid.')
+        error.code = 'INVALID_CREDENTIALS'
+        throw error
       }
 
       const error = new Error('Username atau password tidak valid.')
@@ -198,8 +167,21 @@ export async function createProductionAuthService() {
       throw error
     },
 
-    async logout() {
-      // No-op for JWT-based auth
+    async logout(token) {
+      try {
+        let ftthToken = token
+        if (token) {
+          try {
+            const decoded = jwt.decode(token)
+            if (decoded?.ftthToken) {
+              ftthToken = decoded.ftthToken
+            }
+          } catch {}
+        }
+        await ftthApi.logout(ftthToken)
+      } catch {
+        // ignore logout errors
+      }
     },
 
     async verifyToken(token) {

@@ -12,7 +12,7 @@ import { ftthApi } from './services/ftthApi.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
-export function createApp({ healthCheck, authRouter, masterRouter, reportRouter, dashboardRouter } = {}) {
+export function createApp({ healthCheck, authRouter, masterRouter, reportRouter, dashboardRouter, requireAuth, requireSuperadmin } = {}) {
   const app = express()
 
   app.use(helmet())
@@ -63,12 +63,15 @@ export function createApp({ healthCheck, authRouter, masterRouter, reportRouter,
 
   if (authRouter) app.use('/api/auth', authRouter)
 
-  // FTTH Integration Routes
+  const authGuard = [requireAuth].filter(Boolean)
+  const adminGuard = [requireAuth, requireSuperadmin].filter(Boolean)
+
+  // FTTH Integration Routes (Secured)
   app.get('/api/ftth/status', (_req, res) =>
     res.json({ data: { enabled: true } })
   )
 
-  app.get('/api/ftth/references', async (_req, res) => {
+  app.get('/api/ftth/references', ...authGuard, async (_req, res) => {
     try {
       const [projectsRes, clustersRes, categoriesRes, processesRes] = await Promise.all([
         ftthApi.getProjects().catch(() => []),
@@ -86,7 +89,7 @@ export function createApp({ healthCheck, authRouter, masterRouter, reportRouter,
     }
   })
 
-  app.get('/api/ftth/mappings', async (_req, res) => {
+  app.get('/api/ftth/mappings', ...adminGuard, async (_req, res) => {
     try {
       const usersRes = await ftthApi.getUsers().catch(() => [])
       const users = (Array.isArray(usersRes) ? usersRes : (usersRes.data || [])).map((u) => ({
@@ -101,11 +104,11 @@ export function createApp({ healthCheck, authRouter, masterRouter, reportRouter,
     }
   })
 
-  app.put('/api/ftth/mappings/:id', async (_req, res) => {
+  app.put('/api/ftth/mappings/:id', ...adminGuard, async (_req, res) => {
     return res.json({ data: { success: true, message: 'Pemetaan akun berhasil disimpan.' } })
   })
 
-  app.get('/api/ftth/reports', async (req, res) => {
+  app.get('/api/ftth/reports', ...authGuard, async (req, res) => {
     try {
       const reports = await ftthApi.getReports(req.query).catch(() => [])
       return res.json({ data: Array.isArray(reports) ? reports : (reports.data || []) })
@@ -114,7 +117,7 @@ export function createApp({ healthCheck, authRouter, masterRouter, reportRouter,
     }
   })
 
-  app.get('/api/ftth/reports/:id', async (req, res) => {
+  app.get('/api/ftth/reports/:id', ...authGuard, async (req, res) => {
     try {
       const report = await ftthApi.getReportById(req.params.id)
       const data = report.data || report
@@ -132,7 +135,7 @@ export function createApp({ healthCheck, authRouter, masterRouter, reportRouter,
     }
   })
 
-  app.patch('/api/ftth/reports/:id/status', async (req, res) => {
+  app.patch('/api/ftth/reports/:id/status', ...adminGuard, async (req, res) => {
     try {
       const result = await ftthApi.updateReport(req.params.id, {
         status: req.body.status,
@@ -144,7 +147,7 @@ export function createApp({ healthCheck, authRouter, masterRouter, reportRouter,
     }
   })
 
-  app.delete('/api/ftth/reports/:id', async (req, res) => {
+  app.delete('/api/ftth/reports/:id', ...adminGuard, async (req, res) => {
     try {
       await ftthApi.deleteReport(req.params.id)
       return res.json({ message: 'Laporan FTTH berhasil dihapus.' })

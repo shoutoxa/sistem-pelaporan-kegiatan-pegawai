@@ -1,15 +1,19 @@
 import '../load-env.js'
 import { createApp } from './app.js'
 import { runtimeConfig } from './config/env.js'
-import { createAuthRouter, createProductionAuthRouter, createProductionAuthService } from './modules/auth/auth.routes.js'
+import { createAuthRouter, createProductionAuthService } from './modules/auth/auth.routes.js'
 import { createProductionMasterRouter } from './modules/master-data/master.routes.js'
 import { createProductionReportRouter } from './modules/laporan/report.routes.js'
 import { createProductionDashboardRouter } from './modules/dashboard/dashboard.routes.js'
 import { createProductionPegawaiRouter } from './modules/pegawai/pegawai.routes.js'
 import { createProductionExportRouter } from './modules/export/export.routes.js'
 
+import { requireAuth, requireRole } from './modules/auth/auth.middleware.js'
+
 const authService = await createProductionAuthService()
 const authRouter = createAuthRouter({ authService })
+const requireAuthGuard = requireAuth({ authService })
+const requireSuperadminGuard = requireRole('SUPERADMIN')
 const masterRouter = await createProductionMasterRouter({ authService })
 const reportRouter = await createProductionReportRouter()
 const dashboardRouter = await createProductionDashboardRouter()
@@ -21,19 +25,12 @@ const app = createApp({
   masterRouter,
   reportRouter,
   dashboardRouter: [dashboardRouter, pegawaiRouter, exportRouter].filter(Boolean),
+  requireAuth: requireAuthGuard,
+  requireSuperadmin: requireSuperadminGuard,
 })
-
-if (hasDatabase) {
-  try {
-    const { prisma } = await import('./config/prisma.js')
-    await prisma.$queryRawUnsafe('SELECT 1')
-  } catch (error) {
-    console.warn('Peringatan: Warmup database awal terlewati:', error.message)
-  }
-}
 
 app.listen(runtimeConfig.port, () => {
   console.log(`Backend berjalan di http://localhost:${runtimeConfig.port}`)
-  console.log('Auth: environment variables (ADMIN_USERNAME, ADMIN_PASSWORD)')
-  console.log('Data: FTTH API (https://ftth.digitak.id/ftth_api)')
+  console.log('Mode: Full FTTH Cloud API (tanpa database lama)')
+  console.log('Data & Storage: FTTH API (https://ftth.digitak.id/ftth_api)')
 })

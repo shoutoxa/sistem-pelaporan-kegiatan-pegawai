@@ -1,9 +1,14 @@
 export function requireAuth({ authService }) {
   return async (request, response, next) => {
     try {
-      const token = request.cookies?.session
+      const token = request.cookies?.session || request.headers?.authorization?.replace(/^Bearer\s+/i, '')
       if (authService.readSession) {
-        request.user = await authService.readSession(token)
+        const user = await authService.readSession(token)
+        if (!user) {
+          response.clearCookie?.('session', { httpOnly: true, sameSite: 'lax', secure: false, path: '/', maxAge: 0 })
+          return response.status(401).json({ message: 'Sesi tidak valid atau sudah berakhir.' })
+        }
+        request.user = user
         return next()
       }
       if (!token) {

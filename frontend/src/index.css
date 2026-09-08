@@ -557,4 +557,10 @@ button.table-link { background: none; border: none; padding: 0; cursor: pointer;
 .mobile-avatar { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; border: 1.5px solid var(--border); flex-shrink: 0; }
 .sidebar-account .avatar-img { width: 38px; height: 38px; border-radius: 50%; object-fit: cover; border: 1.5px solid var(--border); flex-shrink: 0; }
 
+/* View Mode Toggle for Dokumentasi */
+.view-mode-toggle { display: inline-flex; align-items: center; gap: 0.35rem; background: var(--surface-subtle); padding: 0.25rem; border-radius: var(--radius-sm); border: 1px solid var(--border); }
+.view-mode-toggle button { padding: 0.45rem 0.85rem; font-size: 0.84rem; font-weight: 700; border: none; background: transparent; cursor: pointer; border-radius: var(--radius-sm); color: var(--text-muted); transition: all 0.2s ease; }
+.view-mode-toggle button.active-mode { background: var(--brand); color: #fff; box-shadow: 0 2px 6px rgba(0,0,0,0.15); }
+.view-mode-toggle button:hover:not(.active-mode) { color: var(--text); background: rgba(0,0,0,0.05); }
+
 

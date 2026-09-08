@@ -53,4 +53,28 @@ describe('DokumentasiPage', () => {
       expect.any(Object),
     ))
   })
+
+  it('switches between Folder View and PDF Sheet View and allows printing', async () => {
+    const printSpy = vi.spyOn(window, 'print').mockImplementation(() => {})
+    const fetchMock = vi.fn().mockImplementation(() => Promise.resolve({ ok: true, json: async () => documentationResponse }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<MemoryRouter><DokumentasiPage /></MemoryRouter>)
+
+    await waitFor(() => expect(screen.getByText('📁 Tampilan Folder')).toBeInTheDocument())
+    expect(screen.getByRole('tab', { name: /tampilan folder/i })).toHaveAttribute('aria-selected', 'true')
+
+    // Switch to PDF format view
+    fireEvent.click(screen.getByRole('tab', { name: /format pdf \/ cetak/i }))
+
+    expect(screen.getByRole('tab', { name: /format pdf \/ cetak/i })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByText('PHOTO DOCUMENTATION')).toBeInTheDocument()
+    expect(screen.getByText('Cetak / Simpan PDF')).toBeInTheDocument()
+
+    // Trigger Print
+    fireEvent.click(screen.getByText('Cetak / Simpan PDF'))
+    expect(printSpy).toHaveBeenCalled()
+
+    printSpy.mockRestore()
+  })
 })

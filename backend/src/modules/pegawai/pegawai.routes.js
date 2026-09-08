@@ -15,16 +15,20 @@ export function createPegawaiRouter({ service, requireAuth, requireSuperadmin } 
     try {
       const result = await ftthApi.getUsers()
       const users = Array.isArray(result) ? result : (result.data || [])
-      const formattedUsers = users.map(u => ({
-        id: u.id,
-        username: u.username,
-        nama: u.full_name || u.username,
-        email: u.email,
-        nomorHp: u.phone,
-        role: u.role === 'administrator' ? 'SUPERADMIN' : 'PEGAWAI',
-        isActive: u.is_active !== false,
-        wajibLapor: u.role !== 'administrator',
-      }))
+      const formattedUsers = users
+        .filter(u => u.role !== 'administrator' && u.role !== 'SUPERADMIN')
+        .map(u => ({
+          id: u.id,
+          username: u.username,
+          nama: u.full_name || u.username,
+          email: u.email,
+          nomorHp: u.phone,
+          role: 'PEGAWAI',
+          isActive: u.is_active !== false,
+          wajibLapor: true,
+          fotoProfil: u.foto,
+          fotoProfilUrl: u.foto ? (u.foto.startsWith('http') ? u.foto : `https://ftth.digitak.id${u.foto}`) : null,
+        }))
       return response.json({ data: formattedUsers })
     } catch (error) {
       console.error('Error fetching users from FTTH:', error.message)

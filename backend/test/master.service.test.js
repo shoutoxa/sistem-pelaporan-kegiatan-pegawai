@@ -1,91 +1,58 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { createMasterService } from '../src/modules/master-data/master.service.js'
 
-function createFakePrisma() {
-  return {
-    desa: {
-      findMany: async () => [{ id: 'd1', namaDesa: 'Dewasari', isActive: true }],
-      findFirst: async () => null,
-      findUnique: async () => ({ id: 'd1', isActive: true }),
-      create: async ({ data }) => ({ id: 'd2', ...data }),
-      update: async ({ data }) => ({ id: 'd1', ...data }),
-    },
-    cluster: {
-      findMany: async () => [{ id: 'c1', desaId: 'd1', clusterName: 'RW 01', isActive: true }],
-      findFirst: async () => null,
-      create: async ({ data }) => ({ id: 'c2', ...data }),
-      update: async ({ data }) => ({ id: 'c1', ...data }),
-    },
-    pekerjaan: {
-      findMany: async () => [{ id: 'p1', namaPekerjaan: 'Penggalian Lubang', isActive: true }],
-      findFirst: async () => null,
-      findUnique: async () => ({ id: 'p1', namaPekerjaan: 'Penggalian Lubang', sumber: 'LOCAL', isActive: true }),
-      create: async ({ data }) => ({ id: 'p2', ...data }),
-      update: async ({ data }) => ({ id: 'p1', ...data }),
-    },
-    kategoriPekerjaan: {
-      findMany: async () => [{ id: 'k1', namaKategori: 'Implementasi', isActive: true }],
-      findFirst: async () => ({ id: 'k1', namaKategori: 'Implementasi', isActive: true }),
-    },
+describe('master data service with FTTH API', () => {
+  const mockFtthApi = {
+    getProjects: vi.fn().mockResolvedValue([
+      { id: 'proj-1', name: 'Dewasari', is_active: true },
+    ]),
+    getClusters: vi.fn().mockResolvedValue([
+      { id: 'clust-1', project_id: 'proj-1', name: 'RW 01', is_active: true },
+    ]),
+    getMasterCategories: vi.fn().mockResolvedValue([
+      { id: 'cat-1', name: 'IKR', is_active: true },
+    ]),
+    getMasterProcesses: vi.fn().mockResolvedValue([
+      { id: 'proc-1', master_category_id: 'cat-1', name: 'Penarikan Kabel', is_active: true },
+    ]),
   }
-}
 
-describe('master data service', () => {
-  it('returns active Desa, Cluster by Desa, and Pekerjaan only', async () => {
-    const prisma = createFakePrisma()
-    const service = createMasterService({ prisma })
-
-    await expect(service.listActiveDesa()).resolves.toEqual([{ id: 'd1', namaDesa: 'Dewasari', isActive: true }])
-    await expect(service.listActiveClusterByDesa('d1')).resolves.toEqual([{ id: 'c1', desaId: 'd1', clusterName: 'RW 01', isActive: true }])
-    await expect(service.listActiveKategori()).resolves.toEqual([{ id: 'k1', namaKategori: 'Implementasi', isActive: true }])
-    await expect(service.listActivePekerjaan()).resolves.toEqual([{ id: 'p1', namaPekerjaan: 'Penggalian Lubang', isActive: true }])
+  it('returns projects from FTTH API', async () => {
+    const service = createMasterService({ ftthApi: mockFtthApi })
+    const projects = await service.listActiveProject()
+    expect(projects).toEqual([
+      expect.objectContaining({ id: 'proj-1', namaDesa: 'Dewasari', name: 'Dewasari', isActive: true }),
+    ])
   })
 
-  it('requires an active parent Desa when listing Cluster for a new report', async () => {
-    const prisma = createFakePrisma()
-    let receivedWhere
-    prisma.cluster.findMany = async ({ where }) => { receivedWhere = where; return [] }
-    const service = createMasterService({ prisma })
-
-    await service.listActiveClusterByDesa('d1')
-
-    expect(receivedWhere).toEqual({ desaId: 'd1', isActive: true, desa: { isActive: true } })
+  it('returns clusters by project from FTTH API', async () => {
+    const service = createMasterService({ ftthApi: mockFtthApi })
+    const clusters = await service.listActiveClusterByProject('proj-1')
+    expect(mockFtthApi.getClusters).toHaveBeenCalledWith({ project_id: 'proj-1' })
+    expect(clusters).toEqual([
+      expect.objectContaining({ id: 'clust-1', clusterName: 'RW 01', name: 'RW 01', desaId: 'proj-1', isActive: true }),
+    ])
   })
 
-  it('normalizes names and rejects duplicate or inactive parent data', async () => {
-    const prisma = createFakePrisma()
-    prisma.desa.findFirst = async ({ where }) => where.namaDesa === 'Dewasari' ? { id: 'd1', isActive: true } : null
-    prisma.cluster.findFirst = async ({ where }) => where.desaId_clusterName ? { id: 'c1' } : null
-    prisma.desa.findUnique = async () => ({ id: 'd2', isActive: false })
-    const service = createMasterService({ prisma })
-
-    await expect(service.create('desa', { namaDesa: '  Dewasari  ' })).rejects.toMatchObject({ code: 'DUPLICATE' })
-    await expect(service.create('cluster', { desaId: 'd2', clusterName: 'RW 02' })).rejects.toMatchObject({ code: 'INACTIVE_PARENT' })
+  it('returns categories from FTTH API', async () => {
+    const service = createMasterService({ ftthApi: mockFtthApi })
+    const categories = await service.listActiveCategory()
+    expect(categories).toHaveLength(1)
+    expect(categories[0].name).toBe('IKR')
   })
 
-  it('soft-disables a master record with update, never delete', async () => {
-    const prisma = createFakePrisma()
-    const service = createMasterService({ prisma })
-
-    await expect(service.setActive('pekerjaan', 'p1', false)).resolves.toMatchObject({ isActive: false })
+  it('filters active processes by category', async () => {
+    const service = createMasterService({ ftthApi: mockFtthApi })
+    const processes = await service.listActiveProcessByCategory('cat-1')
+    expect(processes).toHaveLength(1)
+    expect(processes[0].name).toBe('Penarikan Kabel')
   })
 
-  it('filters active work by category for the employee form', async () => {
-    const prisma = createFakePrisma()
-    let receivedWhere
-    prisma.pekerjaan.findMany = async ({ where }) => { receivedWhere = where; return [] }
-    const service = createMasterService({ prisma })
-
-    await service.listActivePekerjaan('k1')
-
-    expect(receivedWhere).toEqual({ isActive: true, kategoriId: 'k1', kategori: { isActive: true } })
-  })
-
-  it('keeps FTTH-managed process rows read-only locally', async () => {
-    const prisma = createFakePrisma()
-    prisma.pekerjaan.findUnique = async () => ({ id: 'p1', sumber: 'FTTH_APP' })
-    const service = createMasterService({ prisma })
-
-    await expect(service.setActive('pekerjaan', 'p1', false)).rejects.toMatchObject({ code: 'READ_ONLY' })
+  it('lists admin master resources', async () => {
+    const service = createMasterService({ ftthApi: mockFtthApi })
+    await expect(service.listAdmin('project')).resolves.toHaveLength(1)
+    await expect(service.listAdmin('cluster')).resolves.toHaveLength(1)
+    await expect(service.listAdmin('category')).resolves.toHaveLength(1)
+    await expect(service.listAdmin('process')).resolves.toHaveLength(1)
   })
 })

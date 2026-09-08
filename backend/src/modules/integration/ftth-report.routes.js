@@ -54,16 +54,3 @@ export function createFtthReportRouter({ service, requireAuth, requireSuperadmin
   router.delete('/ftth/reports/:id', requireSuperadmin, run((r) => service.remove(r.user, r.params.id)))
   return router
 }
-
-export async function createProductionFtthReportRouter({ authService }) {
-  const [{ prisma }, { requireAuth, requireRole }, { createFtthClient }, { createFtthRepository },
-    { createFtthReportService }, { createSupabaseStorage }, { runtimeConfig }] = await Promise.all([
-    import('../../config/prisma.js'), import('../auth/auth.middleware.js'), import('./ftth.client.js'),
-    import('./ftth.repository.js'), import('./ftth-report.service.js'), import('../../config/supabase.js'), import('../../config/env.js'),
-  ])
-  return createFtthReportRouter({
-    service: createFtthReportService({ client: createFtthClient(), repository: createFtthRepository(prisma), storage: createSupabaseStorage() }),
-    requireAuth: requireAuth({ authService }), requireSuperadmin: requireRole('SUPERADMIN'),
-    enabled: runtimeConfig.ftthReportsEnabled,
-  })
-}

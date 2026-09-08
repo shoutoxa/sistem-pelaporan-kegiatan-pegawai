@@ -45,9 +45,9 @@ export default function MasterTable({
                 ))}
                 <td>
                   <span
-                    className={`status-badge ${row.isActive ? "active" : "inactive"}`}
+                    className={`status-badge ${(row.isActive ?? row.is_active ?? true) ? "active" : "inactive"}`}
                   >
-                    {row.isActive ? "Aktif" : "Nonaktif"}
+                    {(row.isActive ?? row.is_active ?? true) ? "Aktif" : "Nonaktif"}
                   </span>
                 </td>
                 {(onEdit || onToggleActive) && (
