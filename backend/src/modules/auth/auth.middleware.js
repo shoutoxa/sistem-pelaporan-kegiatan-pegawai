@@ -5,7 +5,7 @@ export function requireAuth({ authService }) {
       if (authService.readSession) {
         const user = await authService.readSession(token)
         if (!user) {
-          response.clearCookie?.('session', { httpOnly: true, sameSite: 'lax', secure: false, path: '/', maxAge: 0 })
+          response.clearCookie?.('session', { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production', path: '/', maxAge: 0 })
           return response.status(401).json({ message: 'Sesi tidak valid atau sudah berakhir.' })
         }
         request.user = user
@@ -16,7 +16,7 @@ export function requireAuth({ authService }) {
       }
       const decoded = await authService.verifyToken(token)
       if (!decoded) {
-        response.clearCookie?.('session', { httpOnly: true, sameSite: 'lax', secure: false, path: '/', maxAge: 0 })
+        response.clearCookie?.('session', { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production', path: '/', maxAge: 0 })
         return response.status(401).json({ message: 'Sesi tidak valid atau sudah berakhir.' })
       }
       request.user = {
@@ -27,7 +27,7 @@ export function requireAuth({ authService }) {
       }
       return next()
     } catch {
-      response.clearCookie?.('session', { httpOnly: true, sameSite: 'lax', secure: false, path: '/', maxAge: 0 })
+      response.clearCookie?.('session', { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production', path: '/', maxAge: 0 })
       return response.status(401).json({ message: 'Sesi tidak valid atau sudah berakhir.' })
     }
   }

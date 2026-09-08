@@ -1,8 +1,10 @@
 import { Router } from 'express'
 import multer from 'multer'
+import { fileTypeFromBuffer } from 'file-type'
 import { ftthApi } from '../../services/ftthApi.js'
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10_000_000 } })
+const ALLOWED_PHOTO_MIME = new Set(['image/jpeg', 'image/png', 'image/webp'])
 
 function sendError(error, response) {
   const statuses = { VALIDATION: 400, DUPLICATE: 409, NOT_FOUND: 404, FORBIDDEN: 403 }
@@ -63,16 +65,20 @@ export function createPegawaiRouter({ service, requireAuth, requireSuperadmin } 
       if (!request.file) {
         return response.status(400).json({ message: 'File foto tidak ditemukan.' })
       }
+      const detected = await fileTypeFromBuffer(request.file.buffer)
+      if (!detected || !ALLOWED_PHOTO_MIME.has(detected.mime)) {
+        return response.status(400).json({ message: 'Format foto harus JPG, PNG, atau WEBP.', errors: { fotoProfil: 'Format foto harus JPG, PNG, atau WEBP.' } })
+      }
       const result = await ftthApi.uploadUserPhoto(
         request.params.id,
         request.file.buffer,
         request.file.originalname,
-        request.file.mimetype,
+        detected.mime,
       )
       return response.json({ message: 'Foto profil pegawai berhasil diperbarui.', data: result })
     } catch (error) {
       console.error('Error uploading employee photo:', error.message)
-      return sendError({ code: 'NOT_FOUND', message: 'Gagal mengunggah foto: ' + error.message }, response)
+      return sendError({ code: 'NOT_FOUND', message: 'Gagal mengunggah foto.' }, response)
     }
   })
 
@@ -115,16 +121,20 @@ export function createPegawaiRouter({ service, requireAuth, requireSuperadmin } 
       if (!request.file) {
         return response.status(400).json({ message: 'File foto tidak ditemukan.' })
       }
+      const detected = await fileTypeFromBuffer(request.file.buffer)
+      if (!detected || !ALLOWED_PHOTO_MIME.has(detected.mime)) {
+        return response.status(400).json({ message: 'Format foto harus JPG, PNG, atau WEBP.', errors: { fotoProfil: 'Format foto harus JPG, PNG, atau WEBP.' } })
+      }
       const result = await ftthApi.uploadUserPhoto(
         userId,
         request.file.buffer,
         request.file.originalname,
-        request.file.mimetype,
+        detected.mime,
       )
       return response.json({ message: 'Foto profil berhasil diperbarui.', data: result })
     } catch (error) {
       console.error('Error uploading user photo:', error.message)
-      return sendError({ code: 'NOT_FOUND', message: 'Gagal mengunggah foto: ' + error.message }, response)
+      return sendError({ code: 'NOT_FOUND', message: 'Gagal mengunggah foto.' }, response)
     }
   })
 

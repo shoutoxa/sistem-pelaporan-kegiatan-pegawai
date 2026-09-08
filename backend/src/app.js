@@ -2,6 +2,7 @@ import cors from 'cors'
 import cookieParser from 'cookie-parser'
 import express from 'express'
 import helmet from 'helmet'
+import rateLimit from 'express-rate-limit'
 import { createHealthRouter } from './modules/health/health.routes.js'
 import { runtimeConfig } from './config/env.js'
 import { join, dirname } from 'node:path'
@@ -15,7 +16,11 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 export function createApp({ healthCheck, authRouter, masterRouter, reportRouter, dashboardRouter, requireAuth, requireSuperadmin } = {}) {
   const app = express()
 
-  app.use(helmet())
+  app.use(
+    helmet({
+      crossOriginResourcePolicy: { policy: 'cross-origin' },
+    })
+  )
   app.use(
     cors({
       origin: (origin, callback) => {
@@ -33,6 +38,15 @@ export function createApp({ healthCheck, authRouter, masterRouter, reportRouter,
   )
   app.use(express.json())
   app.use(cookieParser())
+
+  const apiLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 600,
+    standardHeaders: 'draft-8',
+    legacyHeaders: false,
+    skip: () => process.env.NODE_ENV === 'test',
+  })
+  app.use('/api', apiLimiter)
 
   const uploadDir = process.env.UPLOAD_DIR || join(__dirname, '../../uploads')
   const placeholderPath = join(__dirname, '../../frontend/src/assets/hero.png')
@@ -52,10 +66,27 @@ export function createApp({ healthCheck, authRouter, masterRouter, reportRouter,
     return res.status(404).json({ message: 'File not found' })
   })
 
+  app.use('/uploads', (req, res, next) => {
+    const rawPath = req.originalUrl || req.url || req.path
+    if (
+      rawPath.includes('..') ||
+      rawPath.includes('\\') ||
+      rawPath.includes('//') ||
+      rawPath.toLowerCase().includes('%2e')
+    ) {
+      return res.status(400).json({ message: 'Nama berkas tidak valid.' })
+    }
+    const rawFilename = req.path.replace(/^\/+/, '')
+    if (!rawFilename || !/^[a-zA-Z0-9_.\-/]+$/.test(rawFilename)) {
+      return res.status(400).json({ message: 'Nama berkas tidak valid.' })
+    }
+    return next()
+  })
   app.use('/uploads', express.static(uploadDir))
   app.use('/uploads', (req, res) => {
-    const filename = req.path.replace(/^\/+/, '')
-    const remoteUrl = `https://ftth.digitak.id/uploads/${filename}`
+    const rawFilename = req.path.replace(/^\/+/, '')
+    const safeFilename = rawFilename.split('/').map(encodeURIComponent).join('/')
+    const remoteUrl = `https://ftth.digitak.id/uploads/${safeFilename}`
     return res.redirect(remoteUrl)
   })
 
@@ -110,10 +141,14 @@ export function createApp({ healthCheck, authRouter, masterRouter, reportRouter,
 
   app.get('/api/ftth/reports', ...authGuard, async (req, res) => {
     try {
-      const reports = await ftthApi.getReports(req.query).catch(() => [])
+      const query = { ...req.query }
+      if (req.user?.role !== 'SUPERADMIN') {
+        query.user_id = req.user?.id
+      }
+      const reports = await ftthApi.getReports(query).catch(() => [])
       return res.json({ data: Array.isArray(reports) ? reports : (reports.data || []) })
     } catch (e) {
-      return res.status(500).json({ message: e.message || 'Gagal mengambil laporan FTTH.' })
+      return res.status(500).json({ message: 'Gagal mengambil laporan FTTH.' })
     }
   })
 
@@ -121,6 +156,9 @@ export function createApp({ healthCheck, authRouter, masterRouter, reportRouter,
     try {
       const report = await ftthApi.getReportById(req.params.id)
       const data = report.data || report
+      if (!data || (req.user?.role !== 'SUPERADMIN' && data.user_id && data.user_id !== req.user?.id)) {
+        return res.status(404).json({ message: 'Laporan tidak ditemukan.' })
+      }
       let docs = data.dokumentasi || data.dokumentasi_laporan || []
       if (!Array.isArray(docs) || docs.length === 0) {
         const docsRes = await ftthApi.getDocumentation({ laporan_id: req.params.id }).catch(() => [])

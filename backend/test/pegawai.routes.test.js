@@ -49,4 +49,14 @@ describe('pegawai routes', () => {
     clustersSpy.mockRestore()
     statusSpy.mockRestore()
   })
+
+  it('rejects employee photo upload if magic bytes do not match allowed image types', async () => {
+    const app = createApp({ dashboardRouter: createPegawaiRouter() })
+    const response = await request(app)
+      .post('/api/admin/pegawai/u1/foto')
+      .attach('fotoProfil', Buffer.from('NOT_AN_IMAGE_CONTENT'), { filename: 'avatar.jpg', contentType: 'image/jpeg' })
+
+    expect(response.status).toBe(400)
+    expect(response.body.message).toBe('Format foto harus JPG, PNG, atau WEBP.')
+  })
 })

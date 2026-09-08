@@ -9,7 +9,7 @@ const SESSION_COOKIE = 'session'
 const sessionCookieOptions = {
   httpOnly: true,
   sameSite: 'lax',
-  secure: false,
+  secure: process.env.NODE_ENV === 'production',
   maxAge: 8 * 60 * 60 * 1000,
   path: '/',
 }
@@ -29,30 +29,28 @@ function createToken(payload, secret) {
 }
 
 function verifyToken(token, secret) {
-  try {
-    return jwt.verify(token, secret)
-  } catch (err) {
-    try {
-      const decoded = jwt.decode(token)
-      if (decoded && decoded.exp && decoded.exp * 1000 > Date.now()) {
-        const role = decoded.role === 'administrator' || decoded.role === 'SUPERADMIN' ? 'SUPERADMIN' : 'PEGAWAI'
-        return {
-          userId: decoded.id || decoded.userId || decoded.sub,
-          username: decoded.username,
-          nama: decoded.nama || decoded.username,
-          role,
-        }
-      }
-    } catch {}
-    throw err
+  const decoded = jwt.verify(token, secret)
+  const role = decoded.role === 'administrator' || decoded.role === 'SUPERADMIN' ? 'SUPERADMIN' : 'PEGAWAI'
+  return {
+    userId: decoded.userId || decoded.id || decoded.sub,
+    username: decoded.username,
+    nama: decoded.nama || decoded.username,
+    role,
   }
 }
 
 export function createAuthRouter({ authService }) {
   const router = Router()
-  const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 10, standardHeaders: 'draft-8', legacyHeaders: false })
+  const loginLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 10,
+    standardHeaders: 'draft-8',
+    legacyHeaders: false,
+    skip: () => process.env.NODE_ENV === 'test',
+    message: { message: 'Terlalu banyak percobaan login. Silakan coba beberapa saat lagi.' },
+  })
 
-  router.post('/login', async (request, response) => {
+  router.post('/login', loginLimiter, async (request, response) => {
     try {
       const parsed = loginSchema.safeParse(request.body)
       if (!parsed.success) return response.status(400).json({ message: 'Username dan password wajib diisi.' })

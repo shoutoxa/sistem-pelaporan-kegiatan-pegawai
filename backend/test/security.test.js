@@ -129,5 +129,80 @@ describe('security and auth guards', () => {
       ftthApi.logout = originalLogout
     }
   })
+
+  it('rejects forged JWT signed with an untrusted secret', async () => {
+    const jwt = (await import('jsonwebtoken')).default
+    const forgedToken = jwt.sign(
+      { userId: 'hacker-1', role: 'administrator', exp: Math.floor(Date.now() / 1000) + 3600 },
+      'wrong-secret'
+    )
+    const authService = await createProductionAuthService()
+    const verified = await authService.verifyToken(forgedToken)
+    expect(verified).toBeNull()
+  })
+
+  it('scopes /api/ftth/reports to current user for PEGAWAI to prevent IDOR', async () => {
+    const { ftthApi } = await import('../src/services/ftthApi.js')
+    const originalGetReports = ftthApi.getReports
+    let capturedQuery = null
+    ftthApi.getReports = async (query) => {
+      capturedQuery = query
+      return [{ id: 'rep-1', user_id: 'pegawai-1' }]
+    }
+
+    try {
+      const authService = {
+        verifyToken: async () => ({ userId: 'pegawai-1', role: 'PEGAWAI', username: 'pegawai' }),
+      }
+      const app = createApp({
+        requireAuth: requireAuth({ authService }),
+      })
+
+      const res = await request(app)
+        .get('/api/ftth/reports?limit=10')
+        .set('Authorization', 'Bearer dummy')
+      expect(res.status).toBe(200)
+      expect(capturedQuery.user_id).toBe('pegawai-1')
+    } finally {
+      ftthApi.getReports = originalGetReports
+    }
+  })
+
+  it('rejects employee access to another user report detail with 404 in /api/ftth/reports/:id', async () => {
+    const { ftthApi } = await import('../src/services/ftthApi.js')
+    const originalGetReportById = ftthApi.getReportById
+    ftthApi.getReportById = async () => ({ id: 'rep-99', user_id: 'other-user' })
+
+    try {
+      const authService = {
+        verifyToken: async () => ({ userId: 'pegawai-1', role: 'PEGAWAI', username: 'pegawai' }),
+      }
+      const app = createApp({
+        requireAuth: requireAuth({ authService }),
+      })
+
+      const res = await request(app)
+        .get('/api/ftth/reports/rep-99')
+        .set('Authorization', 'Bearer dummy')
+      expect(res.status).toBe(404)
+    } finally {
+      ftthApi.getReportById = originalGetReportById
+    }
+  })
+
+  it('rejects path traversal and invalid filenames on /uploads with 400, and allows safe files', async () => {
+    const app = createApp()
+    const resTraversal = await request(app).get('/uploads/test%5C..%5Csecret')
+    expect(resTraversal.status).toBe(400)
+    expect(resTraversal.body.message).toBe('Nama berkas tidak valid.')
+
+    const resInvalid = await request(app).get('/uploads/file;bad.jpg')
+    expect(resInvalid.status).toBe(400)
+    expect(resInvalid.body.message).toBe('Nama berkas tidak valid.')
+
+    const resSafe = await request(app).get('/uploads/safe-foto_123.jpg')
+    expect(resSafe.status).toBe(302)
+    expect(resSafe.headers.location).toBe('https://ftth.digitak.id/uploads/safe-foto_123.jpg')
+  })
 })
 
