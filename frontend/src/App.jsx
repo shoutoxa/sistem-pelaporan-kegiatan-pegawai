@@ -15,7 +15,6 @@ import AdminReportsPage from './features/dashboard/AdminReportsPage.jsx'
 import DokumentasiPage from './features/dashboard/DokumentasiPage.jsx'
 import AdminEmployeesPage from './features/pegawai/AdminEmployeesPage.jsx'
 import EditReportPage from './features/laporan/EditReportPage.jsx'
-import FtthPage from './features/integration/FtthPage.jsx'
 
 export default function App() {
   return (
@@ -30,7 +29,6 @@ export default function App() {
               <Route index element={<Navigate to="laporan/new" replace />} />
               <Route path="laporan/new" element={<EmployeeReportRoute />} />
               <Route path="histori" element={<HistoryPage />} />
-              <Route path="ftth" element={<FtthPage />} />
               <Route path="laporan/:id" element={<ReportDetailPage />} />
               <Route path="laporan/:id/edit" element={<EditReportPage />} />
             </Route>
@@ -45,7 +43,6 @@ export default function App() {
               <Route path="dokumentasi" element={<DokumentasiPage />} />
               <Route path="pegawai" element={<AdminEmployeesPage />} />
               <Route path="master" element={<AdminMasterPage />} />
-              <Route path="ftth" element={<FtthPage />} />
             </Route>
           </Route>
           <Route path="*" element={<NotFoundPage />} />
