@@ -22,7 +22,7 @@ function getFileIcon(mimeType) {
 export default function DokumentasiPage() {
   const [data, setData] = useState({ items: [], total: 0 })
   const [state, setState] = useState('loading')
-  const [viewMode, setViewMode] = useState('folder')
+  const [viewMode, setViewMode] = useState('pdf')
   const [filters, setFilters] = useState(emptyFilters)
   const [appliedFilters, setAppliedFilters] = useState(emptyFilters)
   const [projectOptions, setProjectOptions] = useState([])
@@ -274,20 +274,20 @@ export default function DokumentasiPage() {
                 <button
                   type="button"
                   role="tab"
-                  aria-selected={viewMode === 'folder'}
-                  className={viewMode === 'folder' ? 'active-mode' : ''}
-                  onClick={() => setViewMode('folder')}
-                >
-                  📁 Tampilan Folder
-                </button>
-                <button
-                  type="button"
-                  role="tab"
                   aria-selected={viewMode === 'pdf'}
                   className={viewMode === 'pdf' ? 'active-mode' : ''}
                   onClick={() => setViewMode('pdf')}
                 >
                   📄 Format PDF / Cetak
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={viewMode === 'folder'}
+                  className={viewMode === 'folder' ? 'active-mode' : ''}
+                  onClick={() => setViewMode('folder')}
+                >
+                  📁 Tampilan Folder
                 </button>
               </div>
               {viewMode === 'pdf' && (
