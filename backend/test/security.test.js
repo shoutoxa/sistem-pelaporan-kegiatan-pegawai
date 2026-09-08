@@ -15,7 +15,7 @@ describe('security and auth guards', () => {
     }
   })
 
-  it('rejects unauthenticated access to /api/ftth/reports and /api/ftth/mappings', async () => {
+  it('rejects unauthenticated access to /api/ftth/reports and /api/ftth/references', async () => {
     const authService = {
       readSession: async () => null,
       verifyToken: async () => null,
@@ -28,11 +28,11 @@ describe('security and auth guards', () => {
     const reportsRes = await request(app).get('/api/ftth/reports')
     expect(reportsRes.status).toBe(401)
 
-    const mappingsRes = await request(app).get('/api/ftth/mappings')
-    expect(mappingsRes.status).toBe(401)
+    const refRes = await request(app).get('/api/ftth/references')
+    expect(refRes.status).toBe(401)
   })
 
-  it('rejects PEGAWAI access to /api/ftth/mappings with 403 Forbidden', async () => {
+  it('rejects PEGAWAI access to admin endpoints with 403 Forbidden', async () => {
     const authService = {
       readSession: async () => ({ id: 'pegawai-1', role: 'PEGAWAI', username: 'pegawai' }),
       verifyToken: async () => ({ userId: 'pegawai-1', role: 'PEGAWAI', username: 'pegawai' }),
@@ -41,11 +41,6 @@ describe('security and auth guards', () => {
       requireAuth: requireAuth({ authService }),
       requireSuperadmin: requireRole('SUPERADMIN'),
     })
-
-    const mappingsRes = await request(app)
-      .get('/api/ftth/mappings')
-      .set('Cookie', ['session=pegawai-token'])
-    expect(mappingsRes.status).toBe(403)
 
     const statusRes = await request(app)
       .patch('/api/ftth/reports/123/status')

@@ -1,24 +1,18 @@
 import { ftthApi as defaultFtthApi } from '../../services/ftthApi.js'
 
-export function createDashboardService({ storage, clock = () => new Date(), ftthApi: injectedFtthApi } = {}) {
+export function createDashboardService({ clock = () => new Date(), ftthApi: injectedFtthApi } = {}) {
   const ftth = injectedFtthApi || defaultFtthApi
 
-  async function resolveFotoUrl(path) {
+  function resolveFotoUrl(path) {
     if (!path) return null
     if (path.startsWith('http://') || path.startsWith('https://')) return path
-    if (storage?.createSignedUrl) {
-      try {
-        return await storage.createSignedUrl(path, 86400)
-      } catch {
-        return path
-      }
-    }
-    return path
+    if (path.startsWith('/uploads/')) return 'https://ftth.digitak.id' + path
+    return '/api/files/' + path.replace(/^\/+/, '')
   }
 
-  async function withFotoUrl(user) {
+  function withFotoUrl(user) {
     if (!user) return user
-    const fotoProfilUrl = await resolveFotoUrl(user.fotoProfil)
+    const fotoProfilUrl = resolveFotoUrl(user.foto || user.fotoProfil)
     return { ...user, fotoProfilUrl }
   }
 
@@ -62,12 +56,47 @@ export function createDashboardService({ storage, clock = () => new Date(), ftth
       const reports = (reportsResponse.data || reportsResponse || [])
       const categories = categoriesResponse.data || categoriesResponse || []
 
-      const wajibLaporIds = new Set(users.map((user) => user.id))
-      const targetReportedIds = new Set(
-        reports
-          .filter((report) => wajibLaporIds.has(report.user_id))
-          .map((report) => report.user_id)
+      // Fetch official laporan-status for all active employees from FTTH API
+      const userStatusEntries = await Promise.all(
+        users.map(async (u) => {
+          try {
+            if (typeof ftth.getUserLaporanStatus === 'function') {
+              const res = await ftth.getUserLaporanStatus(u.id)
+              const statusData = res?.data || res
+              if (statusData) return [u.id, statusData]
+            }
+          } catch {
+            // fallback
+          }
+          return [u.id, null]
+        })
       )
+      const userStatusMap = Object.fromEntries(userStatusEntries)
+
+      // Determine wajib lapor employees and reporting status based on official FTTH laporan-status
+      const wajibLaporUsers = users.filter((u) => {
+        const status = userStatusMap[u.id]
+        if (status && typeof status.wajib_lapor === 'boolean') {
+          return status.wajib_lapor
+        }
+        return u.wajib_lapor !== false
+      })
+
+      const targetReportedIds = new Set()
+      for (const u of wajibLaporUsers) {
+        const status = userStatusMap[u.id]
+        if (status && Array.isArray(status.clusters) && status.clusters.length > 0) {
+          const hasReportedCluster = status.clusters.some((c) => c.sudah_lapor)
+          if (hasReportedCluster) {
+            targetReportedIds.add(u.id)
+            continue
+          }
+        }
+        // Fallback to checking reports returned for the target date
+        if (reports.some((r) => r.user_id === u.id)) {
+          targetReportedIds.add(u.id)
+        }
+      }
 
       const byProject = new Map()
       const byProcess = new Map()
@@ -79,20 +108,18 @@ export function createDashboardService({ storage, clock = () => new Date(), ftth
         byProcess.set(processName, (byProcess.get(processName) || 0) + 1)
       }
 
-      const sudahMelaporUsers = await Promise.all(users.filter((user) => targetReportedIds.has(user.id)).map(withFotoUrl))
-      const belumMelaporUsers = await Promise.all(users.filter((user) => !targetReportedIds.has(user.id)).map(withFotoUrl))
-      const terbaru = await Promise.all(
-        reports.slice(0, 10).map(async (item) => ({
-          ...item,
-          user: item.user || { id: item.user_id, nama: item.user_name },
-        }))
-      )
+      const sudahMelaporUsers = wajibLaporUsers.filter((user) => targetReportedIds.has(user.id)).map(withFotoUrl)
+      const belumMelaporUsers = wajibLaporUsers.filter((user) => !targetReportedIds.has(user.id)).map(withFotoUrl)
+      const terbaru = reports.slice(0, 10).map((item) => ({
+        ...item,
+        user: item.user || { id: item.user_id, nama: item.user_name },
+      }))
 
       return {
         tanggal: selectedDate || null,
         targetDate,
         todayDate: todayStr,
-        wajibLapor: users.length,
+        wajibLapor: wajibLaporUsers.length,
         sudahMelapor: targetReportedIds.size,
         belumMelapor: belumMelaporUsers.length,
         sudahMelaporUsers,

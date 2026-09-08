@@ -115,83 +115,14 @@ export function createAuthRouter({ authService }) {
   return router
 }
 
+import { createAuthService } from './auth.service.js'
+
 export async function createProductionAuthService() {
   const secret = process.env.JWT_SECRET
   if (!secret) {
     throw new Error('JWT_SECRET wajib dikonfigurasi dalam environment (.env).')
   }
-
-  const authService = {
-    async login({ username, password }) {
-      const cleanUsername = String(username || '').trim()
-      const cleanPassword = String(password || '')
-
-      // Authenticate solely via FTTH Auth API (https://ftth.digitak.id/ftth_api/auth/login)
-      try {
-        const ftthRes = await ftthApi.login({ username: cleanUsername, password: cleanPassword })
-        const data = ftthRes?.data || ftthRes
-        if (data && data.user) {
-          const ftthUser = data.user
-          if (ftthUser.is_active === false) {
-            const error = new Error('Akun tidak aktif.')
-            error.code = 'USER_INACTIVE'
-            throw error
-          }
-          const role = ftthUser.role === 'administrator' ? 'SUPERADMIN' : 'PEGAWAI'
-          const user = {
-            id: ftthUser.id,
-            username: ftthUser.username,
-            nama: ftthUser.full_name || ftthUser.username,
-            email: ftthUser.email,
-            role,
-            isActive: Boolean(ftthUser.is_active),
-            foto: ftthUser.foto,
-          }
-          const token = createToken(
-            { userId: user.id, username: user.username, nama: user.nama, role: user.role, ftthToken: data.token },
-            secret
-          )
-          return { user, token }
-        }
-      } catch (err) {
-        if (err.code === 'USER_INACTIVE') throw err
-        const error = new Error('Username atau password tidak valid.')
-        error.code = 'INVALID_CREDENTIALS'
-        throw error
-      }
-
-      const error = new Error('Username atau password tidak valid.')
-      error.code = 'INVALID_CREDENTIALS'
-      throw error
-    },
-
-    async logout(token) {
-      try {
-        let ftthToken = token
-        if (token) {
-          try {
-            const decoded = jwt.decode(token)
-            if (decoded?.ftthToken) {
-              ftthToken = decoded.ftthToken
-            }
-          } catch {}
-        }
-        await ftthApi.logout(ftthToken)
-      } catch {
-        // ignore logout errors
-      }
-    },
-
-    async verifyToken(token) {
-      try {
-        return verifyToken(token, secret)
-      } catch (error) {
-        return null
-      }
-    },
-  }
-
-  return authService
+  return createAuthService({ ftthApi, secret })
 }
 
 export async function createProductionAuthRouter() {

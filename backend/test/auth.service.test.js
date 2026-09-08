@@ -2,35 +2,79 @@ import { describe, expect, it } from 'vitest'
 import { createAuthService } from '../src/modules/auth/auth.service.js'
 
 function createService(overrides = {}) {
-  return createAuthService({
-    userRepository: {
-      findByUsername: async () => ({ id: 'user-1', nama: 'Ayu', username: 'ayu', role: 'PEGAWAI', isActive: true, passwordHash: 'hash' }),
-      findActiveById: async (id) => ({ id, nama: 'Ayu', username: 'ayu', role: 'PEGAWAI', isActive: true }),
-      ...overrides.userRepository,
+  const mockFtth = {
+    login: async ({ username, password }) => {
+      if (username === 'ayu' && password === 'secret') {
+        return {
+          token: 'ftth-jwt-token',
+          user: {
+            id: 'user-1',
+            username: 'ayu',
+            full_name: 'Ayu',
+            email: 'ayu@example.com',
+            role: 'user',
+            is_active: true,
+          },
+        }
+      }
+      if (username === 'inactive') {
+        return {
+          token: 'ftth-jwt-token',
+          user: {
+            id: 'user-2',
+            username: 'inactive',
+            full_name: 'Inactive User',
+            email: 'inactive@example.com',
+            role: 'user',
+            is_active: false,
+          },
+        }
+      }
+      const err = new Error('Invalid credentials')
+      err.status = 401
+      throw err
     },
-    passwordHasher: { compare: async () => true, ...overrides.passwordHasher },
-    tokenSigner: { sign: () => 'signed-token', verify: () => ({ userId: 'user-1', role: 'PEGAWAI' }), ...overrides.tokenSigner },
+    ...overrides.ftthApi,
+  }
+
+  return createAuthService({
+    ftthApi: mockFtth,
+    secret: 'test-secret-key-12345678901234567890',
+    tokenSigner: overrides.tokenSigner,
   })
 }
 
-describe('auth service', () => {
-  it('logs in an active user with a valid password', async () => {
-    await expect(createService().login({ username: 'ayu', password: 'secret' })).resolves.toMatchObject({ token: 'signed-token', user: { id: 'user-1' } })
+describe('auth service with FTTH API', () => {
+  it('logs in an active user with valid FTTH credentials', async () => {
+    const service = createService()
+    const result = await service.login({ username: 'ayu', password: 'secret' })
+    expect(result.user.id).toBe('user-1')
+    expect(result.user.role).toBe('PEGAWAI')
+    expect(result.token).toBeDefined()
   })
 
-  it('uses one public error for missing user and wrong password', async () => {
-    const missingUser = createService({ userRepository: { findByUsername: async () => null } })
-    const wrongPassword = createService({ passwordHasher: { compare: async () => false } })
-
-    await expect(missingUser.login({ username: 'ayu', password: 'bad' })).rejects.toMatchObject({ code: 'INVALID_CREDENTIALS' })
-    await expect(wrongPassword.login({ username: 'ayu', password: 'bad' })).rejects.toMatchObject({ code: 'INVALID_CREDENTIALS' })
+  it('rejects wrong credentials with INVALID_CREDENTIALS', async () => {
+    const service = createService()
+    await expect(service.login({ username: 'ayu', password: 'wrong' })).rejects.toMatchObject({
+      code: 'INVALID_CREDENTIALS',
+    })
   })
 
-  it('rejects an inactive user and an expired session', async () => {
-    const inactive = createService({ userRepository: { findByUsername: async () => ({ isActive: false, passwordHash: 'hash' }) } })
-    const expired = createService({ tokenSigner: { verify: () => { throw new Error('expired') } } })
+  it('rejects inactive user with USER_INACTIVE', async () => {
+    const service = createService()
+    await expect(service.login({ username: 'inactive', password: 'secret' })).rejects.toMatchObject({
+      code: 'USER_INACTIVE',
+    })
+  })
 
-    await expect(inactive.login({ username: 'ayu', password: 'secret' })).rejects.toMatchObject({ code: 'INVALID_CREDENTIALS' })
-    await expect(expired.readSession('expired-token')).rejects.toMatchObject({ code: 'INVALID_SESSION' })
+  it('verifies valid session token', async () => {
+    const service = createService()
+    const { token } = await service.login({ username: 'ayu', password: 'secret' })
+    const session = await service.readSession(token)
+    expect(session).toMatchObject({
+      id: 'user-1',
+      username: 'ayu',
+      role: 'PEGAWAI',
+    })
   })
 })

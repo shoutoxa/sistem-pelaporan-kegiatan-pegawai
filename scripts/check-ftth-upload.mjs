@@ -1,7 +1,11 @@
 // Explicit opt-in: uploads ONE synthetic PNG to the FTTH development API.
 import '../backend/load-env.js'
 import { createFtthClient } from '../backend/src/modules/integration/ftth.client.js'
-import { ftthFileUrl } from '../backend/src/modules/integration/ftth-report.service.js'
+
+function ftthFileUrl(path) {
+  return typeof path === 'string' && /^\/uploads\/[a-zA-Z0-9][a-zA-Z0-9_-]*\.(pdf|jpe?g|png|gif|bmp|webp|kmz|kml|docx?|xlsx?)$/i.test(path)
+    ? `https://ftth.digitak.id/ftth${path}` : null
+}
 if (process.env.APP_ENV !== 'local' || !process.argv.includes('--upload-synthetic-file')) throw new Error('Requires local mode and --upload-synthetic-file. This writes to FTTH development.')
 const file = { originalname: 'codex-development-smoke.png', mimetype: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aN1kAAAAASUVORK5CYII=', 'base64') }
 const result = await createFtthClient().uploadAttachment(file)

@@ -120,24 +120,6 @@ export function createApp({ healthCheck, authRouter, masterRouter, reportRouter,
     }
   })
 
-  app.get('/api/ftth/mappings', ...adminGuard, async (_req, res) => {
-    try {
-      const usersRes = await ftthApi.getUsers().catch(() => [])
-      const users = (Array.isArray(usersRes) ? usersRes : (usersRes.data || [])).map((u) => ({
-        id: u.id,
-        nama: u.full_name || u.username,
-        role: u.role === 'administrator' ? 'SUPERADMIN' : 'PEGAWAI',
-        ftthIdentity: { externalUserId: u.id, allowedClusterIds: [] },
-      }))
-      return res.json({ data: { users, pendingUploads: [] } })
-    } catch {
-      return res.json({ data: { users: [], pendingUploads: [] } })
-    }
-  })
-
-  app.put('/api/ftth/mappings/:id', ...adminGuard, async (_req, res) => {
-    return res.json({ data: { success: true, message: 'Pemetaan akun berhasil disimpan.' } })
-  })
 
   app.get('/api/ftth/reports', ...authGuard, async (req, res) => {
     try {

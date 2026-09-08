@@ -1,7 +1,6 @@
 import { Router } from 'express'
 import multer from 'multer'
 import { fileTypeFromBuffer } from 'file-type'
-import { createLocalStorage, createSupabaseStorage } from './report.storage.js'
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { files: 10, fileSize: 20_000_000 } })
 
@@ -85,23 +84,7 @@ export async function createProductionReportRouter() {
   const { createProductionAuthService } = await import('../auth/auth.routes.js')
   const sessionService = await createProductionAuthService()
 
-  let storage
-  if (process.env.SUPABASE_URL && process.env.SUPABASE_SECRET_KEY) {
-    try {
-      const { createClient } = await import('@supabase/supabase-js')
-      const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SECRET_KEY)
-      const { createSupabaseStorage: createSS } = await import('./report.storage.js')
-      storage = createSS({ client: supabase, bucket: 'laporan' })
-    } catch (e) {
-      console.warn('Supabase not available, using local storage:', e.message)
-      storage = createLocalStorage()
-    }
-  } else {
-    storage = createLocalStorage()
-    console.log('Using local file storage for uploads')
-  }
-
-  const reportService = createReportService({ storage })
+  const reportService = createReportService()
 
   return createReportRouter({
     reportService,

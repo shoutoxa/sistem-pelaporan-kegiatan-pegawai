@@ -138,43 +138,16 @@ export function createPegawaiRouter({ service, requireAuth, requireSuperadmin } 
     }
   })
 
-  router.post('/admin/pegawai', ...guard, async (request, response) => {
-    if (service?.create) {
-      try {
-        const data = await service.create(request.body)
-        return response.status(201).json({ data })
-      } catch (error) {
-        return sendError(error, response)
-      }
-    }
-    return response.status(403).json({ message: 'Penambahan pegawai harus dilakukan melalui FTTH Core.' })
+  router.post('/admin/pegawai', ...guard, async (_request, response) => {
+    return response.status(403).json({ message: 'Penambahan pegawai harus dikelola melalui FTTH Core.' })
   })
 
-  router.put('/admin/pegawai/:id', ...guard, async (request, response) => {
-    if (service?.update) {
-      try {
-        const data = await service.update(request.params.id, request.body)
-        return response.status(200).json({ data })
-      } catch (error) {
-        return sendError(error, response)
-      }
-    }
-    return response.status(403).json({ message: 'Perubahan data pegawai harus dilakukan melalui FTTH Core.' })
+  router.put('/admin/pegawai/:id', ...guard, async (_request, response) => {
+    return response.status(403).json({ message: 'Perubahan data pegawai harus dikelola melalui FTTH Core.' })
   })
 
-  router.patch('/admin/pegawai/:id/status', ...guard, async (request, response) => {
-    if (typeof request.body?.isActive !== 'boolean') {
-      return response.status(400).json({ message: 'Status aktif harus boolean.', errors: { isActive: 'Status aktif harus boolean.' } })
-    }
-    if (service?.setActive) {
-      try {
-        const data = await service.setActive(request.params.id, request.body.isActive)
-        return response.status(200).json({ data })
-      } catch (error) {
-        return sendError(error, response)
-      }
-    }
-    return response.status(403).json({ message: 'Perubahan status pegawai harus dilakukan melalui FTTH Core.' })
+  router.patch('/admin/pegawai/:id/status', ...guard, async (_request, response) => {
+    return response.status(403).json({ message: 'Perubahan status pegawai harus dikelola melalui FTTH Core.' })
   })
 
   return router

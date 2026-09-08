@@ -19,6 +19,11 @@ describe('dashboard service with FTTH API', () => {
       getUsers: vi.fn().mockResolvedValue(users),
       getReports: vi.fn().mockResolvedValue(reports),
       getMasterCategories: vi.fn().mockResolvedValue([{ id: 'cat-1', name: 'IKR' }]),
+      getUserLaporanStatus: vi.fn().mockImplementation(async (userId) => {
+        if (userId === 'u1') return { user_id: 'u1', wajib_lapor: true, clusters: [{ cluster_id: 'c1', sudah_lapor: true }] }
+        if (userId === 'u2') return { user_id: 'u2', wajib_lapor: true, clusters: [{ cluster_id: 'c2', sudah_lapor: true }] }
+        return { user_id: 'u3', wajib_lapor: true, clusters: [{ cluster_id: 'c3', sudah_lapor: false }] }
+      }),
     }
 
     const service = createDashboardService({ ftthApi: mockFtthApi })
@@ -38,5 +43,8 @@ describe('dashboard service with FTTH API', () => {
     )
     expect(result.sudahMelaporUsers.map((u) => u.nama)).toEqual(['Ayu', 'Budi'])
     expect(result.belumMelaporUsers.map((u) => u.nama)).toEqual(['Cici'])
+    expect(mockFtthApi.getUserLaporanStatus).toHaveBeenCalledWith('u1')
+    expect(mockFtthApi.getUserLaporanStatus).toHaveBeenCalledWith('u2')
+    expect(mockFtthApi.getUserLaporanStatus).toHaveBeenCalledWith('u3')
   })
 })

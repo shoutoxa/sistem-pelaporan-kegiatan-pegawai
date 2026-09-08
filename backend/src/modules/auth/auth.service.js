@@ -1,68 +1,143 @@
-export function authError(code) {
-  const error = new Error(code)
+import jwt from 'jsonwebtoken'
+import { ftthApi as defaultFtthApi } from '../../services/ftthApi.js'
+
+export function authError(code, message) {
+  const error = new Error(message || code)
   error.code = code
   return error
 }
 
-export function createAuthService({ userRepository, passwordHasher, tokenSigner, storage }) {
-  async function resolveFotoUrl(path) {
-    if (!path) return null
-    if (path.startsWith('http://') || path.startsWith('https://')) return path
-    if (storage?.createSignedUrl) {
-      try {
-        return await storage.createSignedUrl(path, 86400)
-      } catch {
-        return path
-      }
+export function createAuthService({
+  ftthApi = defaultFtthApi,
+  secret = process.env.JWT_SECRET,
+  tokenSigner,
+} = {}) {
+  const jwtSecret = secret || process.env.JWT_SECRET
+
+  function signToken(payload) {
+    if (tokenSigner?.sign) return tokenSigner.sign(payload)
+    if (!jwtSecret) throw authError('CONFIG_ERROR', 'JWT_SECRET belum dikonfigurasi.')
+    return jwt.sign(
+      {
+        userId: payload.userId,
+        username: payload.username,
+        nama: payload.nama,
+        role: payload.role,
+        ftthToken: payload.ftthToken,
+        sub: payload.userId,
+      },
+      jwtSecret,
+      { expiresIn: '8h' }
+    )
+  }
+
+  function verifyJwt(token) {
+    if (tokenSigner?.verify) return tokenSigner.verify(token)
+    if (!jwtSecret) throw authError('CONFIG_ERROR', 'JWT_SECRET belum dikonfigurasi.')
+    const decoded = jwt.verify(token, jwtSecret)
+    const role = decoded.role === 'administrator' || decoded.role === 'SUPERADMIN' ? 'SUPERADMIN' : 'PEGAWAI'
+    return {
+      userId: decoded.userId || decoded.id || decoded.sub,
+      username: decoded.username,
+      nama: decoded.nama || decoded.username,
+      role,
+      ftthToken: decoded.ftthToken,
     }
-    return path
   }
 
   return {
     async login({ username, password }) {
-      const user = await userRepository.findByUsername(username.trim())
-      if (!user || !user.isActive) throw authError('INVALID_CREDENTIALS')
+      const cleanUsername = String(username || '').trim()
+      const cleanPassword = String(password || '')
 
-      const passwordMatches = await passwordHasher.compare(password, user.passwordHash)
-      if (!passwordMatches) throw authError('INVALID_CREDENTIALS')
-
-      const fotoProfilUrl = await resolveFotoUrl(user.fotoProfil)
-      const token = tokenSigner.sign({ userId: user.id, role: user.role })
-      return {
-        token,
-        user: {
-          id: user.id,
-          nama: user.nama,
-          username: user.username,
-          role: user.role,
-          fotoProfil: user.fotoProfil || null,
-          fotoProfilUrl,
-        },
+      if (!cleanUsername || !cleanPassword) {
+        throw authError('VALIDATION', 'Username dan password wajib diisi.')
       }
+
+      let ftthRes
+      try {
+        ftthRes = await ftthApi.login({ username: cleanUsername, password: cleanPassword })
+      } catch (err) {
+        if (err.status === 401 || err.code === 'INVALID_CREDENTIALS') {
+          throw authError('INVALID_CREDENTIALS', 'Username atau password tidak valid.')
+        }
+        throw authError('INVALID_CREDENTIALS', 'Username atau password tidak valid.')
+      }
+
+      const data = ftthRes?.data || ftthRes
+      if (!data || !data.user) {
+        throw authError('INVALID_CREDENTIALS', 'Username atau password tidak valid.')
+      }
+
+      const ftthUser = data.user
+      if (ftthUser.is_active === false) {
+        throw authError('USER_INACTIVE', 'Akun tidak aktif.')
+      }
+
+      const role = ftthUser.role === 'administrator' || ftthUser.role === 'SUPERADMIN' ? 'SUPERADMIN' : 'PEGAWAI'
+      const user = {
+        id: ftthUser.id,
+        username: ftthUser.username,
+        nama: ftthUser.full_name || ftthUser.nama || ftthUser.username,
+        email: ftthUser.email,
+        role,
+        isActive: Boolean(ftthUser.is_active),
+        foto: ftthUser.foto || null,
+        fotoProfilUrl: ftthUser.foto ? (ftthUser.foto.startsWith('http') ? ftthUser.foto : `https://ftth.digitak.id${ftthUser.foto}`) : null,
+      }
+
+      const token = signToken({
+        userId: user.id,
+        username: user.username,
+        nama: user.nama,
+        role: user.role,
+        ftthToken: data.token,
+      })
+
+      return { user, token }
     },
 
     async readSession(token) {
-      if (!token) throw authError('INVALID_SESSION')
+      if (!token) return null
       try {
-        const payload = tokenSigner.verify(token)
-        const user = await userRepository.findActiveById(payload.userId || payload.sub)
-        if (!user || !user.isActive) throw new Error('inactive')
-        const fotoProfilUrl = await resolveFotoUrl(user.fotoProfil)
+        const decoded = verifyJwt(token)
+        if (!decoded) return null
         return {
-          id: user.id,
-          nama: user.nama,
-          username: user.username,
-          role: user.role,
-          fotoProfil: user.fotoProfil || null,
-          fotoProfilUrl,
+          id: decoded.userId,
+          username: decoded.username || '',
+          nama: decoded.nama || decoded.username || (decoded.role === 'SUPERADMIN' ? 'Superadmin' : 'Pegawai'),
+          role: decoded.role,
         }
       } catch {
-        throw authError('INVALID_SESSION')
+        return null
       }
     },
 
-    async logout() {
-      return undefined
+    async verifyToken(token) {
+      try {
+        return verifyJwt(token)
+      } catch {
+        return null
+      }
+    },
+
+    async logout(token) {
+      try {
+        let ftthToken = token
+        if (token) {
+          try {
+            const decoded = jwt.decode(token)
+            if (decoded?.ftthToken) ftthToken = decoded.ftthToken
+          } catch {
+            // ignore
+          }
+        }
+        if (typeof ftthApi.logout === 'function') {
+          await ftthApi.logout(ftthToken).catch(() => null)
+        }
+      } catch {
+        // ignore logout errors
+      }
     },
   }
 }
