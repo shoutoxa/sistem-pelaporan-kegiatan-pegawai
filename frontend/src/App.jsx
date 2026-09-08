@@ -54,5 +54,5 @@ export default function App() {
 
 function EmployeeReportRoute() {
   const { user } = useAuth()
-  return <ReportForm user={user} />
+  return <ReportForm user={user} showLaporanStatus />
 }

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { http } from '../../api/http.js'
 import { masterApi } from '../../api/master.js'
 import { createReport } from '../../api/reports.js'
 import FilePicker from './FilePicker.jsx'
@@ -69,6 +70,7 @@ export default function ReportForm({
   villages = EMPTY_ARRAY,
   jobs: jobProp = EMPTY_ARRAY,
   categories: categoryProp = EMPTY_ARRAY,
+  showLaporanStatus = false,
 }) {
   const navigate = useNavigate()
   const draftKey = `${DRAFT_PREFIX}:${user?.id || 'pegawai'}`
@@ -90,6 +92,23 @@ export default function ReportForm({
   const [error, setError] = useState('')
   const [fieldErrors, setFieldErrors] = useState({})
   const [submitting, setSubmitting] = useState(false)
+  const [laporanStatus, setLaporanStatus] = useState(null)
+
+  useEffect(() => {
+    if (!showLaporanStatus) return
+    let active = true
+    http
+      .request('/api/pegawai/laporan-status')
+      .then((res) => {
+        if (active && res?.data?.clusters && Array.isArray(res.data.clusters)) {
+          setLaporanStatus(res.data)
+        }
+      })
+      .catch(() => {})
+    return () => {
+      active = false
+    }
+  }, [showLaporanStatus, user])
 
   const prevProjectId = useRef(form.projectId)
   const prevCategoryId = useRef(form.categoryId)
@@ -102,7 +121,7 @@ export default function ReportForm({
     let active = true
     masterApi.fetchProject()
       .then((data) => {
-        if (active) setProjects(Array.isArray(data) ? data : [])
+        if (active) setProjects(Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : []))
       })
       .catch(() => {
         if (active) setProjects([])
@@ -120,7 +139,7 @@ export default function ReportForm({
     let active = true
     masterApi.fetchCategory()
       .then((data) => {
-        if (active) setCategories(Array.isArray(data) ? data : [])
+        if (active) setCategories(Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : []))
       })
       .catch(() => {
         if (active) setCategories([])
@@ -135,7 +154,10 @@ export default function ReportForm({
       let active = true
       masterApi.fetchClusterByProject(form.projectId)
         .then((data) => {
-          if (active) setClusters(Array.isArray(data) ? data : data?.data || [])
+          if (active) {
+            const list = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : [])
+            setClusters(list)
+          }
         })
         .catch(() => {
           if (active) setClusters([])
@@ -309,6 +331,115 @@ export default function ReportForm({
         title="Buat laporan harian"
         description="Lengkapi informasi kegiatan dan dokumentasi pekerjaan Anda di lapangan."
       />
+      {laporanStatus?.clusters?.length > 0 && (
+        <section
+          className="daily-status-card data-section"
+          aria-label="Status Laporan Harian"
+          style={{
+            marginBottom: '1.5rem',
+            background: 'var(--surface-color, #ffffff)',
+            border: '1px solid var(--border-color, #e2e8f0)',
+            borderRadius: '12px',
+            padding: '1.25rem',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: '0.75rem',
+              marginBottom: '0.85rem',
+            }}
+          >
+            <div>
+              <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-primary, #0f172a)' }}>
+                📋 Status Laporan Harian (WIB: {laporanStatus.tanggal})
+              </h3>
+              <p style={{ margin: '0.25rem 0 0', fontSize: '0.875rem', color: 'var(--text-secondary, #64748b)' }}>
+                {laporanStatus.wajib_lapor
+                  ? 'Akun Anda berstatus Wajib Lapor harian untuk cluster penugasan berikut:'
+                  : 'Cluster yang ditugaskan kepada Anda:'}
+              </p>
+            </div>
+            <span
+              style={{
+                fontSize: '0.85rem',
+                fontWeight: 600,
+                padding: '0.35rem 0.85rem',
+                borderRadius: '9999px',
+                backgroundColor: laporanStatus.clusters.every((c) => c.sudah_lapor) ? '#dcfce7' : '#fef3c7',
+                color: laporanStatus.clusters.every((c) => c.sudah_lapor) ? '#166534' : '#b45309',
+              }}
+            >
+              {laporanStatus.clusters.filter((c) => c.sudah_lapor).length} dari {laporanStatus.clusters.length} Cluster Sudah Dilaporkan
+            </span>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '0.75rem' }}>
+            {laporanStatus.clusters.map((c) => {
+              const isSelected = form.clusterId === c.cluster_id
+              return (
+                <div
+                  key={c.cluster_id}
+                  style={{
+                    padding: '0.85rem 1rem',
+                    borderRadius: '8px',
+                    border: isSelected ? '2px solid #0284c7' : '1px solid #e2e8f0',
+                    background: isSelected ? '#f0f9ff' : '#f8fafc',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    gap: '0.5rem',
+                  }}
+                >
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem' }}>
+                      <strong style={{ fontSize: '0.9rem', color: '#1e293b' }}>{c.cluster_name}</strong>
+                      <span
+                        style={{
+                          fontSize: '0.75rem',
+                          fontWeight: 700,
+                          padding: '0.2rem 0.5rem',
+                          borderRadius: '4px',
+                          whiteSpace: 'nowrap',
+                          background: c.sudah_lapor ? '#dcfce7' : '#fee2e2',
+                          color: c.sudah_lapor ? '#166534' : '#991b1b',
+                        }}
+                      >
+                        {c.sudah_lapor ? `✓ Selesai (${c.laporan_status || 'Dilaporkan'})` : '⚠ Belum Lapor'}
+                      </span>
+                    </div>
+                    {c.project_name && (
+                      <small style={{ color: '#64748b', display: 'block', marginTop: '0.25rem' }}>
+                        Projek: {c.project_name}
+                      </small>
+                    )}
+                  </div>
+                  {!isSelected && (
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      style={{ alignSelf: 'flex-start', fontSize: '0.8rem', padding: '0.3rem 0.75rem' }}
+                      onClick={() => {
+                        const targetProject = projects.find((p) => p.name === c.project_name || p.id === c.project_id)
+                        setForm((prev) => ({
+                          ...prev,
+                          projectId: targetProject?.id || prev.projectId,
+                          clusterId: c.cluster_id,
+                        }))
+                      }}
+                    >
+                      Pilih Cluster Ini
+                    </button>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </section>
+      )}
       {draftRestored && (
         <div className="draft-notice" role="status" aria-label="Draf laporan">
           <Icon name="history" />
@@ -411,7 +542,7 @@ export default function ReportForm({
                   aria-describedby={fieldErrors.clusterId ? 'report-cluster-error' : undefined}
                 >
                   <option value="">Pilih Cluster</option>
-                  {clusters.map((cluster) => (
+                  {(Array.isArray(clusters) ? clusters : []).map((cluster) => (
                     <option key={cluster.id} value={cluster.id}>
                       {cluster.name || cluster.clusterName}
                     </option>

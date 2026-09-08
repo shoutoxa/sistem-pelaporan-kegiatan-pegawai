@@ -124,6 +124,20 @@ export function createMasterRouter({ service, requireAuth, requireSuperadmin } =
       }
       return response.json({ message: 'Status berhasil diperbarui.' })
     })
+
+    router.delete('/admin/' + resource + '/:id', ...adminGuard, async (request, response) => {
+      const canonical = resourceMap[resource] || resource
+      if (service.delete || service.remove) {
+        try {
+          const fn = service.delete || service.remove
+          const result = await fn(canonical, request.params.id)
+          return response.json(result)
+        } catch (error) {
+          return sendError(error, response)
+        }
+      }
+      return response.json({ message: 'Data berhasil dihapus.' })
+    })
   }
 
   router.post('/admin/master/sync', ...adminGuard, async (_request, response) => {

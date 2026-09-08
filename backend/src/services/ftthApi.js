@@ -48,6 +48,14 @@ export const ftthApi = {
   getMasterProcesses: (params = {}) => ftthRequest('/integration/master-processes' + buildQuery(params)),
   getMasterProcessById: (id) => ftthRequest('/integration/master-processes/' + id),
   getMasterProcessForms: (processId) => ftthRequest('/integration/master-process-forms' + (processId ? '?processId=' + processId : '')),
+  createMasterProcess: (payload) => ftthRequest('/integration/master-processes', { method: 'POST', body: JSON.stringify(payload) }),
+  updateMasterProcess: (id, payload) => ftthRequest('/integration/master-processes/' + id, { method: 'PUT', body: JSON.stringify(payload) }),
+  deleteMasterProcess: (id) => ftthRequest('/integration/master-processes/' + id, { method: 'DELETE' }),
+  getMasterProvinces: () => ftthRequest('/integration/master-provinces'),
+  getMasterRegencies: (params = {}) => ftthRequest('/integration/master-regencies' + buildQuery(params)),
+  getMasterDistricts: (params = {}) => ftthRequest('/integration/master-districts' + buildQuery(params)),
+  getMasterVillages: (params = {}) => ftthRequest('/integration/master-villages' + buildQuery(params)),
+  updateCluster: (id, payload) => ftthRequest('/integration/clusters/' + id, { method: 'PUT', body: JSON.stringify(payload) }),
   getReports: (params = {}) => ftthRequest('/integration/laporan-kegiatan' + buildQuery(params)),
   getReportById: (id) => ftthRequest('/integration/laporan-kegiatan/' + id),
   createReport: (payload) => ftthRequest('/integration/laporan-kegiatan', { method: 'POST', body: JSON.stringify(payload) }),
@@ -69,4 +77,16 @@ export const ftthApi = {
   deleteDocumentation: (id) => ftthRequest('/integration/dokumentasi-laporan/' + id, { method: 'DELETE' }),
   getUsers: () => ftthRequest('/integration/users'),
   getUserById: (id) => ftthRequest('/integration/users/' + id),
+  getUserClusters: (userId, params = {}) => ftthRequest('/integration/users/' + userId + '/clusters' + buildQuery(params)),
+  getUserLaporanStatus: (userId) => ftthRequest('/integration/users/' + userId + '/laporan-status'),
+  uploadUserPhoto: (userId, fileBuffer, fileName, mimeType) => {
+    const formData = new FormData()
+    formData.append('file', new Blob([fileBuffer], { type: mimeType }), fileName)
+    return ftthRequest('/integration/users/' + userId + '/foto', {
+      method: 'POST',
+      body: formData,
+    })
+  },
+  getUserPhotoUrl: (userId, mode = '') => `${FTTH_CONFIG.baseUrl}/integration/users/${userId}/foto${mode ? '?mode=' + mode : ''}`,
+  getAuthMe: (token) => ftthRequest('/auth/me', { headers: { Authorization: `Bearer ${token}` } }),
 }

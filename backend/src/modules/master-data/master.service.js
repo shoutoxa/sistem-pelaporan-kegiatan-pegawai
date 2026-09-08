@@ -161,6 +161,50 @@ export function createMasterService({ ftthApi: injectedFtthApi } = {}) {
     throw masterError('NOT_FOUND', 'Master data tidak dikenal.')
   }
 
+  async function create(resource, data) {
+    if (resource === 'process' || resource === 'pekerjaan') {
+      const payload = {
+        name: data.name || data.namaPekerjaan,
+        description: data.description || data.deskripsi || '',
+        master_category_id: data.master_category_id || data.categoryId || data.kategoriId,
+        allow_file: data.allow_file !== false,
+        allow_text: data.allow_text !== false,
+        input_instruction: data.input_instruction || data.instruksiDokumentasi || '',
+      }
+      const res = await ftth.createMasterProcess(payload)
+      return { message: 'Master pekerjaan berhasil ditambahkan ke FTTH Core.', data: res }
+    }
+    return { message: 'Data berhasil disimpan.' }
+  }
+
+  async function update(resource, id, data) {
+    if (resource === 'process' || resource === 'pekerjaan') {
+      const payload = {
+        description: data.description || data.deskripsi,
+        is_active: data.isActive !== undefined ? data.isActive : data.is_active,
+      }
+      const res = await ftth.updateMasterProcess(id, payload)
+      return { message: 'Master pekerjaan berhasil diperbarui di FTTH Core.', data: res }
+    }
+    if (resource === 'cluster' || resource === 'rw') {
+      const res = await ftth.updateCluster(id, data)
+      return { message: 'Cluster berhasil diperbarui di FTTH Core.', data: res }
+    }
+    return { message: 'Data berhasil diperbarui.' }
+  }
+
+  async function setActive(resource, id, isActive) {
+    return update(resource, id, { isActive })
+  }
+
+  async function remove(resource, id) {
+    if (resource === 'process' || resource === 'pekerjaan') {
+      const res = await ftth.deleteMasterProcess(id)
+      return { message: 'Master pekerjaan berhasil dihapus dari FTTH Core.', data: res }
+    }
+    return { message: 'Data berhasil dihapus.' }
+  }
+
   return {
     listActiveProject,
     listActiveClusterByProject,
@@ -171,8 +215,10 @@ export function createMasterService({ ftthApi: injectedFtthApi } = {}) {
     listActiveKategori: listActiveCategory,
     listActivePekerjaan: listActiveProcessByCategory,
     listAdmin,
-    create: async () => ({ message: 'Data berhasil disimpan.' }),
-    update: async () => ({ message: 'Data berhasil diperbarui.' }),
-    setActive: async () => ({ message: 'Status berhasil diperbarui.' }),
+    create,
+    update,
+    setActive,
+    delete: remove,
+    remove,
   }
 }

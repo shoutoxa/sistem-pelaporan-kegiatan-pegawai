@@ -1,5 +1,8 @@
 import { Router } from 'express'
+import multer from 'multer'
 import { ftthApi } from '../../services/ftthApi.js'
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10_000_000 } })
 
 function sendError(error, response) {
   const statuses = { VALIDATION: 400, DUPLICATE: 409, NOT_FOUND: 404, FORBIDDEN: 403 }
@@ -10,6 +13,7 @@ function sendError(error, response) {
 export function createPegawaiRouter({ service, requireAuth, requireSuperadmin } = {}) {
   const router = Router()
   const guard = [requireAuth, requireSuperadmin].filter(Boolean)
+  const authGuard = [requireAuth].filter(Boolean)
 
   router.get('/admin/pegawai', ...guard, async (_request, response) => {
     try {
@@ -25,7 +29,7 @@ export function createPegawaiRouter({ service, requireAuth, requireSuperadmin } 
           nomorHp: u.phone,
           role: 'PEGAWAI',
           isActive: u.is_active !== false,
-          wajibLapor: true,
+          wajibLapor: Boolean(u.wajib_lapor),
           fotoProfil: u.foto,
           fotoProfilUrl: u.foto ? (u.foto.startsWith('http') ? u.foto : `https://ftth.digitak.id${u.foto}`) : null,
         }))
@@ -33,6 +37,94 @@ export function createPegawaiRouter({ service, requireAuth, requireSuperadmin } 
     } catch (error) {
       console.error('Error fetching users from FTTH:', error.message)
       return sendError({ code: 'NOT_FOUND', message: 'Gagal mengambil data pegawai dari FTTH.' }, response)
+    }
+  })
+
+  router.get('/admin/pegawai/:id/clusters', ...guard, async (request, response) => {
+    try {
+      const clusters = await ftthApi.getUserClusters(request.params.id)
+      return response.json({ data: Array.isArray(clusters) ? clusters : (clusters?.data || []) })
+    } catch (error) {
+      return sendError({ code: 'NOT_FOUND', message: 'Gagal mengambil cluster pegawai.' }, response)
+    }
+  })
+
+  router.get('/admin/pegawai/:id/laporan-status', ...guard, async (request, response) => {
+    try {
+      const status = await ftthApi.getUserLaporanStatus(request.params.id)
+      return response.json({ data: status?.data || status })
+    } catch (error) {
+      return sendError({ code: 'NOT_FOUND', message: 'Gagal mengambil status laporan pegawai.' }, response)
+    }
+  })
+
+  router.post('/admin/pegawai/:id/foto', ...guard, upload.single('fotoProfil'), async (request, response) => {
+    try {
+      if (!request.file) {
+        return response.status(400).json({ message: 'File foto tidak ditemukan.' })
+      }
+      const result = await ftthApi.uploadUserPhoto(
+        request.params.id,
+        request.file.buffer,
+        request.file.originalname,
+        request.file.mimetype,
+      )
+      return response.json({ message: 'Foto profil pegawai berhasil diperbarui.', data: result })
+    } catch (error) {
+      console.error('Error uploading employee photo:', error.message)
+      return sendError({ code: 'NOT_FOUND', message: 'Gagal mengunggah foto: ' + error.message }, response)
+    }
+  })
+
+  router.put('/admin/clusters/:id/pic', ...guard, async (request, response) => {
+    try {
+      const picId = request.body.picId || request.body.pic_id
+      const result = await ftthApi.updateCluster(request.params.id, { pic_id: picId })
+      return response.json({ message: 'PIC cluster berhasil diperbarui.', data: result })
+    } catch (error) {
+      return sendError({ code: 'NOT_FOUND', message: 'Gagal memperbarui PIC cluster: ' + error.message }, response)
+    }
+  })
+
+  router.get('/pegawai/clusters', ...authGuard, async (request, response) => {
+    try {
+      const userId = request.user?.id
+      if (!userId) return response.status(401).json({ message: 'Tidak terautentikasi' })
+      const clusters = await ftthApi.getUserClusters(userId)
+      return response.json({ data: Array.isArray(clusters) ? clusters : (clusters?.data || []) })
+    } catch (error) {
+      return sendError({ code: 'NOT_FOUND', message: 'Gagal mengambil data cluster pegawai.' }, response)
+    }
+  })
+
+  router.get('/pegawai/laporan-status', ...authGuard, async (request, response) => {
+    try {
+      const userId = request.user?.id
+      if (!userId) return response.status(401).json({ message: 'Tidak terautentikasi' })
+      const status = await ftthApi.getUserLaporanStatus(userId)
+      return response.json({ data: status?.data || status })
+    } catch {
+      return response.json({ data: { user_id: request.user?.id, wajib_lapor: false, clusters: [] } })
+    }
+  })
+
+  router.post('/pegawai/foto', ...authGuard, upload.single('fotoProfil'), async (request, response) => {
+    try {
+      const userId = request.user?.id
+      if (!userId) return response.status(401).json({ message: 'Tidak terautentikasi' })
+      if (!request.file) {
+        return response.status(400).json({ message: 'File foto tidak ditemukan.' })
+      }
+      const result = await ftthApi.uploadUserPhoto(
+        userId,
+        request.file.buffer,
+        request.file.originalname,
+        request.file.mimetype,
+      )
+      return response.json({ message: 'Foto profil berhasil diperbarui.', data: result })
+    } catch (error) {
+      console.error('Error uploading user photo:', error.message)
+      return sendError({ code: 'NOT_FOUND', message: 'Gagal mengunggah foto: ' + error.message }, response)
     }
   })
 
@@ -75,16 +167,9 @@ export function createPegawaiRouter({ service, requireAuth, requireSuperadmin } 
     return response.status(403).json({ message: 'Perubahan status pegawai harus dilakukan melalui FTTH Core.' })
   })
 
-  router.post('/admin/pegawai/:id/foto', ...guard, async (request, response) => {
-    return response.status(403).json({ message: 'Upload foto pegawai harus dilakukan melalui FTTH Core.' })
-  })
-
-  router.post('/pegawai/foto', ...[requireAuth].filter(Boolean), async (_request, response) => {
-    return response.status(403).json({ message: 'Anda tidak memiliki akses untuk mengubah foto profil.' })
-  })
-
   return router
 }
+
 
 export async function createProductionPegawaiRouter() {
   const { requireAuth, requireRole } = await import('../auth/auth.middleware.js')

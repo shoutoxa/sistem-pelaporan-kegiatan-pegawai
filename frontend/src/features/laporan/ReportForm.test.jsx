@@ -123,5 +123,40 @@ describe('ReportForm', () => {
       expect(screen.getByRole('option', { name: 'FTTH' })).toBeInTheDocument()
     })
   })
+
+  it('renders daily reporting status banner when showLaporanStatus is true', async () => {
+    const fetchMock = vi.fn().mockImplementation((url) => {
+      if (String(url).includes('/api/pegawai/laporan-status')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            data: {
+              user_id: 'u1',
+              wajib_lapor: true,
+              tanggal: '2026-09-08',
+              clusters: [
+                { cluster_id: 'cl-1', cluster_name: 'RW 09 Rancamanyar', project_name: 'FTTH Bandung', sudah_lapor: false },
+              ],
+            },
+          }),
+        })
+      }
+      return Promise.resolve({ ok: true, json: async () => [] })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(
+      <MemoryRouter>
+        <ReportForm user={user} showLaporanStatus={true} />
+      </MemoryRouter>
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText(/Status Laporan Harian \(WIB: 2026-09-08\)/i)).toBeInTheDocument()
+      expect(screen.getByText('RW 09 Rancamanyar')).toBeInTheDocument()
+      expect(screen.getByText('⚠ Belum Lapor')).toBeInTheDocument()
+    })
+  })
 })
+
 
