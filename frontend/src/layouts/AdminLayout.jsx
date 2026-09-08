@@ -7,6 +7,5 @@ export default function AdminLayout() {
     { to: '/admin/dokumentasi', label: 'Dokumentasi', icon: 'photo' },
     { to: '/admin/pegawai', label: 'Pegawai', icon: 'users' },
     { to: '/admin/master', label: 'Master Data', icon: 'database' },
-    { to: '/admin/ftth', label: 'Integrasi FTTH (Dev)', icon: 'database' },
   ]} />
 }

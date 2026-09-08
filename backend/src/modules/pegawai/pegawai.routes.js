@@ -5,18 +5,18 @@ import { fileTypeFromBuffer } from 'file-type'
 const photoUpload = multer({ storage: multer.memoryStorage(), limits: { files: 1, fileSize: 5_000_000 } })
 
 function sendError(error, response) {
-  const statuses = { VALIDATION: 400, DUPLICATE: 409, NOT_FOUND: 404, FORBIDDEN: 403 }
+  const statuses = { VALIDATION: 400, DUPLICATE: 409, NOT_FOUND: 404, FORBIDDEN: 403, INTEGRATION_NOT_CONFIGURED: 503, INTEGRATION_UNAVAILABLE: 502, INTEGRATION_UNAUTHORIZED: 502, INTEGRATION_INVALID_RESPONSE: 502 }
   const message = error.message || 'Terjadi kesalahan pada server.'
   return response.status(statuses[error.code] || 500).json({ message, ...(error.errors ? { errors: error.errors } : {}) })
 }
 
-export function createPegawaiRouter({ service, requireAuth, requireSuperadmin } = {}) {
+export function createPegawaiRouter({ service, requireAuth, requireSuperadmin, source = 'local' } = {}) {
   const router = Router()
   const guard = [requireAuth, requireSuperadmin].filter(Boolean)
   const authGuard = requireAuth ? [requireAuth] : []
 
   router.get('/admin/pegawai', ...guard, async (_request, response) => {
-    try { return response.json({ data: await service.list() }) } catch (error) { return sendError(error, response) }
+    try { return response.json({ data: await service.list(), source }) } catch (error) { return sendError(error, response) }
   })
   router.post('/admin/pegawai', ...guard, async (request, response) => {
     try { return response.status(201).json({ message: 'Pegawai berhasil ditambahkan.', data: await service.create(request.body) }) } catch (error) { return sendError(error, response) }
@@ -57,6 +57,13 @@ export function createPegawaiRouter({ service, requireAuth, requireSuperadmin } 
 export async function createProductionPegawaiRouter({ authService } = {}) {
   const [{ prisma }, { requireAuth, requireRole }, { createPegawaiService }, bcrypt] = await Promise.all([import('../../config/prisma.js'), import('../auth/auth.middleware.js'), import('./pegawai.service.js'), import('bcryptjs')])
   const sessionService = authService || await (await import('../auth/auth.routes.js')).createProductionAuthService()
+  const { runtimeConfig } = await import('../../config/env.js')
+  if (runtimeConfig.migration.users === 'ftth') {
+    const { createFtthUsersService } = await import('../integration/ftth-users.service.js')
+    const { createFtthClient } = await import('../integration/ftth.client.js')
+    const usersService = createFtthUsersService(createFtthClient())
+    return createPegawaiRouter({ source: 'ftth', service: usersService, requireAuth: requireAuth({ authService: sessionService }), requireSuperadmin: requireRole('SUPERADMIN') })
+  }
   const storage = (await import('../../config/supabase.js')).createSupabaseStorage()
   return createPegawaiRouter({ service: createPegawaiService({ prisma, passwordHasher: { hash: bcrypt.default.hash }, storage }), requireAuth: requireAuth({ authService: sessionService }), requireSuperadmin: requireRole('SUPERADMIN') })
 }

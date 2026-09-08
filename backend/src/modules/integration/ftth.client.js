@@ -94,6 +94,8 @@ export function createFtthClient({
     listClusterProcesses: (query) => request('/cluster-processes', query),
     listUsers: (query) => request('/users', query),
     getUser: (id) => request(`/users/${encodeURIComponent(id)}`),
+    listUserClusters: (id, query) => request(`/users/${encodeURIComponent(id)}/clusters`, query),
+    getUserReportStatus: (id, query) => request(`/users/${encodeURIComponent(id)}/laporan-status`, query),
     getProject: (id) => request(`/projects/${encodeURIComponent(id)}`),
     getCluster: (id) => request(`/clusters/${encodeURIComponent(id)}`),
     getProcess: (id) => request(`/master-processes/${encodeURIComponent(id)}`),

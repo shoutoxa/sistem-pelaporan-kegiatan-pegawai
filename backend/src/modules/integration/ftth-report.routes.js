@@ -9,7 +9,7 @@ function sendError(error, response) {
   return response.status(status || 500).json({ message: status ? error.message : 'Integrasi belum siap atau terjadi kesalahan penyimpanan. Periksa konfigurasi dan migration development.' })
 }
 
-export function createFtthReportRouter({ service, requireAuth, requireSuperadmin, enabled = false }) {
+export function createFtthReportRouter({ service, requireAuth, requireSuperadmin, enabled = false, reportsSource = 'local', documentationSource = 'local' }) {
   const router = Router()
   const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10000000, files: 5, fields: 6, fieldSize: 10000 } })
   const profileUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5000000, files: 1, fields: 2 } })
@@ -18,7 +18,7 @@ export function createFtthReportRouter({ service, requireAuth, requireSuperadmin
     catch (error) { return sendError(error, response) }
   }
   router.use('/ftth', requireAuth)
-  router.get('/ftth/status', (_request, response) => response.json({ data: { enabled } }))
+  router.get('/ftth/status', (_request, response) => response.json({ data: { enabled, reportsSource, documentationSource } }))
   router.use('/ftth', (_request, response, next) => enabled ? next() : response.status(503).json({ message: 'Mode FTTH development belum diaktifkan pada backend.' }))
   router.get('/ftth/references', run((r) => service.references(r.user)))
   router.get('/ftth/mappings', requireSuperadmin, run((r) => service.mappings(r.user)))
@@ -35,6 +35,8 @@ export function createFtthReportRouter({ service, requireAuth, requireSuperadmin
     profileUpload.single('file')(request, response, (error) => error
       ? response.status(400).json({ message: 'Foto profil maksimal 5 MB dan hanya satu file.' }) : next())
   }, run((r) => service.uploadProfilePhoto(r.user, r.params.id, r.file)))
+  router.get('/ftth/users/:id/clusters', run((r) => service.userClusters(r.user, r.params.id)))
+  router.get('/ftth/users/:id/laporan-status', run((r) => service.userReportStatus(r.user, r.params.id)))
   router.get('/ftth/reports', run((r) => service.list(r.user, r.query)))
   router.get('/ftth/reports/:reportId/attachments/:attachmentId/download', async (request, response) => {
     try {
@@ -57,13 +59,17 @@ export function createFtthReportRouter({ service, requireAuth, requireSuperadmin
 
 export async function createProductionFtthReportRouter({ authService }) {
   const [{ prisma }, { requireAuth, requireRole }, { createFtthClient }, { createFtthRepository },
-    { createFtthReportService }, { createSupabaseStorage }, { runtimeConfig }] = await Promise.all([
+    { createFtthReportService }, { runtimeConfig }] = await Promise.all([
     import('../../config/prisma.js'), import('../auth/auth.middleware.js'), import('./ftth.client.js'),
-    import('./ftth.repository.js'), import('./ftth-report.service.js'), import('../../config/supabase.js'), import('../../config/env.js'),
+    import('./ftth.repository.js'), import('./ftth-report.service.js'), import('../../config/env.js'),
   ])
   return createFtthReportRouter({
-    service: createFtthReportService({ client: createFtthClient(), repository: createFtthRepository(prisma), storage: createSupabaseStorage() }),
+    // FTTH owns attachment bytes; this app journals writes and proxies the
+    // authenticated company download endpoint.
+    service: createFtthReportService({ client: createFtthClient(), repository: createFtthRepository(prisma) }),
     requireAuth: requireAuth({ authService }), requireSuperadmin: requireRole('SUPERADMIN'),
-    enabled: runtimeConfig.ftthReportsEnabled,
+    enabled: runtimeConfig.ftthReportsEnabled || runtimeConfig.migration.reports === 'ftth' || runtimeConfig.migration.documentation === 'ftth',
+    reportsSource: runtimeConfig.migration.reports,
+    documentationSource: runtimeConfig.migration.documentation,
   })
 }

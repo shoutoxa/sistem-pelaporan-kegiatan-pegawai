@@ -36,7 +36,7 @@ export default function AppShell({ roleLabel, navItems, mobileFirst = false }) {
           )}
           <div className="account-copy"><strong>{user?.nama}</strong><small>{roleLabel}</small></div>
         </div>
-        <button className="logout-button" type="button" onClick={handleLogout}><Icon name="logout" /><span>Keluar</span></button>
+        <button className="logout-button" type="button" aria-label="Keluar" onClick={handleLogout}><Icon name="logout" /><span>Keluar</span></button>
       </aside>
       <div className="app-main">
         <header className="app-topbar">

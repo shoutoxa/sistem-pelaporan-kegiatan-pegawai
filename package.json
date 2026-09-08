@@ -13,6 +13,7 @@
     "db:local:migrate": "node scripts/run-local.mjs migrate",
     "db:local:seed": "node scripts/run-local.mjs seed",
     "storage:local": "node scripts/run-local.mjs storage",
+    "ftth:decommission:check": "node scripts/check-ftth-decommission.mjs",
     "dev": "concurrently \"npm:dev:backend\" \"npm:dev:frontend\"",
     "dev:backend": "npm run dev -w backend",
     "dev:frontend": "npm run dev -w frontend",

@@ -4,11 +4,13 @@ import { dashboardApi } from '../../api/dashboard.js'
 import PageHeader from '../../components/PageHeader.jsx'
 import PageState from '../../components/PageState.jsx'
 import Icon from '../../components/Icon.jsx'
+import FtthReportPanel from '../integration/FtthReportPanel.jsx'
 
 const POLL_MS = 30_000
 
 export default function DashboardPage() {
   const [data, setData] = useState(null)
+  const [selected, setSelected] = useState(null)
   const [state, setState] = useState('loading')
   const refresh = useCallback(() => {
     setState((current) => (current === 'ready' ? 'refreshing' : 'loading'))
@@ -83,21 +85,27 @@ export default function DashboardPage() {
         }
       />
 
+      {data?.source === 'ftth' && <p>Sumber: API perusahaan. Akumulasi laporan seluruh tanggal; kepatuhan pelaporan dihitung untuk hari ini.</p>}
+      {data?.complianceAvailable === false && <p role="status">Data wajib lapor dari perusahaan belum lengkap. Angka kepatuhan belum dapat dihitung.</p>}
+      {data?.kepatuhanCluster && <p role="status">Laporan hari ini: {data.kepatuhanCluster.sudah} dari {data.kepatuhanCluster.total} penugasan cluster terpenuhi. Pegawai dihitung sudah melapor setelah seluruh cluster tugasnya terpenuhi.{data.kepatuhanCluster.tanpaPenugasan > 0 && ` ${data.kepatuhanCluster.tanpaPenugasan} pegawai wajib lapor belum memiliki penugasan cluster.`}</p>}
+      {state === 'error' && data && <p role="alert">Pembaruan gagal. Data di bawah adalah hasil terakhir yang berhasil dimuat.</p>}
+      {selected && <FtthReportPanel key={selected} id={selected} onClose={() => setSelected(null)} onChanged={refresh} />}
+
       <div className="dashboard-content">
         <section className="metric-band" aria-label="Ringkasan pegawai lapor">
           <article>
             <span>Pegawai wajib lapor</span>
-            <strong>{data?.wajibLapor ?? 0}</strong>
+            <strong>{data?.wajibLapor ?? '—'}</strong>
             <small>pegawai aktif</small>
           </article>
           <article>
             <span>Sudah melapor</span>
-            <strong className="success-value">{data?.sudahMelapor ?? 0}</strong>
+            <strong className="success-value">{data?.sudahMelapor ?? '—'}</strong>
             <small>tanggal {labelDate}</small>
           </article>
           <article>
             <span>Belum melapor</span>
-            <strong className="signal-value">{data?.belumMelapor ?? 0}</strong>
+            <strong className="signal-value">{data?.belumMelapor ?? '—'}</strong>
             <small>tanggal {labelDate}</small>
           </article>
         </section>
@@ -137,12 +145,12 @@ export default function DashboardPage() {
                       {item.keterangan || '-'}
                     </td>
                     <td>
-                      <Link
+                      {data?.source === 'ftth' ? <button className="secondary-button" onClick={() => setSelected(item.id)}>Detail</button> : <Link
                         className="table-link"
                         to={`/admin/laporan/${item.id}`}
                       >
                         Detail
-                      </Link>
+                      </Link>}
                     </td>
                   </tr>
                 ))}
@@ -162,13 +170,13 @@ export default function DashboardPage() {
           <article className="data-section">
             <div className="section-heading">
               <div>
-                <h2>Progres per Cluster / Desa</h2>
+                <h2>{data?.source === 'ftth' ? 'Data berdasarkan Project' : 'Progres per Cluster / Desa'}</h2>
                 <p>Ringkasan akumulasi laporan harian per wilayah.</p>
               </div>
             </div>
             <ul className="distribution-list">
               {(data?.distribusiDesa || []).map((item) => (
-                <li key={item.namaDesa}>
+                <li key={item.id || item.namaDesa}>
                   <div>
                     <span>{item.namaDesa}</span>
                     <span className="distribution-track">
@@ -199,7 +207,7 @@ export default function DashboardPage() {
             </div>
             <ul className="distribution-list">
               {(data?.distribusiPekerjaan || []).map((item) => (
-                <li key={item.namaPekerjaan}>
+                <li key={item.id || item.namaPekerjaan}>
                   <div>
                     <span>{item.namaPekerjaan}</span>
                     <span className="distribution-track">
