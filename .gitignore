@@ -6,4 +6,5 @@ node_modules/
 frontend/dist/
 backend/uploads-temp/
 coverage/
+.tmp/
 backend/generated/prisma/

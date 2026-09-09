@@ -84,7 +84,7 @@ export default function MasterTable({
             {rows.length === 0 && (
               <tr>
                 <td className="empty-cell" colSpan={columns.length + 1 + (onEdit || onToggleActive ? 1 : 0)}>
-                  Belum ada data. Tambahkan {title.toLowerCase()} pertama.
+                  {onCreate ? `Belum ada data. Tambahkan ${title.toLowerCase()} pertama.` : `Belum ada data ${title.toLowerCase()} yang tersedia.`}
                 </td>
               </tr>
             )}

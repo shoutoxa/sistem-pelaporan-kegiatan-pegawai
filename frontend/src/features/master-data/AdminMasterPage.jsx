@@ -20,6 +20,7 @@ const emptyForms = {
 const labels = { desa: 'Desa', cluster: 'RW', pekerjaan: 'Pekerjaan' }
 
 export default function AdminMasterPage() {
+  const [resourceView, setResourceView] = useState('projects')
   const [remote, setRemote] = useState(null)
   const [data, setData] = useState({ desa: [], cluster: [], kategori: [], pekerjaan: [] })
   const [integration, setIntegration] = useState({ configured: false, categories: 0, processes: 0, lastSyncedAt: null, migration: { master: 'local', users: 'local', reports: 'local', documentation: 'local' } })
@@ -141,16 +142,16 @@ export default function AdminMasterPage() {
   }
 
   if (state === 'loading') return <section className="page"><PageState title="Menyiapkan master data" message="Memuat sumber data yang dikonfigurasi." /></section>
-  if (remote) return <section className="page">
-    <PageHeader title="Master Data" description="Project, Cluster, Kategori, dan Pekerjaan dari sistem perusahaan." />
-    <Notice>Data dikelola melalui FTTH. Perubahan master dilakukan pada sistem perusahaan; data lokal lama tetap tersimpan terpisah.</Notice>
+  if (remote) return <section className="page master-data-page">
+    <PageHeader title="Master Data" description="Referensi project, cluster, kategori, dan pekerjaan." action={<button className="secondary-button" onClick={load}>Muat ulang</button>} />
+    <Notice>Data dikelola melalui FTTH. Perubahan master dilakukan pada sistem perusahaan.</Notice>
     {error && <Notice tone="error">{error}</Notice>}
-    <button className="secondary-button" disabled={state === 'loading'} onClick={load}>Muat ulang</button>
+    <div className="resource-switch" role="group" aria-label="Jenis master data">{Object.entries({ projects: 'Project', clusters: 'Cluster', categories: 'Kategori', processes: 'Pekerjaan' }).map(([key, label]) => <button key={key} type="button" aria-pressed={resourceView === key} onClick={() => setResourceView(key)}>{label}<span>{remote[key].length}</span></button>)}</div>
     <div className="master-stack">
-      <MasterTable title="Project" columns={[{ key: 'name', label: 'Nama Project' }, { key: 'id', label: 'ID Project' }]} rows={remote.projects} />
-      <MasterTable title="Cluster" columns={[{ key: 'name', label: 'Nama Cluster' }, { key: 'projectName', label: 'Project' }, { key: 'id', label: 'ID Cluster' }]} rows={remote.clusters} />
-      <MasterTable title="Kategori" columns={[{ key: 'name', label: 'Nama Kategori' }]} rows={remote.categories} />
-      <MasterTable title="Pekerjaan" columns={[{ key: 'name', label: 'Nama Pekerjaan' }, { key: 'categoryName', label: 'Kategori' }]} rows={remote.processes} />
+      {resourceView === 'projects' && <MasterTable title="Project" columns={[{ key: 'name', label: 'Nama Project' }, { key: 'id', label: 'ID Project', render: row => <details className="record-id"><summary>Lihat ID</summary><code>{row.id}</code></details> }]} rows={remote.projects} />}
+      {resourceView === 'clusters' && <MasterTable title="Cluster" columns={[{ key: 'name', label: 'Nama Cluster' }, { key: 'projectName', label: 'Project' }, { key: 'id', label: 'ID Cluster', render: row => <details className="record-id"><summary>Lihat ID</summary><code>{row.id}</code></details> }]} rows={remote.clusters} />}
+      {resourceView === 'categories' && <MasterTable title="Kategori" columns={[{ key: 'name', label: 'Nama Kategori' }]} rows={remote.categories} />}
+      {resourceView === 'processes' && <MasterTable title="Pekerjaan" columns={[{ key: 'name', label: 'Nama Pekerjaan' }, { key: 'categoryName', label: 'Kategori' }]} rows={remote.processes} />}
     </div>
   </section>
 

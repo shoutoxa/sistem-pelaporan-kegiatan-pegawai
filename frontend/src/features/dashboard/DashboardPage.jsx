@@ -70,7 +70,7 @@ export default function DashboardPage() {
     <section className="page dashboard-page">
       <PageHeader
         title="Dashboard"
-        description="Ringkasan dan pemantauan progres kegiatan lapangan secara menyeluruh."
+        description="Pantau pelaporan hari ini dan aktivitas seluruh project."
         action={
           <div className="dashboard-controls">
             <button
@@ -85,9 +85,8 @@ export default function DashboardPage() {
         }
       />
 
-      {data?.source === 'ftth' && <p>Sumber: API perusahaan. Akumulasi laporan seluruh tanggal; kepatuhan pelaporan dihitung untuk hari ini.</p>}
       {data?.complianceAvailable === false && <p role="status">Data wajib lapor dari perusahaan belum lengkap. Angka kepatuhan belum dapat dihitung.</p>}
-      {data?.kepatuhanCluster && <p role="status">Laporan hari ini: {data.kepatuhanCluster.sudah} dari {data.kepatuhanCluster.total} penugasan cluster terpenuhi. Pegawai dihitung sudah melapor setelah seluruh cluster tugasnya terpenuhi.{data.kepatuhanCluster.tanpaPenugasan > 0 && ` ${data.kepatuhanCluster.tanpaPenugasan} pegawai wajib lapor belum memiliki penugasan cluster.`}</p>}
+      {data?.kepatuhanCluster && <div className="dashboard-daily-note"><strong>{data.kepatuhanCluster.sudah} / {data.kepatuhanCluster.total} cluster sudah dilaporkan hari ini</strong><span>Pegawai dihitung sudah melapor jika seluruh cluster tugasnya terpenuhi.{data.kepatuhanCluster.tanpaPenugasan > 0 && ` ${data.kepatuhanCluster.tanpaPenugasan} pegawai wajib lapor belum memiliki penugasan.`}</span></div>}
       {state === 'error' && data && <p role="alert">Pembaruan gagal. Data di bawah adalah hasil terakhir yang berhasil dimuat.</p>}
       {selected && <FtthReportPanel key={selected} id={selected} onClose={() => setSelected(null)} onChanged={refresh} />}
 
@@ -121,7 +120,7 @@ export default function DashboardPage() {
             </Link>
           </div>
           <div className="table-wrap">
-            <table>
+            <table className="responsive-records">
               <caption className="sr-only">Laporan terbaru</caption>
               <thead>
                 <tr>
@@ -135,16 +134,16 @@ export default function DashboardPage() {
               <tbody>
                 {(data?.terbaru || []).slice(0, 5).map((item) => (
                   <tr key={item.id}>
-                    <td>{item.user?.nama || '-'}</td>
-                    <td>{item.pekerjaan?.namaPekerjaan || '-'}</td>
-                    <td>
-                      {item.cluster?.desa?.namaDesa || '-'} ·{' '}
-                      {item.cluster?.clusterName || '-'}
+                    <td data-label="Pegawai">{item.user?.nama || '-'}</td>
+                    <td data-label="Pekerjaan">{item.pekerjaan?.namaPekerjaan || '-'}</td>
+                    <td className="location-cell" data-label="Lokasi">
+                      <span>{item.cluster?.desa?.namaDesa || '-'}</span>
+                      <small className="table-subline">{item.cluster?.clusterName || '-'}</small>
                     </td>
-                    <td className="description-cell">
+                    <td className="description-cell" data-label="Keterangan">
                       {item.keterangan || '-'}
                     </td>
-                    <td>
+                    <td className="record-actions">
                       {data?.source === 'ftth' ? <button className="secondary-button" onClick={() => setSelected(item.id)}>Detail</button> : <Link
                         className="table-link"
                         to={`/admin/laporan/${item.id}`}
@@ -201,11 +200,11 @@ export default function DashboardPage() {
           <article className="data-section">
             <div className="section-heading">
               <div>
-                <h2>Progres per Pekerjaan</h2>
-                <p>Aktivitas pengerjaan berdasarkan jenis pekerjaan proyek.</p>
+                <h2>Laporan per Pekerjaan</h2>
+                <p>Akumulasi seluruh tanggal, bukan persentase penyelesaian.</p>
               </div>
             </div>
-            <ul className="distribution-list">
+            <ul className="distribution-list jobs-distribution" tabIndex={0} aria-label="Distribusi seluruh pekerjaan">
               {(data?.distribusiPekerjaan || []).map((item) => (
                 <li key={item.id || item.namaPekerjaan}>
                   <div>

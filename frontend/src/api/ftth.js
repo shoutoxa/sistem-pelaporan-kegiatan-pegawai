@@ -3,6 +3,8 @@ const request = async (path, options) => (await http.request(`/api/ftth${path}`,
 export const ftthApi = {
   status: () => request('/status'),
   references: () => request('/references'),
+  userClusters: (id) => request(`/users/${encodeURIComponent(id)}/clusters`),
+  userReportStatus: (id) => request(`/users/${encodeURIComponent(id)}/laporan-status`),
   mappings: () => request('/mappings'),
   saveMapping: (id, data) => request(`/mappings/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   list: (offset = 0) => request(`/reports?limit=25&offset=${offset}`),

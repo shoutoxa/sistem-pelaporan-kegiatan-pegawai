@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Icon from '../../components/Icon.jsx'
 import { ftthApi } from '../../api/ftth.js'
-import { API_URL } from '../../api/http.js'
+import FtthAttachments from './FtthAttachments.jsx'
 import './ftth.css'
 
 const labels = { PENDING: 'Menunggu', APPROVED: 'Diterima', REJECTED: 'Perlu revisi' }
@@ -62,12 +62,7 @@ export default function FtthReportPanel({ id, onClose, onChanged }) {
       </dl>
       <h3>Keterangan</h3><p className="ftth-report-description">{report.keterangan || 'Tidak ada keterangan.'}</p>
       <h3>Lampiran</h3>
-      {!report.dokumentasi?.length && <p>Tidak ada lampiran.</p>}
-      <ul className="ftth-attachments">{report.dokumentasi?.map((file) => <li key={file.id}>
-        <Icon name="report" /><span className="ftth-file-name">{file.original_name}</span>
-        {file.downloadUrl ? <div className="ftth-file-actions"><a href={`${API_URL}${file.downloadUrl}`} aria-label={`Buka ${file.original_name}`} target="_blank" rel="noreferrer">Buka</a>
-        <a aria-label={`Unduh ${file.original_name}`} href={`${API_URL}${file.downloadUrl}?mode=download`}>Unduh</a></div> : <span>Tautan belum tersedia</span>}
-      </li>)}</ul>
+      <FtthAttachments key={report.id || id} items={report.dokumentasi || []} />
       <fieldset disabled={busy} className="ftth-verification">
         <legend>Verifikasi laporan</legend><p id="ftth-revision-help">Isi catatan jika laporan perlu revisi.</p>
         <label>Catatan revisi<textarea aria-describedby="ftth-revision-help" maxLength={2000} value={revision} onChange={(e) => setRevision(e.target.value)} /></label>

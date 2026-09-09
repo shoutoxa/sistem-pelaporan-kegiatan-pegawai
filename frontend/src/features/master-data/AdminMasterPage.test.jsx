@@ -14,6 +14,12 @@ describe('AdminMasterPage', () => {
     expect(await screen.findByText('Project Perusahaan')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Tambah Desa' })).not.toBeInTheDocument()
     expect(fetchMock.mock.calls.every(([url]) => String(url).includes('/api/admin/master-'))).toBe(true)
+    fireEvent.click(screen.getByRole('button', { name: /^Cluster/ }))
+    expect(screen.getByRole('button', { name: /^Cluster/ })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.queryByText('Project Perusahaan')).not.toBeInTheDocument()
+    expect(screen.getByText('Belum ada data cluster yang tersedia.')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /^Project/ }))
+    expect(screen.getByText('Project Perusahaan')).toBeInTheDocument()
   })
   it('loads every master resource and submits a new village', async () => {
     const fetchMock = vi.fn(async (url, options = {}) => {

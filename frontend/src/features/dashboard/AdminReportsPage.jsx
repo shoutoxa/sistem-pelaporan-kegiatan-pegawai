@@ -41,12 +41,11 @@ export default function AdminReportsPage() {
   )
 
   return (
-    <section className="page">
+    <section className="page admin-reports-page">
       <PageHeader
         title="Laporan"
         description="Seluruh laporan kegiatan harian pegawai yang tercatat pada sistem."
       />
-      {result.source === 'ftth' && <p className="notice">Sumber: API perusahaan. Laporan lokal lama tetap tersimpan terpisah.</p>}
       <section className="filter-bar report-search-bar" aria-label="Pencarian laporan">
         <label htmlFor="report-search">
           Cari laporan
@@ -82,7 +81,7 @@ export default function AdminReportsPage() {
           <div
             className={`table-wrap ${state === 'loading' ? 'is-loading' : ''}`}
           >
-            <table>
+            <table className="responsive-records">
               <caption className="sr-only">Daftar seluruh laporan</caption>
               <thead>
                 <tr>
@@ -98,23 +97,23 @@ export default function AdminReportsPage() {
               <tbody>
                 {result.items.map((item) => (
                   <tr key={item.id}>
-                    <td>{String(item.tanggalKegiatan).slice(0, 10)}</td>
-                    <td>
+                    <td className="date-cell" data-label="Tanggal">{String(item.tanggalKegiatan).slice(0, 10)}</td>
+                    <td data-label="Pegawai">
                       <strong>{item.user?.nama || '-'}</strong>
                       {item.user?.nomorHp && <small className="table-subline">{item.user.nomorHp}</small>}
                     </td>
-                    <td>
-                      {item.cluster?.desa?.namaDesa || '-'} ·{' '}
-                      {item.cluster?.clusterName || '-'}
+                    <td className="location-cell" data-label="Lokasi">
+                      <span>{item.cluster?.desa?.namaDesa || '-'}</span>
+                      <small className="table-subline">{item.cluster?.clusterName || '-'}</small>
                     </td>
-                    <td>{item.pekerjaan?.namaPekerjaan || '-'}</td>
-                    <td>
+                    <td data-label="Pekerjaan">{item.pekerjaan?.namaPekerjaan || '-'}</td>
+                    <td data-label="Status">
                       <span className={`status-badge ${item.status === 'REJECTED' ? 'inactive' : item.diterima ? 'active' : 'pending'}`}>
                         {item.status === 'REJECTED' ? 'Perlu revisi' : item.diterima ? 'Diterima' : 'Menunggu'}
                       </span>
                     </td>
-                    <td className="description-cell">{item.keterangan}</td>
-                    <td>
+                    <td className="description-cell" data-label="Keterangan">{item.keterangan}</td>
+                    <td className="record-actions">
                       {result.source === 'ftth' ? <button className="secondary-button" onClick={() => setSelected(item.id)}>Detail</button> : <Link
                         className="table-link"
                         to={`/admin/laporan/${item.id}`}

@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { http } from '../../api/http.js'
 import PageHeader from '../../components/PageHeader.jsx'
 import Notice from '../../components/Notice.jsx'
 import PageState from '../../components/PageState.jsx'
+import FtthDialog from '../integration/FtthDialog.jsx'
+import ClusterReportingStatus from '../integration/ClusterReportingStatus.jsx'
 
 const emptyForm = {
   nama: '',
@@ -13,8 +15,20 @@ const emptyForm = {
   isActive: true,
 }
 
+function ProfilePhotoButton({ row, disabled, uploading, onUpload }) {
+  const inputId = useId()
+  const input = useRef(null)
+  return <>
+    <label className="sr-only" htmlFor={inputId}>Upload foto {row.nama}</label>
+    <input className="sr-only" tabIndex={-1} ref={input} id={inputId} type="file" accept="image/jpeg,image/png,image/webp" disabled={disabled}
+      onChange={event => { onUpload(row, event.target.files?.[0]); event.target.value = '' }} />
+    <button type="button" className="secondary-button" aria-label={`Ubah foto ${row.nama}`} disabled={disabled} onClick={() => input.current?.click()}>{uploading ? 'Mengunggah…' : 'Ubah foto'}</button>
+  </>
+}
+
 export default function AdminEmployeesPage() {
   const [source, setSource] = useState('local')
+  const [clusterUser, setClusterUser] = useState(null)
   const [rows, setRows] = useState([])
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
@@ -143,19 +157,22 @@ export default function AdminEmployeesPage() {
   if (state === 'loading') return <section className="page"><PageState title="Memuat pegawai" message="Mengambil data akun." /></section>
   if (state === 'error') return <section className="page"><Notice tone="error">{error}</Notice><button onClick={load}>Coba lagi</button></section>
   if (source === 'ftth') return <section className="page employee-page">
-    <PageHeader title="Pegawai" description="Daftar akun perusahaan, termasuk administrator dan teknisi sesuai role FTTH." />
-    <Notice>Data akun dan penugasan cluster berasal dari FTTH. Pengaturan akun, wajib lapor, dan penugasan dikelola melalui sistem perusahaan.</Notice>
+    <PageHeader title="Pegawai" description="Akun tim, kewajiban pelaporan, dan penugasan cluster." action={<button className="secondary-button" onClick={load}>Muat ulang</button>} />
+    <Notice>Data akun dan penugasan cluster berasal dari FTTH. Pengaturan dikelola melalui sistem perusahaan.</Notice>
     {error && <Notice tone="error">{error}</Notice>}
     {message && <Notice tone="success">{message}</Notice>}
-    <button className="secondary-button" onClick={load}>Muat ulang</button>
-    <div className="table-wrap"><table><caption className="sr-only">Akun FTTH</caption>
-      <thead><tr>{['Nama', 'Username', 'Role FTTH', 'Nomor HP', 'Status', 'Wajib lapor', 'Foto profil'].map(label => <th key={label}>{label}</th>)}</tr></thead>
+    <section className="data-section employee-directory"><div className="section-heading"><div><h2>Anggota tim</h2><p>{rows.length} akun · {activeCount} aktif · {wajibLaporCount} wajib lapor</p></div></div>
+    <div className="table-wrap"><table className="responsive-records"><caption className="sr-only">Akun FTTH</caption>
+      <thead><tr>{['Nama / Username', 'Peran', 'Nomor HP', 'Status', 'Wajib lapor', 'Aksi'].map(label => <th key={label}>{label}</th>)}</tr></thead>
       <tbody>{rows.map(row => <tr key={row.id}>
-        <td>{row.nama}</td><td>{row.username}</td><td>{row.role}</td><td>{row.nomorHp || '—'}</td>
-        <td>{row.isActive ? 'Aktif' : 'Nonaktif'}</td><td>{row.wajibLapor === null ? 'Belum tersedia' : row.wajibLapor ? 'Ya' : 'Tidak'}</td>
-        <td><label>Upload foto {row.nama}<input type="file" accept="image/jpeg,image/png,image/webp" disabled={Boolean(uploadingPhotoId)} onChange={event => { handlePhotoUpload(row, event.target.files?.[0]); event.target.value = '' }} /></label></td>
-      </tr>)}{!rows.length && <tr><td colSpan={7}>Belum ada akun di FTTH.</td></tr>}</tbody>
-    </table></div>
+        <td className="record-identity"><div className="employee-identity"><span className="employee-initial" aria-hidden="true">{row.nama?.slice(0, 1).toUpperCase() || '?'}</span><div><strong>{row.nama}</strong><small className="table-subline">{row.username}</small></div></div></td>
+        <td data-label="Peran"><span>{({ administrator: 'Superadmin', user: 'Pegawai', teknisi: 'Teknisi' })[row.role] || row.role}</span><small className="table-subline">{row.role}</small></td><td className="date-cell" data-label="Nomor HP">{row.nomorHp || '—'}</td>
+        <td data-label="Status"><span className={`status-badge ${row.isActive ? 'active' : 'inactive'}`}>{row.isActive ? 'Aktif' : 'Nonaktif'}</span></td><td data-label="Wajib lapor">{row.wajibLapor == null ? 'Belum tersedia' : row.wajibLapor ? 'Ya' : 'Tidak'}</td>
+        <td className="record-actions"><div className="employee-row-actions"><button className="secondary-button" aria-label={`Lihat cluster ${row.nama}`} onClick={() => setClusterUser(row)}>Lihat cluster</button>
+        <ProfilePhotoButton row={row} disabled={Boolean(uploadingPhotoId)} uploading={uploadingPhotoId === row.id} onUpload={handlePhotoUpload} /></div></td>
+      </tr>)}{!rows.length && <tr><td colSpan={6}>Belum ada akun di FTTH.</td></tr>}</tbody>
+    </table></div></section>
+    {clusterUser && <FtthDialog title={`Cluster — ${clusterUser.nama}`} onClose={() => setClusterUser(null)}><ClusterReportingStatus key={clusterUser.id} userId={clusterUser.id} /></FtthDialog>}
   </section>
 
   return (
