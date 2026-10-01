@@ -270,6 +270,7 @@ export function createFtthReportService({ client, repository, storage, clock = (
     const page = Math.max(1, Math.floor(Number(query.page) || 1))
     const limit = Math.min(100, Math.max(1, Math.floor(Number(query.limit) || 20)))
     const keyword = String(query.search || '').trim().toLocaleLowerCase('id')
+    const statusFilter = query.status ? String(query.status).trim() : null
     if (keyword.length > 200) throw fail('VALIDATION', 'Pencarian maksimal 200 karakter.')
     // API has no documented cross-relation name search. Scan bounded pages,
     // filter names before pagination, and fail instead of returning partial totals.
@@ -281,6 +282,7 @@ export function createFtthReportService({ client, repository, storage, clock = (
         if (seen.has(item.id)) throw fail('INTEGRATION_INVALID_RESPONSE', 'Pagination laporan FTTH mengembalikan ID berulang.')
         seen.add(item.id)
         const data = summary(item)
+        if (statusFilter && statusFilter !== 'ALL' && data.status !== statusFilter) continue
         const names = [item.user?.full_name || item.user?.name || item.user?.nama,
           item.project?.name || item.project?.project_name,
           item.cluster?.name || item.cluster?.cluster_name,
@@ -424,13 +426,20 @@ export function createFtthReportService({ client, repository, storage, clock = (
     const count = statuses.filter((item) => item.clusters.length > 0 && item.clusters.every((cluster) => cluster.sudah_lapor)).length
     const clusterStatuses = statuses.flatMap((item) => item.clusters)
     const latest = [...reports].sort((a, b) => String(b.created_at || b.tanggal_kegiatan).localeCompare(String(a.created_at || a.tanggal_kegiatan)) || a.id.localeCompare(b.id)).slice(0, 10)
+    const reportStats = {
+      onProgress: reports.filter((r) => r.status === 'ON_PROGRESS' || r.status === 'PENDING').length,
+      selesai: reports.filter((r) => r.status === 'SELESAI' || r.status === 'APPROVED').length,
+      kendala: reports.filter((r) => r.status === 'KENDALA' || r.status === 'REJECTED').length,
+      total: reports.length,
+    }
     return { source: 'ftth', targetDate, tanggal: null, jumlahLaporan: reports.length,
+      reportStats,
       wajibLapor: complete ? required.length : null, sudahMelapor: complete ? count : null, belumMelapor: complete ? required.length - count : null,
       complianceAvailable: complete,
       kepatuhanCluster: complete ? { total: clusterStatuses.length, sudah: clusterStatuses.filter((item) => item.sudah_lapor).length,
         belum: clusterStatuses.filter((item) => !item.sudah_lapor).length, tanpaPenugasan: statuses.filter((item) => !item.clusters.length).length } : null,
       distribusiDesa: [...byProject.values()], distribusiPekerjaan: [...byProcess.values()],
-      terbaru: latest.map((item) => { const data = summary(item); return { id: data.id, keterangan: data.keterangan,
+      terbaru: latest.map((item) => { const data = summary(item); return { id: data.id, keterangan: data.keterangan, kendala_lapangan: data.kendala_lapangan, status: data.status,
         user: { nama: data.user_name }, cluster: { desa: { namaDesa: data.project_name }, clusterName: data.cluster_name }, pekerjaan: { namaPekerjaan: data.process_name } } }),
     }
   }

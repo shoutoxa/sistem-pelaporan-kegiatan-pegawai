@@ -6,10 +6,38 @@ import Icon from '../../components/Icon.jsx'
 import PageState from '../../components/PageState.jsx'
 import FtthReportPanel from '../integration/FtthReportPanel.jsx'
 
+const STATUS_LABELS = {
+  ALL: 'Semua Status',
+  ON_PROGRESS: 'On Progress',
+  SELESAI: 'Selesai',
+  KENDALA: 'Kendala',
+  APPROVED: 'Diterima',
+  REJECTED: 'Perlu revisi',
+  PENDING: 'Menunggu',
+}
+
+function renderStatusBadge(item) {
+  const status = item.status || (item.diterima ? 'APPROVED' : 'PENDING')
+  let badgeClass = 'pending'
+  let label = STATUS_LABELS[status] || status
+  if (status === 'SELESAI' || status === 'APPROVED') {
+    badgeClass = 'active'
+    label = status === 'SELESAI' ? 'Selesai' : 'Diterima'
+  } else if (status === 'KENDALA' || status === 'REJECTED') {
+    badgeClass = 'inactive'
+    label = status === 'KENDALA' ? 'Kendala' : 'Perlu revisi'
+  } else if (status === 'ON_PROGRESS') {
+    badgeClass = 'info'
+    label = 'On Progress'
+  }
+  return <span className={`status-badge ${badgeClass}`}>{label}</span>
+}
+
 export default function AdminReportsPage() {
   const [page, setPage] = useState(1)
   const limit = 20
   const [search, setSearch] = useState('')
+  const [status, setStatus] = useState('ALL')
   const [result, setResult] = useState({ items: [], total: 0 })
   const [state, setState] = useState('loading')
   const [error, setError] = useState('')
@@ -20,7 +48,7 @@ export default function AdminReportsPage() {
     let active = true
     setState('loading')
     dashboardApi
-      .listReports({ page, limit, search })
+      .listReports({ page, limit, search, status })
       .then((response) => {
         if (active) {
           setResult(response.data)
@@ -33,7 +61,7 @@ export default function AdminReportsPage() {
     return () => {
       active = false
     }
-  }, [page, search, reload])
+  }, [page, search, status, reload])
 
   const totalPages = Math.max(
     1,
@@ -52,7 +80,7 @@ export default function AdminReportsPage() {
           <input
             id="report-search"
             type="search"
-            placeholder="Pegawai, project/cluster, atau pekerjaan..."
+            placeholder="Pegawai, project/cluster, pekerjaan, atau kendala..."
             maxLength={200}
             value={search}
             onChange={(event) => {
@@ -60,6 +88,25 @@ export default function AdminReportsPage() {
               setPage(1)
             }}
           />
+        </label>
+        <label htmlFor="status-filter">
+          Status
+          <select
+            id="status-filter"
+            value={status}
+            onChange={(event) => {
+              setStatus(event.target.value)
+              setPage(1)
+            }}
+          >
+            <option value="ALL">Semua Status</option>
+            <option value="ON_PROGRESS">On Progress</option>
+            <option value="SELESAI">Selesai</option>
+            <option value="KENDALA">Kendala</option>
+            <option value="APPROVED">Diterima</option>
+            <option value="REJECTED">Perlu revisi</option>
+            <option value="PENDING">Menunggu</option>
+          </select>
         </label>
         <button className="secondary-button" disabled={state === 'loading'} onClick={() => setReload((value) => value + 1)}><Icon name="refresh" size={18} />Muat ulang</button>
       </section>
@@ -90,7 +137,7 @@ export default function AdminReportsPage() {
                   <th>Lokasi</th>
                   <th>Pekerjaan</th>
                   <th>Status</th>
-                  <th>Keterangan</th>
+                  <th>Kendala Laporan / Keterangan</th>
                   <th>Aksi</th>
                 </tr>
               </thead>
@@ -108,11 +155,12 @@ export default function AdminReportsPage() {
                     </td>
                     <td data-label="Pekerjaan">{item.pekerjaan?.namaPekerjaan || '-'}</td>
                     <td data-label="Status">
-                      <span className={`status-badge ${item.status === 'REJECTED' ? 'inactive' : item.diterima ? 'active' : 'pending'}`}>
-                        {item.status === 'REJECTED' ? 'Perlu revisi' : item.diterima ? 'Diterima' : 'Menunggu'}
-                      </span>
+                      {renderStatusBadge(item)}
                     </td>
-                    <td className="description-cell" data-label="Keterangan">{item.keterangan}</td>
+                    <td className="description-cell" data-label="Kendala Laporan / Keterangan">
+                      {item.status === 'KENDALA' && <strong className="text-danger" style={{ display: 'block', fontSize: '11px', textTransform: 'uppercase', marginBottom: '2px' }}>Kendala Lapangan</strong>}
+                      {item.kendala_lapangan || item.keterangan || '-'}
+                    </td>
                     <td className="record-actions">
                       {result.source === 'ftth' ? <button className="secondary-button" onClick={() => setSelected(item.id)}>Detail</button> : <Link
                         className="table-link"

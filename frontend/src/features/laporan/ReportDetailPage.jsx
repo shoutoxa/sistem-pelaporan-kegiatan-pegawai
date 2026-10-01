@@ -104,8 +104,8 @@ export default function ReportDetailPage() {
             <div>
               <dt>Status</dt>
               <dd>
-                <span className={`status-badge ${report.diterima ? 'active' : 'pending'}`}>
-                  {report.diterima ? 'Diterima' : 'Menunggu'}
+                <span className={`status-badge ${report.status === 'SELESAI' || report.diterima ? 'active' : report.status === 'KENDALA' ? 'inactive' : report.status === 'ON_PROGRESS' ? 'info' : 'pending'}`}>
+                  {report.status === 'SELESAI' ? 'Selesai' : report.status === 'KENDALA' ? 'Kendala' : report.status === 'ON_PROGRESS' ? 'On Progress' : report.diterima ? 'Diterima' : 'Menunggu'}
                 </span>
               </dd>
             </div>
@@ -136,8 +136,11 @@ export default function ReportDetailPage() {
               </div>
             )}
             <div className="detail-description">
-              <dt>Keterangan</dt>
-              <dd>{report.keterangan}</dd>
+              <dt>Kendala Laporan / Keterangan</dt>
+              <dd>
+                {report.status === 'KENDALA' && <strong className="text-danger" style={{ display: 'block', marginBottom: '4px' }}>Ada Kendala Lapangan:</strong>}
+                {report.kendala_lapangan || report.keterangan || '-'}
+              </dd>
             </div>
           </dl>
         </article>

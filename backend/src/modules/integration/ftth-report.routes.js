@@ -11,8 +11,8 @@ function sendError(error, response) {
 
 export function createFtthReportRouter({ service, requireAuth, requireSuperadmin, enabled = false, reportsSource = 'local', documentationSource = 'local' }) {
   const router = Router()
-  const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10000000, files: 5, fields: 6, fieldSize: 10000 } })
-  const profileUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5000000, files: 1, fields: 2 } })
+  const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10000000, files: 5, fields: 25, fieldSize: 100000 } })
+  const profileUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5000000, files: 1, fields: 5 } })
   const run = (fn, status = 200) => async (request, response) => {
     try { return response.status(status).json({ data: await fn(request) }) }
     catch (error) { return sendError(error, response) }
@@ -53,8 +53,21 @@ export function createFtthReportRouter({ service, requireAuth, requireSuperadmin
   })
   router.get('/ftth/reports/:id', run((r) => service.detail(r.user, r.params.id)))
   router.post('/ftth/reports', (request, response, next) => {
-    upload.array('dokumentasi', 5)(request, response, (error) => error
-      ? response.status(400).json({ message: 'Unggah maksimal 5 lampiran, masing-masing maksimal 10 MB.' }) : next())
+    upload.array('dokumentasi', 5)(request, response, (error) => {
+      if (error) {
+        if (error.code === 'LIMIT_FILE_SIZE') {
+          return response.status(400).json({ message: 'Ukuran setiap berkas lampiran maksimal 10 MB.' })
+        }
+        if (error.code === 'LIMIT_FILE_COUNT') {
+          return response.status(400).json({ message: 'Unggah maksimal 5 lampiran.' })
+        }
+        if (error.code === 'LIMIT_FIELD_COUNT' || error.code === 'LIMIT_FIELD_VALUE') {
+          return response.status(400).json({ message: 'Jumlah isian atau ukuran data melebihi batas.' })
+        }
+        return response.status(400).json({ message: error.message || 'Unggah maksimal 5 lampiran, masing-masing maksimal 10 MB.' })
+      }
+      return next()
+    })
   }, run((r) => service.create(r.user, r.body, r.files), 201))
   router.put('/ftth/reports/:id', requireSuperadmin, run((r) => service.update(r.user, r.params.id, r.body)))
   router.patch('/ftth/reports/:id/status', requireSuperadmin, run((r) => service.setStatus(r.user, r.params.id, r.body)))

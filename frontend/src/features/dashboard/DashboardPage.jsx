@@ -107,6 +107,25 @@ export default function DashboardPage() {
             <strong className="signal-value">{data?.belumMelapor ?? '—'}</strong>
             <small>tanggal {labelDate}</small>
           </article>
+          {data?.reportStats && (
+            <>
+              <article>
+                <span>On Progress</span>
+                <strong className="info-value">{data.reportStats.onProgress}</strong>
+                <small>laporan proses</small>
+              </article>
+              <article>
+                <span>Selesai</span>
+                <strong className="success-value">{data.reportStats.selesai}</strong>
+                <small>laporan selesai</small>
+              </article>
+              <article>
+                <span>Kendala Lapangan</span>
+                <strong className="danger-value">{data.reportStats.kendala}</strong>
+                <small>perlu perhatian</small>
+              </article>
+            </>
+          )}
         </section>
 
         <section className="data-section latest-reports">
@@ -127,7 +146,8 @@ export default function DashboardPage() {
                   <th>Pegawai</th>
                   <th>Pekerjaan</th>
                   <th>Lokasi</th>
-                  <th>Keterangan</th>
+                  <th>Status</th>
+                  <th>Kendala / Keterangan</th>
                   <th>Aksi</th>
                 </tr>
               </thead>
@@ -140,8 +160,14 @@ export default function DashboardPage() {
                       <span>{item.cluster?.desa?.namaDesa || '-'}</span>
                       <small className="table-subline">{item.cluster?.clusterName || '-'}</small>
                     </td>
-                    <td className="description-cell" data-label="Keterangan">
-                      {item.keterangan || '-'}
+                    <td data-label="Status">
+                      <span className={`status-badge ${item.status === 'SELESAI' || item.status === 'APPROVED' ? 'active' : item.status === 'KENDALA' || item.status === 'REJECTED' ? 'inactive' : 'info'}`}>
+                        {item.status === 'SELESAI' ? 'Selesai' : item.status === 'KENDALA' ? 'Kendala' : item.status === 'ON_PROGRESS' ? 'On Progress' : item.status || 'On Progress'}
+                      </span>
+                    </td>
+                    <td className="description-cell" data-label="Kendala / Keterangan">
+                      {item.status === 'KENDALA' && <strong className="text-danger" style={{ display: 'block', fontSize: '11px' }}>Kendala Lapangan: </strong>}
+                      {item.kendala_lapangan || item.keterangan || '-'}
                     </td>
                     <td className="record-actions">
                       {data?.source === 'ftth' ? <button className="secondary-button" onClick={() => setSelected(item.id)}>Detail</button> : <Link
@@ -155,7 +181,7 @@ export default function DashboardPage() {
                 ))}
                 {!data?.terbaru?.length && (
                   <tr>
-                    <td className="empty-cell" colSpan="5">
+                    <td className="empty-cell" colSpan="6">
                       Belum ada laporan terbaru.
                     </td>
                   </tr>
