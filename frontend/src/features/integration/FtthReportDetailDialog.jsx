@@ -3,7 +3,14 @@ import { ftthApi } from '../../api/ftth.js'
 import FtthDialog from './FtthDialog.jsx'
 import FtthAttachments from './FtthAttachments.jsx'
 
-const labels = { PENDING: 'Menunggu', APPROVED: 'Diterima', REJECTED: 'Perlu revisi' }
+const labels = {
+  ON_PROGRESS: 'On Progress',
+  SELESAI: 'Selesai',
+  KENDALA: 'Kendala',
+  PENDING: 'On Progress',
+  APPROVED: 'Selesai',
+  REJECTED: 'Kendala',
+}
 
 export default function FtthReportDetailDialog({ report, onClose, children }) {
   const [detail, setDetail] = useState(null)
@@ -19,11 +26,14 @@ export default function FtthReportDetailDialog({ report, onClose, children }) {
   return <FtthDialog title="Detail laporan" responsive onClose={onClose}>
     <section className="ftth-detail-summary" aria-label="Informasi laporan">
       <div className="ftth-report-heading"><time>{item.tanggal_kegiatan?.slice(0, 10)}</time>
-        <span className={`ftth-status ftth-status-${item.status}`}>{labels[item.status] || item.status}</span></div>
+        <span className={`ftth-status ftth-status-${item.status?.toLowerCase()}`}>{labels[item.status] || item.status}</span></div>
       <h3>{item.process_name || 'Laporan kegiatan'}</h3>
       <div className="ftth-detail-location"><strong>{item.project_name}</strong><span>{item.cluster_name}</span></div>
       {item.nomor_perangkat && <p>Nomor perangkat: {item.nomor_perangkat}</p>}
-      <p className="ftth-detail-description">{item.keterangan}</p>
+      <p className="ftth-detail-description">
+        <strong>Kendala Lapangan: </strong>
+        {item.kendala_lapangan || item.keterangan || 'Tidak ada kendala'}
+      </p>
       {item.catatan_revisi && <p>Catatan revisi: {item.catatan_revisi}</p>}
     </section>
     <section aria-label="Lampiran laporan">

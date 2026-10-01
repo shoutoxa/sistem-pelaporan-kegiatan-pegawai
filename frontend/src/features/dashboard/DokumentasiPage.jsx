@@ -2,11 +2,12 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { dashboardApi } from '../../api/dashboard.js'
 import { masterApi } from '../../api/master.js'
+import DocumentationFolders from '../integration/DocumentationFolders.jsx'
 import PageHeader from '../../components/PageHeader.jsx'
 import PageState from '../../components/PageState.jsx'
 import Icon from '../../components/Icon.jsx'
 
-const emptyFilters = { desaId: '', clusterId: '', pekerjaanId: '' }
+const emptyFilters = { desaId: '', clusterId: '', kategoriId: '', pekerjaanId: '' }
 const photosPerPage = 6
 
 export default function DokumentasiPage() {
@@ -16,20 +17,24 @@ export default function DokumentasiPage() {
   const [appliedFilters, setAppliedFilters] = useState(emptyFilters)
   const [desaOptions, setDesaOptions] = useState([])
   const [clusterOptions, setClusterOptions] = useState([])
+  const [kategoriOptions, setKategoriOptions] = useState([])
   const [pekerjaanOptions, setPekerjaanOptions] = useState([])
   const [loadingCluster, setLoadingCluster] = useState(false)
+  const [view, setView] = useState('pdf')
 
   useEffect(() => {
     let active = true
-    Promise.all([masterApi.fetchDesa(), masterApi.fetchPekerjaan()])
-      .then(([desa, pekerjaan]) => {
+    Promise.all([masterApi.fetchDesa(), masterApi.fetchKategori(), masterApi.fetchPekerjaan()])
+      .then(([desa, kategori, pekerjaan]) => {
         if (!active) return
         setDesaOptions(Array.isArray(desa) ? desa : [])
+        setKategoriOptions(Array.isArray(kategori) ? kategori : [])
         setPekerjaanOptions(Array.isArray(pekerjaan) ? pekerjaan : [])
       })
       .catch(() => {
         if (!active) return
         setDesaOptions([])
+        setKategoriOptions([])
         setPekerjaanOptions([])
       })
     return () => { active = false }
@@ -79,6 +84,12 @@ export default function DokumentasiPage() {
     setClusterOptions([])
   }
 
+  const availablePekerjaan = useMemo(() => {
+    const list = pekerjaanOptions.filter((item) => item.isActive !== false)
+    if (!filters.kategoriId) return list
+    return list.filter((item) => item.kategoriId === filters.kategoriId)
+  }, [pekerjaanOptions, filters.kategoriId])
+
   const documentPages = useMemo(() => {
     const groups = new Map()
 
@@ -108,8 +119,9 @@ export default function DokumentasiPage() {
   const selectedNames = useMemo(() => ({
     desa: desaOptions.find((item) => item.id === appliedFilters.desaId)?.namaDesa || 'Semua Desa',
     cluster: clusterOptions.find((item) => item.id === appliedFilters.clusterId)?.clusterName || 'Semua RW',
+    kategori: kategoriOptions.find((item) => item.id === appliedFilters.kategoriId)?.namaKategori || 'Semua Kategori',
     pekerjaan: pekerjaanOptions.find((item) => item.id === appliedFilters.pekerjaanId)?.namaPekerjaan || 'Semua Pekerjaan',
-  }), [appliedFilters, clusterOptions, desaOptions, pekerjaanOptions])
+  }), [appliedFilters, clusterOptions, desaOptions, kategoriOptions, pekerjaanOptions])
 
   return (
     <section className="page documentation-page">
@@ -151,6 +163,30 @@ export default function DokumentasiPage() {
               ))}
             </select>
           </label>
+          <label htmlFor="documentation-kategori">
+            Kategori Pekerjaan
+            <select
+              id="documentation-kategori"
+              value={filters.kategoriId}
+              onChange={(event) => {
+                const kategoriId = event.target.value
+                setFilters((current) => {
+                  const currentJob = pekerjaanOptions.find((p) => p.id === current.pekerjaanId)
+                  const shouldKeepJob = currentJob && (!kategoriId || currentJob.kategoriId === kategoriId)
+                  return {
+                    ...current,
+                    kategoriId,
+                    pekerjaanId: shouldKeepJob ? current.pekerjaanId : '',
+                  }
+                })
+              }}
+            >
+              <option value="">Semua Kategori</option>
+              {kategoriOptions.filter((item) => item.isActive !== false).map((item) => (
+                <option key={item.id} value={item.id}>{item.namaKategori}</option>
+              ))}
+            </select>
+          </label>
           <label htmlFor="documentation-pekerjaan">
             Pekerjaan
             <select
@@ -159,7 +195,7 @@ export default function DokumentasiPage() {
               onChange={(event) => setFilters((current) => ({ ...current, pekerjaanId: event.target.value }))}
             >
               <option value="">Semua Pekerjaan</option>
-              {pekerjaanOptions.filter((item) => item.isActive !== false).map((item) => (
+              {availablePekerjaan.map((item) => (
                 <option key={item.id} value={item.id}>{item.namaPekerjaan}</option>
               ))}
             </select>
@@ -190,20 +226,36 @@ export default function DokumentasiPage() {
             <div>
               <span className="preview-eyebrow">Preview dokumen</span>
               <h2>{selectedNames.desa} · {selectedNames.cluster}</h2>
-              <p>{selectedNames.pekerjaan} · {data.total} foto · {documentPages.length} halaman</p>
+              <p>{selectedNames.kategori} · {selectedNames.pekerjaan} · {data.total} foto · {documentPages.length} halaman</p>
             </div>
-            <button
-              className="primary-button icon-label"
-              type="button"
-              disabled={documentPages.length === 0}
-              onClick={() => window.print()}
-            >
-              <Icon name="download" />
-              Cetak / Simpan PDF
-            </button>
+            <div className="ftth-view-switch" role="group" aria-label="Tampilan dokumentasi">
+              {['pdf', 'folder'].map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  aria-pressed={view === mode}
+                  onClick={() => setView(mode)}
+                >
+                  {mode === 'pdf' ? 'Tampilan PDF' : 'Tampilan folder'}
+                </button>
+              ))}
+            </div>
+            {view === 'pdf' && (
+              <button
+                className="primary-button icon-label"
+                type="button"
+                disabled={documentPages.length === 0}
+                onClick={() => window.print()}
+              >
+                <Icon name="download" />
+                Cetak / Simpan PDF
+              </button>
+            )}
           </div>
 
-          {documentPages.length === 0 ? (
+          {view === 'folder' ? (
+            <DocumentationFolders items={data.items} />
+          ) : documentPages.length === 0 ? (
             <PageState
               title="Dokumentasi tidak ditemukan"
               message="Belum ada foto untuk kombinasi Desa, RW, dan Pekerjaan yang dipilih."

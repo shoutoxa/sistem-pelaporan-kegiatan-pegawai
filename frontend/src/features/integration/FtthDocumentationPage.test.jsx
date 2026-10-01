@@ -23,7 +23,7 @@ it('pages the screen preview while retaining all sheets and image readiness for 
 })
 it('filters project/cluster and prints only after image loading, with PDF as a link', async () => {
   const base = { reportId: 'r1', projectId: 'p1', clusterId: 'c1', processId: 'j1', projectName: 'Project A', clusterName: 'Cluster A', processName: 'Sitac', downloadUrl: '/api/ftth/reports/r1/attachments/a/download' }
-  dashboardApi.listDocumentation.mockResolvedValue({ data: { source: 'ftth', items: [{ ...base, id: 'a', originalName: 'foto.png', mimeType: 'image/png' }, { ...base, id: 'b', originalName: 'izin.pdf', mimeType: 'application/pdf' }], options: { projects: [{ id: 'p1', name: 'Project A' }], clusters: [{ id: 'c1', name: 'Cluster A', projectId: 'p1' }], processes: [{ id: 'j1', name: 'Sitac' }] } } })
+  dashboardApi.listDocumentation.mockResolvedValue({ data: { source: 'ftth', items: [{ ...base, id: 'a', originalName: 'foto.png', mimeType: 'image/png' }, { ...base, id: 'b', originalName: 'izin.pdf', mimeType: 'application/pdf' }], options: { projects: [{ id: 'p1', name: 'Project A' }], clusters: [{ id: 'c1', name: 'Cluster A', projectId: 'p1' }], categories: [{ id: 'cat-1', name: 'Sitac' }], processes: [{ id: 'j1', name: 'Sitac', categoryId: 'cat-1' }] } } })
   render(<FtthDocumentationPage />)
   const photo = await screen.findByAltText('foto.png')
   expect(photo).toHaveAttribute('crossorigin', 'use-credentials')
@@ -39,6 +39,7 @@ it('filters project/cluster and prints only after image loading, with PDF as a l
   fireEvent.load(screen.getByAltText('foto.png'))
   fireEvent.change(screen.getByLabelText('Project'), { target: { value: 'p1' } })
   fireEvent.change(screen.getByLabelText('Cluster'), { target: { value: 'c1' } })
+  fireEvent.change(screen.getByLabelText('Kategori Pekerjaan'), { target: { value: 'cat-1' } })
   fireEvent.click(screen.getByText('Tampilkan'))
-  await waitFor(() => expect(dashboardApi.listDocumentation).toHaveBeenCalledWith({ projectId: 'p1', clusterId: 'c1', pekerjaanId: '' }))
+  await waitFor(() => expect(dashboardApi.listDocumentation).toHaveBeenCalledWith({ projectId: 'p1', clusterId: 'c1', kategoriId: 'cat-1', pekerjaanId: '' }))
 })

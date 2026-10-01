@@ -8,3 +8,5 @@ backend/uploads-temp/
 coverage/
 .tmp/
 backend/generated/prisma/
+uploads/
+walkthrough.md

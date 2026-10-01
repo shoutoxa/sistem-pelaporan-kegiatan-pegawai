@@ -7,7 +7,14 @@ import ClusterReportingStatus from './ClusterReportingStatus.jsx'
 import { newReportFields as empty, reportDraftKey, readReportDraft, saveReportDraft, clearReportDraft, reconcileReportFields } from './reportDraft.js'
 import './ftth.css'
 
-const labels = { PENDING: 'Menunggu', APPROVED: 'Diterima', REJECTED: 'Perlu revisi' }
+const labels = {
+  ON_PROGRESS: 'On Progress',
+  SELESAI: 'Selesai',
+  KENDALA: 'Kendala',
+  PENDING: 'Menunggu',
+  APPROVED: 'Diterima',
+  REJECTED: 'Perlu revisi',
+}
 
 export default function FtthPage({ mode = 'dev' }) {
   const { user } = useAuth()
@@ -83,10 +90,21 @@ function FtthPageContent({ user, mode }) {
     setItems(await ftthApi.list(nextOffset)); setOffset(nextOffset)
   }
   function change(name, value) {
-    setFields((current) => ({ ...current, [name]: value,
-      ...(name === 'project_id' ? { cluster_id: '' } : {}),
-      ...(name === 'category_id' ? { process_id: '' } : {}),
-    }))
+    setFields((current) => {
+      const next = { ...current, [name]: value }
+      if (name === 'cluster_id' && value) {
+        const cluster = references.clusters.find((c) => c.id === value)
+        if (cluster?.project_id) next.project_id = cluster.project_id
+      }
+      if (name === 'project_id') {
+        const stillValid = references.clusters.some((c) => c.id === next.cluster_id && c.project_id === value)
+        if (!stillValid) next.cluster_id = ''
+      }
+      if (name === 'category_id') {
+        next.process_id = ''
+      }
+      return next
+    })
   }
   async function submit(event) {
     event.preventDefault()
@@ -96,12 +114,21 @@ function FtthPageContent({ user, mode }) {
         await ftthApi.update(editing, data)
         setMessage('Koreksi laporan tersimpan.'); setEditing(null)
       } else {
+        if (data.status === 'KENDALA') {
+          const kendalaText = (data.kendala_lapangan || data.keterangan || '').trim()
+          if (kendalaText.length < 5) throw new Error('Kendala Lapangan wajib diisi minimal 5 karakter ketika status Kendala.')
+        }
         if (!files.length || files.length > 5 || files.some((file) => file.size > 10000000)) throw new Error('Pilih 1–5 lampiran, maksimal 10 MB per berkas.')
         const problem = fileSelectionError(files)
         if (problem) throw new Error(problem)
         if (!references.clusters.some((c) => c.id === data.cluster_id && c.project_id === data.project_id)) throw new Error('Pilih cluster dari penugasan yang tersedia.')
         const body = new FormData()
-        Object.entries(data).forEach(([key, value]) => body.append(key, value))
+        if (!data.status) data.status = 'ON_PROGRESS'
+        data.kendala_lapangan = data.kendala_lapangan || data.keterangan || ''
+        data.keterangan = data.kendala_lapangan
+        Object.entries(data).forEach(([key, value]) => {
+          if (value !== undefined && value !== null) body.append(key, value)
+        })
         files.forEach((file) => body.append('dokumentasi', file))
         const result = await ftthApi.create(body)
         setMessage(`Laporan ${result.id} tersimpan. ${result.warnings?.join(' ') || 'Lampiran terkirim.'}`)
@@ -113,8 +140,18 @@ function FtthPageContent({ user, mode }) {
   }
   function edit(item) {
     const process = references.processes.find((p) => p.id === item.process_id)
-    setFields({ ...empty(), project_id: item.project_id, cluster_id: item.cluster_id, category_id: process?.master_category_id || '',
-      process_id: item.process_id, tanggal_kegiatan: item.tanggal_kegiatan.slice(0, 10), nomor_perangkat: item.nomor_perangkat || '', keterangan: item.keterangan || '' })
+    setFields({
+      ...empty(),
+      project_id: item.project_id,
+      cluster_id: item.cluster_id,
+      category_id: process?.master_category_id || '',
+      process_id: item.process_id,
+      tanggal_kegiatan: item.tanggal_kegiatan?.slice(0, 10) || '',
+      nomor_perangkat: item.nomor_perangkat || '',
+      status: item.status || 'ON_PROGRESS',
+      kendala_lapangan: item.kendala_lapangan || item.keterangan || '',
+      keterangan: item.kendala_lapangan || item.keterangan || '',
+    })
     setEditing(item.id)
     document.getElementById('ftth-form-title')?.focus()
   }
@@ -176,7 +213,44 @@ function FtthPageContent({ user, mode }) {
         </div>
         {selectedProcess?.input_instruction && <aside className="ftth-job-guidance"><strong>Panduan dokumentasi pekerjaan</strong><p>{selectedProcess.input_instruction}</p></aside>}
         {selectedProcess?.allow_file === false && <p role="alert">Pekerjaan ini tidak menerima berkas. Pengiriman teks/link belum tersedia; pilih pekerjaan lain atau hubungi admin.</p>}
-        <label>Keterangan<textarea aria-label="Keterangan" required minLength={5} maxLength={2000} value={fields.keterangan} onChange={(e) => change('keterangan', e.target.value)} /></label>
+        <div className="ftth-status-selection">
+          <label className="ftth-status-label">Status Laporan</label>
+          <div className="ftth-status-group" role="radiogroup" aria-label="Status Laporan">
+            {[
+              { id: 'ON_PROGRESS', label: 'On Progress', desc: 'Sedang Berlangsung' },
+              { id: 'SELESAI', label: 'Selesai', desc: 'Pekerjaan Selesai' },
+              { id: 'KENDALA', label: 'Kendala', desc: 'Ada Kendala Lapangan' },
+            ].map((opt) => (
+              <label key={opt.id} className={`ftth-status-card ${fields.status === opt.id ? 'is-selected is-' + opt.id.toLowerCase() : ''}`}>
+                <input
+                  type="radio"
+                  name="status"
+                  value={opt.id}
+                  checked={fields.status === opt.id}
+                  onChange={(e) => change('status', e.target.value)}
+                />
+                <span className="ftth-status-card-title">{opt.label}</span>
+                <small className="ftth-status-card-desc">{opt.desc}</small>
+              </label>
+            ))}
+          </div>
+        </div>
+        <label htmlFor="kendala-laporan-input">
+          Kendala Laporan {fields.status === 'KENDALA' ? <span className="ftth-badge-required">* (Wajib diisi jika status Kendala)</span> : <span className="ftth-helper">(Opsional)</span>}
+          <textarea
+            id="kendala-laporan-input"
+            aria-label="Kendala Laporan"
+            required={fields.status === 'KENDALA'}
+            minLength={fields.status === 'KENDALA' ? 5 : undefined}
+            maxLength={2000}
+            placeholder={fields.status === 'KENDALA' ? 'Jelaskan kendala lapangan yang dihadapi (minimal 5 karakter)...' : 'Tuliskan catatan kendala lapangan jika ada (opsional)...'}
+            value={fields.kendala_lapangan || fields.keterangan || ''}
+            onChange={(e) => {
+              change('kendala_lapangan', e.target.value)
+              change('keterangan', e.target.value)
+            }}
+          />
+        </label>
         </div>
         {!editing && <div className="ftth-form-section"><h3><span aria-hidden="true">3</span> Lampiran</h3>
           <FtthFilePicker key={fileKey} files={files} onChange={setFiles} disabled={busy} />
@@ -190,7 +264,15 @@ function FtthPageContent({ user, mode }) {
         {items.length === 0 && <p>Belum ada laporan pada halaman ini.</p>}
         <div className="ftth-history-grid">{items.map((item) => <article className="ftth-report" key={item.id}>
           <div className="ftth-report-heading"><time dateTime={item.tanggal_kegiatan?.slice(0, 10)}>{item.tanggal_kegiatan?.slice(0, 10)}</time><span className={`ftth-status ftth-status-${item.status}`}>{labels[item.status] || item.status}</span></div>
-          <h3>{item.process_name || 'Laporan kegiatan'}</h3><p className="ftth-report-location"><strong>{item.project_name}</strong><span>{item.cluster_name}</span></p><p className="ftth-report-description">{item.keterangan}</p>
+          <h3>{item.process_name || 'Laporan kegiatan'}</h3><p className="ftth-report-location"><strong>{item.project_name}</strong><span>{item.cluster_name}</span></p>
+          {(item.kendala_lapangan || item.keterangan) ? (
+            <p className="ftth-report-description">
+              {item.status === 'KENDALA' && <strong className="text-danger">Kendala Lapangan: </strong>}
+              {item.kendala_lapangan || item.keterangan}
+            </p>
+          ) : (
+            <p className="ftth-report-description ftth-helper">Tidak ada catatan kendala lapangan.</p>
+          )}
           {isAdmin && <p className="ftth-helper">Pelapor: {item.user_name || '—'}</p>}
           {item.catatan_revisi && <p>Catatan: {item.catatan_revisi}</p>}
           <div className="ftth-actions"><button disabled={busy} onClick={() => { setSelected(item); setRevision(item.catatan_revisi || '') }}>Lihat lampiran</button>

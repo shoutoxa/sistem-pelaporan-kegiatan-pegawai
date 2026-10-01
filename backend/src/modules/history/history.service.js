@@ -53,9 +53,10 @@ export function createHistoryService({ prisma, storage, clock = () => new Date()
   }
 
   async function listDocumentation(filters = {}) {
-    const { desaId, clusterId, pekerjaanId } = filters
+    const { desaId, clusterId, kategoriId, pekerjaanId } = filters
     const where = { dokumentasi: { some: {} } }
     if (pekerjaanId) where.pekerjaanId = pekerjaanId
+    else if (kategoriId) where.pekerjaan = { kategoriId }
     if (clusterId) where.clusterId = clusterId
     else if (desaId) where.cluster = { desaId }
     const reports = await prisma.laporan.findMany({
@@ -63,7 +64,7 @@ export function createHistoryService({ prisma, storage, clock = () => new Date()
       include: {
         user: { select: { id: true, nama: true, nomorHp: true } },
         cluster: { include: { desa: true } },
-        pekerjaan: true,
+        pekerjaan: { include: { kategori: true } },
         dokumentasi: true,
       },
       orderBy: { createdAt: 'desc' },
@@ -97,6 +98,8 @@ export function createHistoryService({ prisma, storage, clock = () => new Date()
           desa: report.cluster?.desa,
           cluster: report.cluster,
           pekerjaan: report.pekerjaan,
+          categoryId: report.pekerjaan?.kategoriId,
+          categoryName: report.pekerjaan?.kategori?.namaKategori || 'Belum dikategorikan',
         })
       }
     }

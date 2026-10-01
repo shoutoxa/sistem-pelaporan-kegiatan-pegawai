@@ -127,6 +127,11 @@
 .ftth-folders details { padding: var(--space-3); margin: var(--space-3) 0; border: 1px solid var(--border); border-radius: 10px; background: var(--surface, white); min-width: 0; }
 .ftth-folders summary { cursor: pointer; padding: var(--space-2); font-weight: 600; overflow-wrap: anywhere; }
 .ftth-folders small { font-weight: 400; }
+.ftth-folders-toolbar { display: flex; flex-wrap: wrap; gap: var(--space-3); margin-bottom: var(--space-4); align-items: center; }
+.ftth-download-progress { background: var(--surface-muted, #f4f8f5); border: 1px solid var(--border, #c8d7ce); border-radius: 8px; padding: var(--space-3) var(--space-4); margin-bottom: var(--space-4); }
+.ftth-download-progress .progress-info { display: flex; justify-content: space-between; font-size: 0.9rem; font-weight: 600; margin-bottom: var(--space-2); color: var(--text, #142b2c); }
+.ftth-download-progress .progress-bar-track { width: 100%; height: 8px; background: #e2e8e4; border-radius: 4px; overflow: hidden; }
+.ftth-download-progress .progress-bar-fill { height: 100%; background: #187448; transition: width 0.2s ease; }
 .ftth-attachments { padding: 0; list-style: none; }
 .ftth-attachments li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); padding: var(--space-3) 0; border-bottom: 1px solid var(--border); }
 .ftth-file-name { flex: 1 1 160px; overflow-wrap: anywhere; min-width: 0; }
@@ -137,3 +142,25 @@
   .ftth-folders details { padding: var(--space-2); }
 }
 @media print { .ftth-dialog, .ftth-view-switch, .ftth-folders { display: none !important; } }
+
+/* Status selector cards */
+.ftth-status-selection { margin: var(--space-4) 0 var(--space-5); }
+.ftth-status-label { font-weight: 600; margin-bottom: var(--space-2); display: block; color: var(--text, #142b2c); }
+.ftth-status-group { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: var(--space-3); }
+.ftth-status-card { display: flex; flex-direction: column; padding: var(--space-3) var(--space-4); border: 2px solid var(--border, #c8d7ce); border-radius: 10px; cursor: pointer; transition: all 0.2s ease; background: var(--surface, #fff); position: relative; }
+.ftth-status-card input[type="radio"] { position: absolute; opacity: 0; width: 0; height: 0; }
+.ftth-status-card-title { font-weight: 700; font-size: 0.95rem; margin-bottom: 2px; }
+.ftth-status-card-desc { font-size: 0.8rem; color: var(--text-muted, #5a7164); }
+.ftth-status-card:hover { border-color: #8da497; background: var(--surface-muted, #f8faf8); }
+.ftth-status-card.is-selected { border-width: 2px; }
+.ftth-status-card.is-selected.is-on_progress { border-color: #2563eb; background: #eff6ff; color: #1e40af; }
+.ftth-status-card.is-selected.is-on_progress .ftth-status-card-desc { color: #3b82f6; }
+.ftth-status-card.is-selected.is-selesai { border-color: #16a34a; background: #f0fdf4; color: #166534; }
+.ftth-status-card.is-selected.is-selesai .ftth-status-card-desc { color: #22c55e; }
+.ftth-status-card.is-selected.is-kendala { border-color: #dc2626; background: #fef2f2; color: #991b1b; }
+.ftth-status-card.is-selected.is-kendala .ftth-status-card-desc { color: #ef4444; }
+
+.ftth-status-ON_PROGRESS { color: #1d4ed8; background: #dbeafe; }
+.ftth-status-SELESAI { color: #15803d; background: #dcfce7; }
+.ftth-status-KENDALA { color: #b91c1c; background: #fee2e2; }
+.ftth-badge-required { color: #dc2626; font-size: 0.85rem; font-weight: 600; margin-left: var(--space-2); }

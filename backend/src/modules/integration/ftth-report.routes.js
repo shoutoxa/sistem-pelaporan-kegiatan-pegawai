@@ -21,6 +21,11 @@ export function createFtthReportRouter({ service, requireAuth, requireSuperadmin
   router.get('/ftth/status', (_request, response) => response.json({ data: { enabled, reportsSource, documentationSource } }))
   router.use('/ftth', (_request, response, next) => enabled ? next() : response.status(503).json({ message: 'Mode FTTH development belum diaktifkan pada backend.' }))
   router.get('/ftth/references', run((r) => service.references(r.user)))
+  router.get('/ftth/dashboard', run((r) => service.employeeDashboard(r.user)))
+  router.get('/ftth/projects', run((r) => service.listProjects(r.user)))
+  router.get('/ftth/projects/:id', run((r) => service.projectDetail(r.user, r.params.id)))
+  router.get('/ftth/clusters', run((r) => service.listClusters(r.user)))
+  router.get('/ftth/clusters/:id', run((r) => service.clusterDetail(r.user, r.params.id)))
   router.get('/ftth/mappings', requireSuperadmin, run((r) => service.mappings(r.user)))
   router.put('/ftth/mappings/:id', requireSuperadmin, run((r) => service.saveMapping(r.user, r.params.id, r.body)))
   router.get('/ftth/users/:id/foto', async (request, response) => {

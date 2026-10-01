@@ -10,9 +10,9 @@ import { createProductionPegawaiRouter } from './modules/pegawai/pegawai.routes.
 import { createProductionExportRouter } from './modules/export/export.routes.js'
 import { createProductionFtthReportRouter } from './modules/integration/ftth-report.routes.js'
 
-const hasDatabase = process.env.DATABASE_URL && process.env.JWT_SECRET
+const canAuthenticate = process.env.FTTH_AUTH_SOURCE === 'ftth' || Boolean(process.env.DATABASE_URL && process.env.JWT_SECRET)
 if (process.env.REQUIRE_FULL_CONFIG === 'true') assertFullConfig()
-const authService = hasDatabase ? await createProductionAuthService() : undefined
+const authService = canAuthenticate ? await createProductionAuthService() : undefined
 const authRouter = authService ? await createProductionAuthRouter() : undefined
 const masterRouter = authService ? await createProductionMasterRouter({ authService }) : undefined
 const hasStorageKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY

@@ -28,8 +28,11 @@ describe('DokumentasiPage', () => {
       if (requestUrl.endsWith('/api/master/desa')) {
         return Promise.resolve({ ok: true, json: async () => [{ id: 'd1', namaDesa: 'Handapherang' }] })
       }
+      if (requestUrl.endsWith('/api/master/kategori')) {
+        return Promise.resolve({ ok: true, json: async () => [{ id: 'k1', namaKategori: 'Implementasi' }] })
+      }
       if (requestUrl.endsWith('/api/master/pekerjaan')) {
-        return Promise.resolve({ ok: true, json: async () => [{ id: 'p1', namaPekerjaan: 'Pemasangan ODN' }] })
+        return Promise.resolve({ ok: true, json: async () => [{ id: 'p1', namaPekerjaan: 'Pemasangan ODN', kategoriId: 'k1' }] })
       }
       if (requestUrl.includes('/api/master/desa/d1/cluster')) {
         return Promise.resolve({ ok: true, json: async () => [{ id: 'c1', clusterName: 'RW 02' }] })
@@ -44,14 +47,19 @@ describe('DokumentasiPage', () => {
     fireEvent.change(screen.getByLabelText('Desa'), { target: { value: 'd1' } })
     await waitFor(() => expect(screen.getByRole('option', { name: 'RW 02' })).toBeInTheDocument())
     fireEvent.change(screen.getByLabelText('RW / Cluster'), { target: { value: 'c1' } })
+    fireEvent.change(screen.getByLabelText('Kategori Pekerjaan'), { target: { value: 'k1' } })
     fireEvent.change(screen.getByLabelText('Pekerjaan'), { target: { value: 'p1' } })
     fireEvent.click(screen.getByRole('button', { name: /tampilkan/i }))
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining('/api/admin/dokumentasi?desaId=d1&clusterId=c1&pekerjaanId=p1'),
+      expect.stringContaining('/api/admin/dokumentasi?desaId=d1&clusterId=c1&kategoriId=k1&pekerjaanId=p1'),
       expect.any(Object),
     ))
     expect(screen.getByText('Foto pengerjaan ODN')).toBeInTheDocument()
     expect(screen.getByText('Halaman 1 dari 1')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Tampilan folder' }))
+    expect(screen.getByRole('region', { name: 'Folder dokumentasi' })).toBeInTheDocument()
+    expect(screen.getByText('Unduh Semua File (Struktur Folder)')).toBeInTheDocument()
   })
 })

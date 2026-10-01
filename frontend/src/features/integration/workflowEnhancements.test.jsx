@@ -75,8 +75,40 @@ it('shows current-day status per assigned cluster', async () => {
   await waitFor(() => expect(screen.getByText('Sudah lapor · Menunggu')).toBeInTheDocument())
 })
 it('never merges folders with identical display names but different IDs', () => {
-  const common = { projectName: 'Same', clusterName: 'Same', processName: 'Same', processId: 'j' }
+  const common = { projectName: 'Same', clusterName: 'Same', processName: 'Same', processId: 'j', categoryName: 'IKR', categoryId: 'cat-1' }
   const groups = groupDocumentation([{ ...common, projectId: 'p1', clusterId: 'c1' }, { ...common, projectId: 'p2', clusterId: 'c2' }, { ...common, projectId: 'p1', clusterId: 'c3' }])
   expect(groups).toHaveLength(2)
   expect(groups[0].clusters).toHaveLength(2)
+  expect(groups[0].clusters[0].categories[0].name).toBe('IKR')
+})
+it('renders DocumentationFolders with download all files button and handles download flow', async () => {
+  const createObjectURLMock = vi.fn().mockReturnValue('blob:test-zip')
+  const revokeObjectURLMock = vi.fn()
+  vi.stubGlobal('URL', { createObjectURL: createObjectURLMock, revokeObjectURL: revokeObjectURLMock })
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, blob: async () => new Blob(['fake content']) }))
+
+  const items = [{
+    id: 'f1',
+    projectId: 'p1',
+    projectName: 'Project Alpha',
+    clusterId: 'c1',
+    clusterName: 'RW 01',
+    categoryId: 'k1',
+    categoryName: 'Implementasi',
+    processId: 'proc1',
+    processName: 'Pemasangan ODP',
+    originalName: 'foto1.png',
+    mimeType: 'image/png',
+    downloadUrl: '/api/ftth/reports/r1/attachments/f1/download',
+  }]
+
+  const { default: DocumentationFolders } = await import('./DocumentationFolders.jsx')
+  render(<DocumentationFolders items={items} />)
+
+  const downloadBtn = screen.getByRole('button', { name: 'Unduh Semua File (Struktur Folder)' })
+  expect(downloadBtn).toBeInTheDocument()
+  expect(downloadBtn).toBeEnabled()
+
+  fireEvent.click(downloadBtn)
+  await waitFor(() => expect(createObjectURLMock).toHaveBeenCalled())
 })

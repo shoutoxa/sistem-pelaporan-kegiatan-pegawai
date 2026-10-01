@@ -15,10 +15,13 @@ function admin(actor) {
 function active(item) { return item.is_active !== false && !item.deleted_at }
 const label = (item) => item.full_name || item.name || item.nama || item.project_name || item.cluster_name || item.id
 function summary(item) {
+  const desc = item.kendala_lapangan ?? item.keterangan ?? ''
   return {
     id: item.id, user_id: item.user_id, project_id: item.project_id, cluster_id: item.cluster_id,
     process_id: item.process_id, tanggal_kegiatan: item.tanggal_kegiatan,
-    keterangan: item.keterangan, nomor_perangkat: item.nomor_perangkat,
+    keterangan: desc,
+    kendala_lapangan: desc,
+    nomor_perangkat: item.nomor_perangkat,
     status: item.status, catatan_revisi: item.catatan_revisi,
     created_at: item.created_at, project_name: item.project ? label(item.project) : item.project_id,
     cluster_name: item.cluster ? label(item.cluster) : item.cluster_id,
@@ -33,8 +36,14 @@ export function createFtthReportService({ client, repository, storage, clock = (
     const mapping = actor.authSource === 'ftth' && actor.identitySource === 'ftth'
       ? { externalUserId: parse(idSchema, actor.id) } : await repository.identity(actor.id)
     if (!mapping) throw fail('MAPPING_REQUIRED', 'Akun belum dipetakan ke FTTH. Hubungi admin.')
-    const user = row(await client.getUser(mapping.externalUserId))
-    if (user.id !== mapping.externalUserId || !active(user)) throw fail('FORBIDDEN', 'Akun FTTH tidak aktif atau tidak cocok.')
+    let user
+    try {
+      user = row(await client.getUser(mapping.externalUserId))
+    } catch {
+      const users = await (client.listUsers ? client.listUsers().then(rows).catch(() => []) : [])
+      user = users.find((u) => u.id === mapping.externalUserId)
+    }
+    if (!user || user.id !== mapping.externalUserId || !active(user)) throw fail('FORBIDDEN', 'Akun FTTH tidak aktif atau tidak cocok.')
     return mapping
   }
   async function all(fetchPage) {
@@ -53,13 +62,83 @@ export function createFtthReportService({ client, repository, storage, clock = (
   }
   async function references(actor) {
     const mapping = actor.role === 'SUPERADMIN' ? null : await identity(actor)
-    const [projects, clusters, categories, processes] = await Promise.all([
-      all(client.listProjects), mapping ? assignedClusters(mapping.externalUserId) : all(client.listClusters), client.listCategories().then(rows), client.listProcesses().then(rows),
+    const [projects, clusters, categories, processes, clusterProcesses, userReports] = await Promise.all([
+      all(client.listProjects),
+      mapping ? assignedClusters(mapping.externalUserId) : all(client.listClusters),
+      client.listCategories().then(rows),
+      client.listProcesses().then(rows),
+      client.listClusterProcesses ? client.listClusterProcesses().then(rows).catch(() => []) : Promise.resolve([]),
+      mapping ? all((query) => client.listReports({ ...query, user_id: mapping.externalUserId })) : Promise.resolve([]),
     ])
-    const visible = clusters.filter(active)
+    const visibleClusters = clusters.filter(active)
+
+    if (mapping) {
+      // Find cluster processes assigned to this user as PIC
+      const userAssignedCP = clusterProcesses.filter((cp) => cp.pic_id === mapping.externalUserId && active(cp))
+
+      // Determine which jobs are completed (either status in cp is completed/selesai, or user submitted a SELESAI report)
+      const completedJobKeys = new Set()
+      userAssignedCP.forEach((cp) => {
+        if (cp.status === 'completed' || cp.status === 'selesai') {
+          completedJobKeys.add(`${cp.cluster_id}:${cp.master_process_id}`)
+        }
+      })
+      userReports.forEach((rep) => {
+        if (rep.status === 'SELESAI' || rep.status === 'completed' || rep.status === 'APPROVED') {
+          completedJobKeys.add(`${rep.cluster_id}:${rep.process_id}`)
+        }
+      })
+
+      // Active assigned jobs: assigned to this user AND not completed yet
+      const activeAssignments = userAssignedCP.filter(
+        (cp) => !completedJobKeys.has(`${cp.cluster_id}:${cp.master_process_id}`)
+      )
+
+      // Only clusters that have assigned jobs or assigned to user
+      const assignedClusterIds = new Set(userAssignedCP.map((cp) => cp.cluster_id))
+      visibleClusters.forEach((c) => assignedClusterIds.add(c.id))
+      const userClusters = visibleClusters.filter((c) => assignedClusterIds.has(c.id))
+
+      // Only processes that are assigned to this employee and not completed
+      const activeProcessIds = new Set(activeAssignments.map((cp) => cp.master_process_id))
+      const userProcesses = processes
+        .filter((item) => active(item) && (activeProcessIds.size === 0 || activeProcessIds.has(item.id)))
+        .map((item) => {
+          const forClusters = activeAssignments
+            .filter((cp) => cp.master_process_id === item.id)
+            .map((cp) => cp.cluster_id)
+          return {
+            id: item.id,
+            name: label(item),
+            master_category_id: item.master_category_id,
+            allow_file: item.allow_file,
+            input_instruction: item.input_instruction,
+            cluster_ids: forClusters,
+          }
+        })
+
+      const userCategoryIds = new Set(userProcesses.map((p) => p.master_category_id))
+      const userCategories = categories.filter((cat) => active(cat) && userCategoryIds.has(cat.id))
+      const userProjectIds = new Set(userClusters.map((c) => c.project_id))
+      const userProjects = projects.filter((p) => active(p) && userProjectIds.has(p.id))
+
+      return {
+        projects: userProjects.map((item) => ({ id: item.id, name: label(item) })),
+        clusters: userClusters.map((item) => ({ id: item.id, name: label(item), project_id: item.project_id })),
+        categories: userCategories.map((item) => ({ id: item.id, name: label(item) })),
+        processes: userProcesses,
+        assignedJobs: activeAssignments.map((cp) => ({
+          id: cp.id,
+          cluster_id: cp.cluster_id,
+          process_id: cp.master_process_id,
+          status: cp.status,
+        })),
+      }
+    }
+
     return {
-      projects: projects.filter((item) => active(item) && visible.some((c) => c.project_id === item.id)).map((item) => ({ id: item.id, name: label(item) })),
-      clusters: visible.map((item) => ({ id: item.id, name: label(item), project_id: item.project_id })),
+      projects: projects.filter((item) => active(item) && visibleClusters.some((c) => c.project_id === item.id)).map((item) => ({ id: item.id, name: label(item) })),
+      clusters: visibleClusters.map((item) => ({ id: item.id, name: label(item), project_id: item.project_id })),
       categories: categories.filter(active).map((item) => ({ id: item.id, name: label(item) })),
       processes: processes.filter((item) => active(item) && categories.some((category) => category.id === item.master_category_id && active(category)))
         .map((item) => ({ id: item.id, name: label(item), master_category_id: item.master_category_id, allow_file: item.allow_file, input_instruction: item.input_instruction })),
@@ -98,11 +177,25 @@ export function createFtthReportService({ client, repository, storage, clock = (
         !categories.some((category) => category.id === process.master_category_id && active(category))) {
       throw fail('VALIDATION', 'Project, cluster, atau pekerjaan tidak aktif/tidak sesuai.')
     }
-    if (actor.role !== 'SUPERADMIN' && !(await assignedClusters(mapping.externalUserId)).some((item) => item.id === cluster.id && item.project_id === project.id)) throw fail('FORBIDDEN', 'Cluster ini belum ditugaskan kepada Anda.')
+    if (actor.role !== 'SUPERADMIN') {
+      const assigned = await assignedClusters(mapping.externalUserId)
+      const clusterProcesses = client.listClusterProcesses ? await client.listClusterProcesses().then(rows).catch(() => []) : []
+      const userAssignedCP = clusterProcesses.filter((cp) => cp.pic_id === mapping.externalUserId && active(cp))
+
+      const hasJobAssignment = userAssignedCP.some((cp) => cp.cluster_id === cluster.id && cp.master_process_id === process.id)
+      const hasClusterAssignment = assigned.some((item) => item.id === cluster.id && item.project_id === project.id)
+
+      if (userAssignedCP.length > 0 && !hasJobAssignment) {
+        throw fail('FORBIDDEN', 'Pekerjaan ini tidak di-assign kepada Anda.')
+      }
+      if (!hasClusterAssignment && !hasJobAssignment) {
+        throw fail('FORBIDDEN', 'Cluster ini belum ditugaskan kepada Anda.')
+      }
+    }
     return process
   }
   async function create(actor, fields, files) {
-    const data = parse(fieldsSchema, fields) // strict: rejects user_id, status and verification fields
+    const data = parse(fieldsSchema, fields)
     const mapping = await identity(actor)
     const process = await validateReferences(data, actor, mapping)
     if (actor.role !== 'SUPERADMIN' && ![jakartaDate(clock()), jakartaDate(new Date(clock().getTime() - 86400000))].includes(data.tanggal_kegiatan)) {
@@ -119,7 +212,19 @@ export function createFtthReportService({ client, repository, storage, clock = (
     }
     let report
     try {
-      report = row(await client.createReport({ ...data, user_id: mapping.externalUserId, status: 'PENDING', verified_by: null, verified_at: null }))
+      const payload = {
+        user_id: mapping.externalUserId,
+        project_id: data.project_id,
+        cluster_id: data.cluster_id,
+        process_id: data.process_id,
+        tanggal_kegiatan: data.tanggal_kegiatan,
+        nomor_perangkat: data.nomor_perangkat || null,
+        status: data.status || 'ON_PROGRESS',
+        kendala_lapangan: data.status === 'KENDALA' ? (data.kendala_lapangan || data.keterangan || null) : (data.kendala_lapangan || data.keterangan || null),
+        verified_by: null,
+        verified_at: null,
+      }
+      report = row(await client.createReport(payload))
     } catch {
       throw fail('WRITE_UNCONFIRMED', 'Pengiriman laporan belum terkonfirmasi. Muat ulang daftar laporan dan periksa FTTH sebelum mencoba lagi agar tidak membuat duplikat.')
     }
@@ -207,29 +312,90 @@ export function createFtthReportService({ client, repository, storage, clock = (
   async function documentation(actor, query = {}) {
     admin(actor)
     await identity(actor)
-    for (const key of ['projectId', 'clusterId', 'pekerjaanId']) if (query[key]) parse(idSchema, query[key])
-    const reports = await all(client.listReports)
-    const seen = new Set(), projects = new Map(), clusters = new Map(), processes = new Map(), items = []
+    for (const key of ['projectId', 'clusterId', 'kategoriId', 'pekerjaanId']) if (query[key]) parse(idSchema, query[key])
+    const [reports, rawProjects, rawClusters, rawCategories, rawProcesses] = await Promise.all([
+      all(client.listReports),
+      all(client.listProjects),
+      all(client.listClusters),
+      client.listCategories().then(rows),
+      client.listProcesses().then(rows),
+    ])
+    const categoryMap = new Map(rawCategories.map((c) => [c.id, { id: c.id, name: label(c) }]))
+    const processMap = new Map(rawProcesses.map((p) => [p.id, {
+      id: p.id,
+      name: label(p),
+      categoryId: p.master_category_id || p.category_id || null,
+      categoryName: categoryMap.get(p.master_category_id || p.category_id)?.name || 'Belum dikategorikan',
+    }]))
+    const projects = new Map()
+    for (const p of rawProjects) {
+      if (active(p)) projects.set(p.id, { id: p.id, name: label(p) })
+    }
+    const clusters = new Map()
+    for (const c of rawClusters) {
+      if (active(c)) clusters.set(c.id, { id: c.id, name: label(c), projectId: c.project_id })
+    }
+    const categories = new Map()
+    for (const c of rawCategories) {
+      if (active(c)) categories.set(c.id, { id: c.id, name: label(c) })
+    }
+    const processes = new Map()
+    for (const p of rawProcesses) {
+      if (active(p)) {
+        const catId = p.master_category_id || p.category_id || null
+        processes.set(p.id, {
+          id: p.id,
+          name: label(p),
+          categoryId: catId,
+          categoryName: categoryMap.get(catId)?.name || 'Belum dikategorikan',
+        })
+      }
+    }
+    const seen = new Set(), items = []
     for (const report of reports) {
       if (seen.has(report.id)) throw fail('INTEGRATION_INVALID_RESPONSE', 'Pagination laporan FTTH mengembalikan ID berulang.')
       seen.add(report.id)
       const data = summary(report)
-      projects.set(report.project_id, { id: report.project_id, name: data.project_name })
-      clusters.set(report.cluster_id, { id: report.cluster_id, name: data.cluster_name, projectId: report.project_id })
-      processes.set(report.process_id, { id: report.process_id, name: data.process_name })
+      const procInfo = processMap.get(report.process_id)
+      const catId = procInfo?.categoryId || null
+      const catName = procInfo?.categoryName || 'Belum dikategorikan'
+      if (!projects.has(report.project_id)) {
+        projects.set(report.project_id, { id: report.project_id, name: data.project_name })
+      }
+      if (!clusters.has(report.cluster_id)) {
+        clusters.set(report.cluster_id, { id: report.cluster_id, name: data.cluster_name, projectId: report.project_id })
+      }
+      if (catId && !categories.has(catId)) {
+        categories.set(catId, { id: catId, name: catName })
+      }
+      if (!processes.has(report.process_id)) {
+        processes.set(report.process_id, { id: report.process_id, name: data.process_name, categoryId: catId, categoryName: catName })
+      }
       if ((query.projectId && report.project_id !== query.projectId) ||
           (query.clusterId && report.cluster_id !== query.clusterId) ||
+          (query.kategoriId && catId !== query.kategoriId) ||
           (query.pekerjaanId && report.process_id !== query.pekerjaanId)) continue
       if (!Array.isArray(report.dokumentasi)) throw fail('INTEGRATION_INVALID_RESPONSE', 'Relasi dokumentasi tidak tersedia pada respons laporan FTTH.')
       for (const file of rows(report.dokumentasi)) {
         if (file.laporan_id !== report.id) throw fail('INTEGRATION_INVALID_RESPONSE', 'Relasi lampiran FTTH tidak sesuai laporan.')
-        items.push({ id: file.id, reportId: report.id, projectId: report.project_id, clusterId: report.cluster_id, processId: report.process_id,
+        items.push({ id: file.id, reportId: report.id, projectId: report.project_id, clusterId: report.cluster_id,
+          processId: report.process_id, categoryId: catId, categoryName: catName,
           projectName: data.project_name, clusterName: data.cluster_name, processName: data.process_name,
           originalName: file.original_name, mimeType: file.mime_type, tanggal: report.tanggal_kegiatan, keterangan: report.keterangan,
           downloadUrl: `/api/ftth/reports/${encodeURIComponent(report.id)}/attachments/${encodeURIComponent(file.id)}/download` })
       }
     }
-    return { source: 'ftth', items, total: items.length, options: { projects: [...projects.values()], clusters: [...clusters.values()], processes: [...processes.values()] } }
+    return {
+      source: 'ftth',
+      items,
+      total: items.length,
+      options: {
+        projects: [...projects.values()],
+        clusters: [...clusters.values()],
+        categories: [...categories.values()],
+        processes: [...processes.values()],
+      },
+    }
   }
   async function dashboard(actor) {
     admin(actor)
@@ -360,5 +526,282 @@ export function createFtthReportService({ client, repository, storage, clock = (
     if (!user.wajib_lapor) return { user_id: userId, wajib_lapor: false, tanggal: jakartaDate(clock()), clusters: [] }
     return dailyStatus(userId)
   }
-  return { references, mappings, saveMapping, create, list, listAdminReports, documentation, dashboard, detail, update, setStatus, remove, download, profilePhoto, uploadProfilePhoto, userClusters, userReportStatus }
+  async function employeeDashboard(actor) {
+    await identity(actor)
+    const [projects, clusters, processes, clusterProcesses, reports] = await Promise.all([
+      all(client.listProjects),
+      all(client.listClusters),
+      client.listProcesses().then(rows),
+      client.listClusterProcesses().then(rows),
+      all(client.listReports),
+    ])
+
+    const activeProjects = projects.filter(active)
+    const activeClusters = clusters.filter(active)
+    const activeCP = clusterProcesses.filter(active)
+
+    const totalProjects = activeProjects.length
+    const totalClusters = activeClusters.length
+    const homepassTarget = activeClusters.reduce((sum, c) => sum + (Number(c.homepass_target) || 0), 0)
+    const homepassAchieved = activeClusters.reduce((sum, c) => sum + (Number(c.homepass_achieved) || 0), 0)
+
+    // Calculate overall progress from cluster processes
+    const completedCP = activeCP.filter((cp) => cp.status === 'completed' || cp.status === 'selesai').length
+    const overallProgress = activeCP.length > 0 ? Math.round((completedCP / activeCP.length) * 100) : 0
+
+    // Process progress breakdown
+    const processProgress = processes.filter(active).map((p) => {
+      const items = activeCP.filter((cp) => cp.master_process_id === p.id)
+      const total = items.length
+      const done = items.filter((cp) => cp.status === 'completed' || cp.status === 'selesai').length
+      return {
+        id: p.id,
+        name: label(p),
+        total,
+        completed: done,
+        percentage: total > 0 ? Math.round((done / total) * 100) : 0,
+      }
+    }).filter((p) => p.total > 0)
+
+    // Clusters with location for map
+    const projectMap = new Map(projects.map((p) => [p.id, p]))
+    const mapClusters = activeClusters.map((c) => ({
+      id: c.id,
+      name: label(c),
+      project_id: c.project_id,
+      project_name: projectMap.get(c.project_id) ? label(projectMap.get(c.project_id)) : c.project_id,
+      status: c.status || 'open',
+      latitude: Number(c.latitude) || null,
+      longitude: Number(c.longitude) || null,
+      homepass_target: Number(c.homepass_target) || 0,
+      homepass_achieved: Number(c.homepass_achieved) || 0,
+    }))
+
+    // Report stats for this employee
+    const userReports = reports.filter((r) => r.user_id === actor.externalUserId || r.user_id === actor.id)
+    const reportStats = {
+      onProgress: userReports.filter((r) => r.status === 'ON_PROGRESS' || r.status === 'PENDING').length,
+      selesai: userReports.filter((r) => r.status === 'SELESAI' || r.status === 'APPROVED').length,
+      kendala: userReports.filter((r) => r.status === 'KENDALA' || r.status === 'REJECTED').length,
+      total: userReports.length,
+    }
+
+    return {
+      totalProjects,
+      totalClusters,
+      homepassTarget,
+      homepassAchieved,
+      overallProgress,
+      clusters: mapClusters,
+      processProgress,
+      reportStats,
+    }
+  }
+
+  async function listProjects(actor) {
+    await identity(actor)
+    const [projects, clusters] = await Promise.all([
+      all(client.listProjects),
+      all(client.listClusters),
+    ])
+    const activeProjects = projects.filter(active)
+    const activeClusters = clusters.filter(active)
+
+    return activeProjects.map((p) => {
+      const pClusters = activeClusters.filter((c) => c.project_id === p.id)
+      const target = pClusters.reduce((sum, c) => sum + (Number(c.homepass_target) || 0), 0)
+      const achieved = pClusters.reduce((sum, c) => sum + (Number(c.homepass_achieved) || 0), 0)
+      return {
+        id: p.id,
+        name: label(p),
+        spk_number: p.spk_number || '-',
+        spk_date: p.spk_date || '-',
+        estimated_homepass: Number(p.estimated_homepass) || target,
+        homepass_target: target,
+        homepass_achieved: achieved,
+        status: p.status || 'open',
+        cluster_count: pClusters.length,
+      }
+    })
+  }
+
+  async function projectDetail(actor, id) {
+    await identity(actor)
+    parse(idSchema, id)
+    const [project, clusters] = await Promise.all([
+      client.getProject(id).then(row),
+      all(client.listClusters),
+    ])
+    const pClusters = clusters.filter(active).filter((c) => c.project_id === id)
+    return {
+      ...project,
+      clusters: pClusters.map((c) => ({
+        id: c.id,
+        name: label(c),
+        status: c.status,
+        homepass_target: c.homepass_target,
+        homepass_achieved: c.homepass_achieved,
+        latitude: c.latitude,
+        longitude: c.longitude,
+      })),
+    }
+  }
+
+  async function listClusters(actor) {
+    await identity(actor)
+    const [clusters, projects, users, clusterProcesses, processes, categories] = await Promise.all([
+      all(client.listClusters),
+      all(client.listProjects),
+      all(client.listUsers),
+      all(client.listClusterProcesses),
+      all(client.listProcesses),
+      all(client.listCategories),
+    ])
+    const projectMap = new Map(projects.map((p) => [p.id, p]))
+    const userMap = new Map(users.map((u) => [u.id, u]))
+    const processMap = new Map(processes.map((p) => [p.id, p]))
+    const activeCP = clusterProcesses.filter(active)
+
+    return clusters.filter(active).map((c) => {
+      const cpForCluster = activeCP.filter((cp) => cp.cluster_id === c.id)
+      const totalCP = cpForCluster.length
+      const completedCP = cpForCluster.filter((cp) => cp.status === 'completed' || cp.status === 'selesai').length
+      const overallProgress = totalCP > 0 ? Math.round((completedCP / totalCP) * 100) : 0
+
+      // Categorize into SITAC, IMPLEMENTASI, IKR
+      const categoriesSummary = categories.filter(active).map((cat) => {
+        const catProcesses = cpForCluster.filter((cp) => {
+          const proc = processMap.get(cp.master_process_id)
+          return proc && proc.master_category_id === cat.id
+        })
+        const total = catProcesses.length
+        const done = catProcesses.filter((cp) => cp.status === 'completed' || cp.status === 'selesai').length
+        const percentage = total > 0 ? Math.round((done / total) * 100) : 0
+
+        const items = catProcesses.map((cp) => {
+          const proc = processMap.get(cp.master_process_id)
+          return {
+            id: cp.id,
+            process_id: cp.master_process_id,
+            name: proc ? label(proc) : cp.master_process_id,
+            status: cp.status || 'pending',
+            date: cp.completed_date || cp.target_date || null,
+          }
+        })
+
+        return {
+          id: cat.id,
+          name: label(cat),
+          total,
+          completed: done,
+          percentage,
+          items,
+        }
+      }).filter((cat) => cat.total > 0 || cat.items.length > 0)
+
+      return {
+        id: c.id,
+        name: label(c),
+        description: c.description || (projectMap.get(c.project_id) ? label(projectMap.get(c.project_id)) : ''),
+        project_id: c.project_id,
+        project_name: projectMap.get(c.project_id) ? label(projectMap.get(c.project_id)) : c.project_id,
+        status: c.status || 'open',
+        homepass_target: Number(c.homepass_target) || 0,
+        homepass_achieved: Number(c.homepass_achieved) || 0,
+        latitude: Number(c.latitude) || null,
+        longitude: Number(c.longitude) || null,
+        pic_id: c.pic_id,
+        pic_name: userMap.get(c.pic_id) ? label(userMap.get(c.pic_id)) : '-',
+        overall_progress: overallProgress,
+        categories_summary: categoriesSummary,
+      }
+    })
+  }
+
+  async function clusterDetail(actor, id) {
+    await identity(actor)
+    parse(idSchema, id)
+    const [cluster, clusterProcesses, processes, categories, users, projects, reports] = await Promise.all([
+      client.getCluster(id).then(row),
+      all(client.listClusterProcesses),
+      all(client.listProcesses),
+      all(client.listCategories),
+      all(client.listUsers),
+      all(client.listProjects),
+      all(client.listReports),
+    ])
+    const processMap = new Map(processes.map((p) => [p.id, p]))
+    const userMap = new Map(users.map((u) => [u.id, u]))
+    const projectMap = new Map(projects.map((p) => [p.id, p]))
+    const activeCP = clusterProcesses.filter(active)
+    const cpForCluster = activeCP.filter((cp) => cp.cluster_id === id)
+    const totalCP = cpForCluster.length
+    const completedCP = cpForCluster.filter((cp) => cp.status === 'completed' || cp.status === 'selesai').length
+    const overallProgress = totalCP > 0 ? Math.round((completedCP / totalCP) * 100) : 0
+
+    const categoriesSummary = categories.filter(active).map((cat) => {
+      const catProcesses = cpForCluster.filter((cp) => {
+        const proc = processMap.get(cp.master_process_id)
+        return proc && proc.master_category_id === cat.id
+      })
+      const total = catProcesses.length
+      const done = catProcesses.filter((cp) => cp.status === 'completed' || cp.status === 'selesai').length
+      const percentage = total > 0 ? Math.round((done / total) * 100) : 0
+
+      const items = catProcesses.map((cp) => {
+        const proc = processMap.get(cp.master_process_id)
+        const itemReports = reports.filter((r) => r.cluster_id === id && r.process_id === cp.master_process_id)
+        return {
+          id: cp.id,
+          process_id: cp.master_process_id,
+          name: proc ? label(proc) : cp.master_process_id,
+          input_instruction: proc?.input_instruction || '',
+          allow_file: proc?.allow_file ?? true,
+          status: cp.status || 'pending',
+          target_date: cp.target_date,
+          completed_date: cp.completed_date,
+          pic_id: cp.pic_id,
+          pic_name: userMap.get(cp.pic_id) ? label(userMap.get(cp.pic_id)) : '-',
+          notes: cp.notes,
+          reportCount: itemReports.length,
+          latestReport: itemReports[0] ? summary(itemReports[0]) : null,
+        }
+      })
+
+      return {
+        id: cat.id,
+        name: label(cat),
+        total,
+        completed: done,
+        percentage,
+        items,
+      }
+    }).filter((cat) => cat.total > 0 || cat.items.length > 0)
+
+    return {
+      ...cluster,
+      name: label(cluster),
+      description: cluster.description || (projectMap.get(cluster.project_id) ? label(projectMap.get(cluster.project_id)) : ''),
+      project_name: projectMap.get(cluster.project_id) ? label(projectMap.get(cluster.project_id)) : cluster.project_id,
+      overall_progress: overallProgress,
+      categories_summary: categoriesSummary,
+      homepass_target: Number(cluster.homepass_target) || 0,
+      homepass_achieved: Number(cluster.homepass_achieved) || 0,
+      latitude: Number(cluster.latitude) || null,
+      longitude: Number(cluster.longitude) || null,
+      processes: cpForCluster.map((cp) => ({
+        id: cp.id,
+        process_id: cp.master_process_id,
+        process_name: processMap.get(cp.master_process_id) ? label(processMap.get(cp.master_process_id)) : cp.master_process_id,
+        status: cp.status,
+        target_date: cp.target_date,
+        completed_date: cp.completed_date,
+        pic_id: cp.pic_id,
+        pic_name: userMap.get(cp.pic_id) ? label(userMap.get(cp.pic_id)) : '-',
+        notes: cp.notes,
+      })),
+    }
+  }
+
+  return { references, mappings, saveMapping, create, list, listAdminReports, documentation, dashboard, detail, update, setStatus, remove, download, profilePhoto, uploadProfilePhoto, userClusters, userReportStatus, employeeDashboard, listProjects, projectDetail, listClusters, clusterDetail }
 }

@@ -13,4 +13,9 @@ export const ftthApi = {
   update: (id, data) => request(`/reports/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   setStatus: (id, data) => request(`/reports/${id}/status`, { method: 'PATCH', body: JSON.stringify(data) }),
   remove: (id) => request(`/reports/${id}`, { method: 'DELETE' }),
+  dashboard: () => request('/dashboard'),
+  projects: () => request('/projects'),
+  projectDetail: (id) => request(`/projects/${encodeURIComponent(id)}`),
+  clusters: () => request('/clusters'),
+  clusterDetail: (id) => request(`/clusters/${encodeURIComponent(id)}`),
 }

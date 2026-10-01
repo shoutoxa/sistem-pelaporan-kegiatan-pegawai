@@ -60,5 +60,10 @@ describe('history service', () => {
       pekerjaanId: 'p1',
     })
     expect(findMany.mock.calls[1][0].where.cluster).toBeUndefined()
+
+    await service.listDocumentation({ kategoriId: 'k1' })
+    expect(findMany.mock.calls[2][0].where).toMatchObject({
+      pekerjaan: { kategoriId: 'k1' },
+    })
   })
 })

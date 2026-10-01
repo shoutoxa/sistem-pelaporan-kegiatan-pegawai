@@ -11,10 +11,21 @@ export const fieldsSchema = z.object({
   process_id: idSchema,
   tanggal_kegiatan: z.iso.date(),
   nomor_perangkat: z.string().trim().max(100).default(''),
-  keterangan: z.string().trim().min(5).max(2000),
-}).strict()
+  status: z.enum(['ON_PROGRESS', 'SELESAI', 'KENDALA']).default('ON_PROGRESS'),
+  kendala_lapangan: z.string().trim().max(2000).optional().nullable(),
+  keterangan: z.string().trim().max(2000).optional().nullable(),
+}).strict().refine((data) => {
+  if (data.status === 'KENDALA') {
+    const text = (data.kendala_lapangan || data.keterangan || '').trim()
+    return text.length >= 5
+  }
+  return true
+}, {
+  message: 'Kendala lapangan wajib diisi minimal 5 karakter jika status Kendala.',
+  path: ['kendala_lapangan'],
+})
 export const statusSchema = z.object({
-  status: z.enum(['PENDING', 'APPROVED', 'REJECTED']),
+  status: z.enum(['ON_PROGRESS', 'SELESAI', 'KENDALA', 'PENDING', 'APPROVED', 'REJECTED']),
   catatan_revisi: z.string().trim().max(2000).default(''),
 }).strict().refine((value) => value.status !== 'REJECTED' || value.catatan_revisi.length > 0)
 export const pageSchema = z.object({

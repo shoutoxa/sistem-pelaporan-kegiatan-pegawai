@@ -23,8 +23,8 @@ export default function DocumentationRoute() {
 }
 
 export function FtthDocumentationPage() {
-  const [data, setData] = useState({ items: [], options: { projects: [], clusters: [], processes: [] } })
-  const [filters, setFilters] = useState({ projectId: '', clusterId: '', pekerjaanId: '' })
+  const [data, setData] = useState({ items: [], options: { projects: [], clusters: [], categories: [], processes: [] } })
+  const [filters, setFilters] = useState({ projectId: '', clusterId: '', kategoriId: '', pekerjaanId: '' })
   const [applied, setApplied] = useState({})
   const [loading, setLoading] = useState(true), [error, setError] = useState('')
   const [images, setImages] = useState({})
@@ -54,15 +54,44 @@ export function FtthDocumentationPage() {
   }, [data.items])
   const photos = data.items.filter((item) => /^image\/(jpeg|png|webp|gif|bmp)$/i.test(item.mimeType || ''))
   const readyToPrint = photos.every((item) => images[item.id] === 'loaded')
-  const options = (rows) => rows.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)
+  const options = (rows) => (rows || []).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)
+  const availableClusters = useMemo(() => {
+    const list = data.options?.clusters || []
+    if (!filters.projectId) return list
+    return list.filter((x) => x.projectId === filters.projectId)
+  }, [data.options?.clusters, filters.projectId])
+
+  const availableProcesses = useMemo(() => {
+    const list = data.options?.processes || []
+    if (!filters.kategoriId) return list
+    return list.filter((x) => x.categoryId === filters.kategoriId)
+  }, [data.options?.processes, filters.kategoriId])
+
   return <section className="page documentation-page">
     <PageHeader title="Dokumentasi Kegiatan" description="Telusuri lampiran per project atau siapkan dokumentasi untuk dicetak." />
     <form className="documentation-filters no-print" onSubmit={(e) => { e.preventDefault(); load(filters) }}>
       <label>Project<select value={filters.projectId} onChange={(e) => setFilters({ ...filters, projectId: e.target.value, clusterId: '' })}><option value="">Semua Project</option>{options(data.options.projects)}</select></label>
-      <label>Cluster<select disabled={!filters.projectId} value={filters.clusterId} onChange={(e) => setFilters({ ...filters, clusterId: e.target.value })}><option value="">Semua Cluster</option>{options(data.options.clusters.filter((x) => x.projectId === filters.projectId))}</select></label>
-      <label>Pekerjaan<select value={filters.pekerjaanId} onChange={(e) => setFilters({ ...filters, pekerjaanId: e.target.value })}><option value="">Semua Pekerjaan</option>{options(data.options.processes)}</select></label>
+      <label>Cluster<select value={filters.clusterId} onChange={(e) => {
+        const clusterId = e.target.value
+        const found = (data.options?.clusters || []).find((x) => x.id === clusterId)
+        setFilters((current) => ({
+          ...current,
+          clusterId,
+          projectId: found?.projectId && !current.projectId ? found.projectId : current.projectId,
+        }))
+      }}><option value="">Semua Cluster</option>{options(availableClusters)}</select></label>
+      <label>Kategori Pekerjaan<select value={filters.kategoriId} onChange={(e) => setFilters({ ...filters, kategoriId: e.target.value, pekerjaanId: '' })}><option value="">Semua Kategori</option>{options(data.options.categories)}</select></label>
+      <label>Pekerjaan<select value={filters.pekerjaanId} onChange={(e) => {
+        const pekerjaanId = e.target.value
+        const found = (data.options?.processes || []).find((x) => x.id === pekerjaanId)
+        setFilters((current) => ({
+          ...current,
+          pekerjaanId,
+          kategoriId: found?.categoryId && !current.kategoriId ? found.categoryId : current.kategoriId,
+        }))
+      }}><option value="">Semua Pekerjaan</option>{options(availableProcesses)}</select></label>
       <div className="documentation-filter-actions"><button className="primary-button" type="submit" disabled={loading}>Tampilkan</button>
-      <button className="secondary-button" type="button" disabled={loading} onClick={() => { const reset = { projectId: '', clusterId: '', pekerjaanId: '' }; setFilters(reset); load(reset) }}>Reset</button></div>
+      <button className="secondary-button" type="button" disabled={loading} onClick={() => { const reset = { projectId: '', clusterId: '', kategoriId: '', pekerjaanId: '' }; setFilters(reset); load(reset) }}>Reset</button></div>
     </form>
     {loading ? <p role="status">Memuat dokumentasi…</p> : error ? <div><p role="alert">{error}</p><button onClick={() => load(applied)}>Coba lagi</button></div> : <>
       <div className="preview-toolbar no-print"><div><h2>Pratinjau dokumentasi</h2><p>{data.items.length} lampiran · {pages.length} halaman</p></div>

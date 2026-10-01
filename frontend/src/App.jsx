@@ -16,6 +16,11 @@ import DocumentationRoute from './features/integration/FtthDocumentationPage.jsx
 import AdminEmployeesPage from './features/pegawai/AdminEmployeesPage.jsx'
 import EditReportPage from './features/laporan/EditReportPage.jsx'
 import EmployeeReportSource from './features/integration/EmployeeReportSource.jsx'
+import EmployeeDashboardPage from './features/pegawai/EmployeeDashboardPage.jsx'
+import EmployeeProjectsPage from './features/pegawai/EmployeeProjectsPage.jsx'
+import EmployeeClustersPage from './features/pegawai/EmployeeClustersPage.jsx'
+import EmployeeClusterDetailPage from './features/pegawai/EmployeeClusterDetailPage.jsx'
+import EmployeeHomepassPage from './features/pegawai/EmployeeHomepassPage.jsx'
 
 export default function App() {
   return (
@@ -27,7 +32,12 @@ export default function App() {
           <Route path="/403" element={<ForbiddenPage />} />
           <Route element={<ProtectedRoute role="PEGAWAI" />}>
             <Route path="/pegawai" element={<EmployeeLayout />}>
-              <Route index element={<Navigate to="laporan/new" replace />} />
+              <Route index element={<Navigate to="dashboard" replace />} />
+              <Route path="dashboard" element={<EmployeeDashboardPage />} />
+              <Route path="projects" element={<EmployeeProjectsPage />} />
+              <Route path="clusters" element={<EmployeeClustersPage />} />
+              <Route path="clusters/:id" element={<EmployeeClusterDetailPage />} />
+              <Route path="homepass" element={<EmployeeHomepassPage />} />
               <Route path="laporan/new" element={<EmployeeReportRoute />} />
               <Route path="histori" element={<EmployeeReportSource mode="history"><HistoryPage /></EmployeeReportSource>} />
               <Route path="laporan/:id" element={<ReportDetailPage />} />

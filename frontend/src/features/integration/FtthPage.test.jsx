@@ -61,7 +61,7 @@ describe('FTTH development page', () => {
     localStorage.setItem(key, JSON.stringify({ ...newReportFields(), project_id: 'p1', cluster_id: 'c1', category_id: 'cat1', process_id: 'job1', keterangan: 'Saved draft text' }))
     ftthApi.create.mockRejectedValueOnce(new Error('Test offline')).mockResolvedValueOnce({ id: 'r1' })
     render(<FtthPage mode="form" />)
-    expect(await screen.findByLabelText('Keterangan')).toHaveValue('Saved draft text')
+    expect(await screen.findByLabelText(/Kendala Laporan|Keterangan/)).toHaveValue('Saved draft text')
     expect(screen.getByText(/0 dari 5 lampiran/)).toBeInTheDocument()
     fireEvent.change(screen.getByLabelText(/Lampiran \(1/), { target: { files: [new File(['png'], 'a.png', { type: 'image/png' })] } })
     const form = screen.getByRole('button', { name: 'Kirim laporan' }).closest('form')
@@ -75,10 +75,10 @@ describe('FTTH development page', () => {
   it('resets form state when the authenticated account changes', async () => {
     auth.user = { id: 'a', role: 'PEGAWAI' }
     const view = render(<FtthPage mode="form" />)
-    fireEvent.change(await screen.findByLabelText('Keterangan'), { target: { value: 'Account A text' } })
+    fireEvent.change(await screen.findByLabelText(/Kendala Laporan|Keterangan/), { target: { value: 'Account A text' } })
     auth.user = { id: 'b', role: 'PEGAWAI' }
     view.rerender(<FtthPage mode="form" />)
-    expect(await screen.findByLabelText('Keterangan')).toHaveValue('')
+    expect(await screen.findByLabelText(/Kendala Laporan|Keterangan/)).toHaveValue('')
   })
   it('uses task-focused copy on the employee history page', async () => {
     auth.user.authSource = 'ftth'
@@ -97,25 +97,46 @@ describe('FTTH development page', () => {
     expect(screen.queryByText('Koreksi')).not.toBeInTheDocument()
     expect(screen.queryByText('Hapus')).not.toBeInTheDocument()
   })
-  it('submits company form as multipart without user or status fields', async () => {
+  it('submits company form as multipart with status and kendala_lapangan fields', async () => {
     ftthApi.create.mockResolvedValue({ id: 'r1', warnings: [] })
     render(<FtthPage mode="form" />)
     fireEvent.change(await screen.findByLabelText('Project'), { target: { value: 'p1' } })
     fireEvent.change(screen.getByLabelText('Cluster'), { target: { value: 'c1' } })
     fireEvent.change(screen.getByLabelText('Kategori'), { target: { value: 'cat1' } })
     fireEvent.change(screen.getByLabelText('Pekerjaan'), { target: { value: 'job1' } })
-    fireEvent.change(screen.getByLabelText('Keterangan'), { target: { value: 'Pemasangan selesai' } })
+    fireEvent.change(screen.getByLabelText(/Kendala Laporan|Keterangan/), { target: { value: 'Pemasangan selesai' } })
     fireEvent.change(screen.getByLabelText(/Lampiran \(1/), { target: { files: [new File(['test'], 'foto.png', { type: 'image/png' })] } })
     fireEvent.submit(screen.getByRole('button', { name: 'Kirim laporan' }).closest('form'))
     await waitFor(() => expect(ftthApi.create).toHaveBeenCalledTimes(1))
     const body = ftthApi.create.mock.calls[0][0]
     expect(body.get('project_id')).toBe('p1')
     expect(body.get('dokumentasi').name).toBe('foto.png')
-    expect(body.has('status')).toBe(false)
+    expect(body.get('status')).toBe('ON_PROGRESS')
     expect(body.has('user_id')).toBe(false)
     expect(body.has('category_id')).toBe(false)
     expect(ftthApi.list).not.toHaveBeenCalled()
     expect(await screen.findByRole('status')).toHaveTextContent('tersimpan')
+  })
+  it('validates mandatory kendala_lapangan when status is KENDALA', async () => {
+    ftthApi.create.mockResolvedValue({ id: 'r1', warnings: [] })
+    render(<FtthPage mode="form" />)
+    fireEvent.change(await screen.findByLabelText('Project'), { target: { value: 'p1' } })
+    fireEvent.change(screen.getByLabelText('Cluster'), { target: { value: 'c1' } })
+    fireEvent.change(screen.getByLabelText('Kategori'), { target: { value: 'cat1' } })
+    fireEvent.change(screen.getByLabelText('Pekerjaan'), { target: { value: 'job1' } })
+    
+    // Choose status KENDALA
+    const kendalaRadio = screen.getByRole('radio', { name: /Kendala/i })
+    fireEvent.click(kendalaRadio)
+
+    fireEvent.change(screen.getByLabelText(/Lampiran \(1/), { target: { files: [new File(['test'], 'foto.png', { type: 'image/png' })] } })
+    
+    // Leave kendala_lapangan empty or short
+    fireEvent.change(screen.getByLabelText(/Kendala Laporan|Keterangan/), { target: { value: '' } })
+    fireEvent.submit(screen.getByRole('button', { name: 'Kirim laporan' }).closest('form'))
+    
+    expect(await screen.findByRole('alert')).toHaveTextContent('Kendala Lapangan wajib diisi minimal 5 karakter ketika status Kendala.')
+    expect(ftthApi.create).not.toHaveBeenCalled()
   })
   it('shows disabled state without loading reports', async () => {
     ftthApi.status.mockResolvedValue({ enabled: false })

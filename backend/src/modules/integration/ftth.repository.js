@@ -1,4 +1,29 @@
 export function createFtthRepository(prisma) {
+  if (!process.env.DATABASE_URL) {
+    const uploads = new Map()
+    return {
+      prepareUpload: async (data) => {
+        const item = { ...data, id: data.id || `upl-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, state: 'PREPARED', createdAt: new Date(), updatedAt: new Date() }
+        uploads.set(data.storagePath, item)
+        return item
+      },
+      markUpload: async (storagePath, state) => {
+        const item = uploads.get(storagePath)
+        if (item) { item.state = state; item.updatedAt = new Date() }
+        return item
+      },
+      recordRemoteUpload: async (storagePath, remotePath) => {
+        const item = uploads.get(storagePath)
+        if (item) { item.remotePath = remotePath; item.state = 'REMOTE_UPLOADED'; item.updatedAt = new Date() }
+        return item
+      },
+      pendingUploads: async () => Array.from(uploads.values()).filter((u) => u.state !== 'SYNCED'),
+      identity: async () => null,
+      localUser: async () => null,
+      mappings: async () => [],
+      saveMapping: async () => null,
+    }
+  }
   return {
     prepareUpload: (data) => prisma.ftthUpload.create({ data }),
     markUpload: (storagePath, state) => prisma.ftthUpload.update({ where: { storagePath }, data: { state } }),

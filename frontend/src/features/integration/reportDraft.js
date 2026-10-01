@@ -1,6 +1,6 @@
 export const newReportFields = () => ({ project_id: '', cluster_id: '', category_id: '', process_id: '',
   tanggal_kegiatan: new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()),
-  nomor_perangkat: '', keterangan: '' })
+  nomor_perangkat: '', status: 'ON_PROGRESS', kendala_lapangan: '', keterangan: '' })
 
 export function reportDraftKey(user) {
   return user?.id ? `ftth-report-draft:v1:${user.authSource || 'local'}:${user.externalUserId || user.id}` : null
@@ -12,8 +12,11 @@ export function readReportDraft(key) {
     if (!value || typeof value !== 'object') return null
     const fields = newReportFields()
     for (const name of Object.keys(fields)) {
-      if (typeof value[name] === 'string') fields[name] = value[name].slice(0, name === 'keterangan' ? 2000 : 100)
+      if (typeof value[name] === 'string') fields[name] = value[name].slice(0, name === 'keterangan' || name === 'kendala_lapangan' ? 2000 : 100)
     }
+    if (value.status && ['ON_PROGRESS', 'SELESAI', 'KENDALA'].includes(value.status)) fields.status = value.status
+    if (value.kendala_lapangan) fields.kendala_lapangan = value.kendala_lapangan
+    else if (value.keterangan) fields.kendala_lapangan = value.keterangan
     return fields
   } catch { return null }
 }

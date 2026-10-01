@@ -70,6 +70,17 @@ describe('FTTH report flow', () => {
     client.listReports.mockResolvedValue([{ ...report, dokumentasi: [{ id: id(9), laporan_id: id(99) }] }])
     await expect(service.documentation(admin)).rejects.toMatchObject({ code: 'INTEGRATION_INVALID_RESPONSE' })
   })
+  it('filters documentation by kategoriId and exposes category options', async () => {
+    const { service, client } = setup()
+    client.listReports.mockResolvedValue([{ ...report, dokumentasi: [{ id: id(9), laporan_id: report.id, mime_type: 'image/png', original_name: 'foto.png' }] }])
+    const data = await service.documentation(admin, { kategoriId: id(8) })
+    expect(data.total).toBe(1)
+    expect(data.options.categories).toHaveLength(1)
+    expect(data.options.categories[0].id).toBe(id(8))
+    expect(data.items[0].categoryId).toBe(id(8))
+    const empty = await service.documentation(admin, { kategoriId: id(99) })
+    expect(empty.total).toBe(0)
+  })
   it('does not require Supabase storage for FTTH attachment details', async () => {
     const { client, repository } = setup()
     client.listAttachments.mockResolvedValue([{ id: id(9), laporan_id: report.id, file_url: 'ftth-laporan/6/abc.png', mime_type: 'image/png', original_name: 'foto.png' }])
@@ -126,7 +137,7 @@ describe('FTTH report flow', () => {
   it('uploads to FTTH and journals remote path before metadata', async () => {
     const { service, client, repository, storage } = setup()
     const result = await service.create(employee, fields, [file])
-    expect(client.createReport).toHaveBeenCalledWith(expect.objectContaining({ user_id: id(7), status: 'PENDING', verified_by: null }))
+    expect(client.createReport).toHaveBeenCalledWith(expect.objectContaining({ user_id: id(7), status: 'ON_PROGRESS', verified_by: null }))
     expect(client.createAttachment).toHaveBeenCalledWith(expect.objectContaining({ laporan_id: id(6), file_url: '/uploads/test-file.png', mime_type: 'image/png', tipe_berkas: 'foto' }))
     expect(repository.recordRemoteUpload).toHaveBeenCalledWith(expect.any(String), '/uploads/test-file.png')
     expect(storage.upload).not.toHaveBeenCalled()
