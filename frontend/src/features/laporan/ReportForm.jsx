@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { http } from '../../api/http.js'
 import { masterApi } from '../../api/master.js'
 import { createReport } from '../../api/reports.js'
+import LocationFields from '../master-data/LocationFields.jsx'
 import FilePicker from './FilePicker.jsx'
 import PageHeader from '../../components/PageHeader.jsx'
 import Notice from '../../components/Notice.jsx'
@@ -17,15 +17,15 @@ function jakartaToday() {
   }).format(new Date())
 }
 
-const DRAFT_PREFIX = 'sistem-pelaporan:report-draft:v2'
+const DRAFT_PREFIX = 'sistem-pelaporan:report-draft:v1'
 
 function emptyReportForm() {
   return {
     tanggalKegiatan: jakartaToday(),
-    projectId: '',
+    desaId: '',
     clusterId: '',
-    categoryId: '',
-    processId: '',
+    kategoriId: '',
+    pekerjaanId: '',
     keterangan: '',
     nomorPerangkat: '',
   }
@@ -33,180 +33,67 @@ function emptyReportForm() {
 
 function hasDraftContent(form) {
   return form.tanggalKegiatan !== jakartaToday() || [
-    form.projectId,
+    form.desaId,
     form.clusterId,
-    form.categoryId,
-    form.processId,
+    form.kategoriId,
+    form.pekerjaanId,
     form.keterangan,
     form.nomorPerangkat,
-  ].some((value) => value && value.trim())
+  ].some((value) => value.trim())
 }
 
 function readDraft(key) {
   try {
-    const raw = localStorage.getItem(key) || (key.includes(':v2:') ? localStorage.getItem(key.replace(':v2:', ':v1:')) : null)
-    const stored = JSON.parse(raw)
+    const stored = JSON.parse(localStorage.getItem(key))
     if (!stored || typeof stored !== 'object') return null
     const fallback = emptyReportForm()
-    const normalized = {
-      tanggalKegiatan: typeof stored.tanggalKegiatan === 'string' ? stored.tanggalKegiatan : fallback.tanggalKegiatan,
-      projectId: stored.projectId || stored.desaId || '',
-      clusterId: stored.clusterId || '',
-      categoryId: stored.categoryId || stored.kategoriId || '',
-      processId: stored.processId || stored.pekerjaanId || '',
-      keterangan: typeof stored.keterangan === 'string' ? stored.keterangan : '',
-      nomorPerangkat: typeof stored.nomorPerangkat === 'string' ? stored.nomorPerangkat : '',
-    }
+    const normalized = Object.fromEntries(
+      Object.keys(fallback).map((field) => [
+        field,
+        typeof stored[field] === 'string' ? stored[field] : fallback[field],
+      ]),
+    )
     return hasDraftContent(normalized) ? normalized : null
   } catch {
     return null
   }
 }
 
-const EMPTY_ARRAY = []
-
-export default function ReportForm({
-  user,
-  villages = EMPTY_ARRAY,
-  jobs: jobProp = EMPTY_ARRAY,
-  categories: categoryProp = EMPTY_ARRAY,
-  showLaporanStatus = false,
-}) {
+export default function ReportForm({ user, villages, jobs: jobProp, categories: categoryProp }) {
   const navigate = useNavigate()
   const draftKey = `${DRAFT_PREFIX}:${user?.id || 'pegawai'}`
   const [initialDraft] = useState(() => readDraft(draftKey))
-
-  const [projects, setProjects] = useState(() => villages.map((v) => ({ id: v.id, name: v.namaDesa || v.name })))
-  const [clusters, setClusters] = useState([])
-  const [categories, setCategories] = useState(() => categoryProp.map((c) => ({ id: c.id, name: c.namaKategori || c.name })))
-  const [processes, setProcesses] = useState(() => jobProp.map((j) => ({
-    id: j.id,
-    name: j.namaPekerjaan || j.name,
-    kategoriId: j.kategoriId || j.categoryId,
-    input_instruction: j.instruksiDokumentasi || j.input_instruction,
-  })))
-
+  const [jobs, setJobs] = useState(jobProp || [])
+  const [categories, setCategories] = useState(categoryProp || [])
   const [form, setForm] = useState(() => initialDraft || emptyReportForm())
   const [draftRestored, setDraftRestored] = useState(Boolean(initialDraft))
   const [files, setFiles] = useState([])
   const [error, setError] = useState('')
   const [fieldErrors, setFieldErrors] = useState({})
   const [submitting, setSubmitting] = useState(false)
-  const [laporanStatus, setLaporanStatus] = useState(null)
 
   useEffect(() => {
-    if (!showLaporanStatus) return
-    let active = true
-    http
-      .request('/api/pegawai/laporan-status')
-      .then((res) => {
-        if (active && res?.data?.clusters && Array.isArray(res.data.clusters)) {
-          setLaporanStatus(res.data)
-        }
-      })
-      .catch(() => {})
-    return () => {
-      active = false
-    }
-  }, [showLaporanStatus, user])
-
-  const prevProjectId = useRef(form.projectId)
-  const prevCategoryId = useRef(form.categoryId)
-
-  useEffect(() => {
-    if (villages.length > 0) {
-      setProjects(villages.map((v) => ({ id: v.id, name: v.namaDesa || v.name })))
-      return
-    }
-    let active = true
-    masterApi.fetchProject()
-      .then((data) => {
-        if (active) setProjects(Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : []))
+    if (jobProp && categoryProp) return
+    Promise.all([
+      categoryProp ? Promise.resolve(categoryProp) : masterApi.fetchKategori(),
+      jobProp ? Promise.resolve(jobProp) : masterApi.fetchPekerjaan(),
+    ])
+      .then(([categoryRows, jobRows]) => {
+        setCategories(Array.isArray(categoryRows) ? categoryRows : [])
+        setJobs(Array.isArray(jobRows) ? jobRows : [])
+        setForm((current) => {
+          if (current.kategoriId || !current.pekerjaanId) return current
+          const currentJob = jobRows.find((job) => job.id === current.pekerjaanId)
+          return currentJob?.kategoriId
+            ? { ...current, kategoriId: currentJob.kategoriId }
+            : current
+        })
       })
       .catch(() => {
-        if (active) setProjects([])
+        setCategories(categoryProp || [])
+        setJobs(jobProp || [])
       })
-    return () => {
-      active = false
-    }
-  }, [villages])
-
-  useEffect(() => {
-    if (categoryProp.length > 0) {
-      setCategories(categoryProp.map((c) => ({ id: c.id, name: c.namaKategori || c.name })))
-      return
-    }
-    let active = true
-    masterApi.fetchCategory()
-      .then((data) => {
-        if (active) setCategories(Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : []))
-      })
-      .catch(() => {
-        if (active) setCategories([])
-      })
-    return () => {
-      active = false
-    }
-  }, [categoryProp])
-
-  useEffect(() => {
-    if (form.projectId) {
-      let active = true
-      masterApi.fetchClusterByProject(form.projectId)
-        .then((data) => {
-          if (active) {
-            const list = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : [])
-            setClusters(list)
-          }
-        })
-        .catch(() => {
-          if (active) setClusters([])
-        })
-      return () => {
-        active = false
-      }
-    } else {
-      setClusters((current) => (current.length === 0 ? current : []))
-    }
-    if (prevProjectId.current !== form.projectId) {
-      prevProjectId.current = form.projectId
-      setForm((current) => (current.clusterId ? { ...current, clusterId: '' } : current))
-    }
-  }, [form.projectId])
-
-  useEffect(() => {
-    if (jobProp.length > 0) {
-      const filtered = !form.categoryId
-        ? []
-        : jobProp
-            .filter((j) => (j.kategoriId || j.categoryId || j.master_category_id) === form.categoryId)
-            .map((j) => ({
-              id: j.id,
-              name: j.namaPekerjaan || j.name,
-              kategoriId: j.kategoriId || j.categoryId,
-              input_instruction: j.instruksiDokumentasi || j.input_instruction,
-            }))
-      setProcesses(filtered)
-    } else if (form.categoryId) {
-      let active = true
-      masterApi.fetchProcessByCategory(form.categoryId)
-        .then((data) => {
-          if (active) setProcesses(Array.isArray(data) ? data : data?.data || [])
-        })
-        .catch(() => {
-          if (active) setProcesses([])
-        })
-      return () => {
-        active = false
-      }
-    } else {
-      setProcesses((current) => (current.length === 0 ? current : []))
-    }
-    if (prevCategoryId.current !== form.categoryId) {
-      prevCategoryId.current = form.categoryId
-      setForm((current) => (current.processId ? { ...current, processId: '' } : current))
-    }
-  }, [form.categoryId, jobProp])
+  }, [categoryProp, jobProp])
 
   useEffect(() => {
     try {
@@ -217,24 +104,25 @@ export default function ReportForm({
     }
   }, [draftKey, form])
 
-  const selectedProcess = useMemo(() => {
-    const found = processes.find((p) => p.id === form.processId)
-    if (found) return found
-    const fromJob = jobProp.find((j) => j.id === form.processId)
-    if (fromJob) {
-      return {
-        id: fromJob.id,
-        name: fromJob.namaPekerjaan || fromJob.name,
-        input_instruction: fromJob.instruksiDokumentasi || fromJob.input_instruction,
-      }
+  const selectedJob = useMemo(
+    () => jobs.find((job) => job.id === form.pekerjaanId),
+    [jobs, form.pekerjaanId],
+  )
+  const availableCategories = useMemo(() => {
+    const rows = [...categories]
+    if (jobs.some((job) => !job.kategoriId)) {
+      rows.push({ id: 'uncategorized', namaKategori: 'Belum dikategorikan' })
     }
-    return null
-  }, [processes, form.processId, jobProp])
-
-  const isSitac = useMemo(() => {
-    const sitacCategory = categories.find((c) => c.id === form.categoryId)
-    return (sitacCategory?.name || sitacCategory?.namaKategori || '').toLowerCase().includes('sitac')
-  }, [categories, form.categoryId])
+    return rows
+  }, [categories, jobs])
+  const visibleJobs = useMemo(
+    () => jobs.filter((job) => (
+      form.kategoriId === 'uncategorized'
+        ? !job.kategoriId
+        : job.kategoriId === form.kategoriId
+    )),
+    [form.kategoriId, jobs],
+  )
 
   const clearFieldError = (key) =>
     setFieldErrors((current) => {
@@ -252,13 +140,10 @@ export default function ReportForm({
   function focusFirstInvalid(errors) {
     const fieldByError = {
       tanggalKegiatan: 'report-date',
-      projectId: 'report-project',
-      desaId: 'report-project',
+      desaId: 'report-village',
       clusterId: 'report-cluster',
-      categoryId: 'report-category',
       kategoriId: 'report-category',
-      processId: 'report-process',
-      pekerjaanId: 'report-process',
+      pekerjaanId: 'report-job',
       nomorPerangkat: 'report-device',
       keterangan: 'report-description',
       dokumentasi: 'report-gallery-input',
@@ -274,7 +159,6 @@ export default function ReportForm({
   function clearDraft() {
     try {
       localStorage.removeItem(draftKey)
-      localStorage.removeItem(draftKey.replace(':v2:', ':v1:'))
     } catch {
       // Resetting the visible form remains useful even without storage access.
     }
@@ -289,14 +173,14 @@ export default function ReportForm({
     event.preventDefault()
     setError('')
     const validationErrors = {}
-    if (!form.projectId) validationErrors.projectId = 'Project wajib dipilih.'
+    if (!form.desaId) validationErrors.desaId = 'Desa wajib dipilih.'
     if (!form.clusterId) validationErrors.clusterId = 'Cluster wajib dipilih.'
-    if (!form.categoryId) validationErrors.categoryId = 'Kategori wajib dipilih.'
-    if (!form.processId) validationErrors.processId = 'Pekerjaan wajib dipilih.'
+    if (!form.kategoriId) validationErrors.kategoriId = 'Kategori pekerjaan wajib dipilih.'
+    if (!form.pekerjaanId) validationErrors.pekerjaanId = 'Pekerjaan wajib dipilih.'
     if (form.keterangan.trim().length < 5)
       validationErrors.keterangan = 'Keterangan minimal 5 karakter.'
     if (files.length < 1)
-      validationErrors.dokumentasi = 'Minimal satu file wajib dipilih.'
+      validationErrors.dokumentasi = 'Minimal satu foto wajib dipilih.'
 
     if (Object.keys(validationErrors).length) {
       setFieldErrors(validationErrors)
@@ -310,7 +194,6 @@ export default function ReportForm({
       const result = await createReport({ ...form, files })
       try {
         localStorage.removeItem(draftKey)
-        localStorage.removeItem(draftKey.replace(':v2:', ':v1:'))
       } catch {
         // Submission success must not depend on browser storage availability.
       }
@@ -331,121 +214,12 @@ export default function ReportForm({
         title="Buat laporan harian"
         description="Lengkapi informasi kegiatan dan dokumentasi pekerjaan Anda di lapangan."
       />
-      {laporanStatus?.clusters?.length > 0 && (
-        <section
-          className="daily-status-card data-section"
-          aria-label="Status Laporan Harian"
-          style={{
-            marginBottom: '1.5rem',
-            background: 'var(--surface-color, #ffffff)',
-            border: '1px solid var(--border-color, #e2e8f0)',
-            borderRadius: '12px',
-            padding: '1.25rem',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-          }}
-        >
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              flexWrap: 'wrap',
-              gap: '0.75rem',
-              marginBottom: '0.85rem',
-            }}
-          >
-            <div>
-              <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-primary, #0f172a)' }}>
-                📋 Status Laporan Harian (WIB: {laporanStatus.tanggal})
-              </h3>
-              <p style={{ margin: '0.25rem 0 0', fontSize: '0.875rem', color: 'var(--text-secondary, #64748b)' }}>
-                {laporanStatus.wajib_lapor
-                  ? 'Akun Anda berstatus Wajib Lapor harian untuk cluster penugasan berikut:'
-                  : 'Cluster yang ditugaskan kepada Anda:'}
-              </p>
-            </div>
-            <span
-              style={{
-                fontSize: '0.85rem',
-                fontWeight: 600,
-                padding: '0.35rem 0.85rem',
-                borderRadius: '9999px',
-                backgroundColor: laporanStatus.clusters.every((c) => c.sudah_lapor) ? '#dcfce7' : '#fef3c7',
-                color: laporanStatus.clusters.every((c) => c.sudah_lapor) ? '#166534' : '#b45309',
-              }}
-            >
-              {laporanStatus.clusters.filter((c) => c.sudah_lapor).length} dari {laporanStatus.clusters.length} Cluster Sudah Dilaporkan
-            </span>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '0.75rem' }}>
-            {laporanStatus.clusters.map((c) => {
-              const isSelected = form.clusterId === c.cluster_id
-              return (
-                <div
-                  key={c.cluster_id}
-                  style={{
-                    padding: '0.85rem 1rem',
-                    borderRadius: '8px',
-                    border: isSelected ? '2px solid #0284c7' : '1px solid #e2e8f0',
-                    background: isSelected ? '#f0f9ff' : '#f8fafc',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'space-between',
-                    gap: '0.5rem',
-                  }}
-                >
-                  <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem' }}>
-                      <strong style={{ fontSize: '0.9rem', color: '#1e293b' }}>{c.cluster_name}</strong>
-                      <span
-                        style={{
-                          fontSize: '0.75rem',
-                          fontWeight: 700,
-                          padding: '0.2rem 0.5rem',
-                          borderRadius: '4px',
-                          whiteSpace: 'nowrap',
-                          background: c.sudah_lapor ? '#dcfce7' : '#fee2e2',
-                          color: c.sudah_lapor ? '#166534' : '#991b1b',
-                        }}
-                      >
-                        {c.sudah_lapor ? `✓ Selesai (${c.laporan_status || 'Dilaporkan'})` : '⚠ Belum Lapor'}
-                      </span>
-                    </div>
-                    {c.project_name && (
-                      <small style={{ color: '#64748b', display: 'block', marginTop: '0.25rem' }}>
-                        Projek: {c.project_name}
-                      </small>
-                    )}
-                  </div>
-                  {!isSelected && (
-                    <button
-                      type="button"
-                      className="secondary-button"
-                      style={{ alignSelf: 'flex-start', fontSize: '0.8rem', padding: '0.3rem 0.75rem' }}
-                      onClick={() => {
-                        const targetProject = projects.find((p) => p.name === c.project_name || p.id === c.project_id)
-                        setForm((prev) => ({
-                          ...prev,
-                          projectId: targetProject?.id || prev.projectId,
-                          clusterId: c.cluster_id,
-                        }))
-                      }}
-                    >
-                      Pilih Cluster Ini
-                    </button>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        </section>
-      )}
       {draftRestored && (
         <div className="draft-notice" role="status" aria-label="Draf laporan">
           <Icon name="history" />
           <div>
             <strong>Draf sebelumnya dipulihkan</strong>
-            <small>Isian teks tersimpan di perangkat ini. File perlu dipilih kembali.</small>
+            <small>Isian teks tersimpan di perangkat ini. Foto perlu dipilih kembali.</small>
           </div>
           <button className="text-button" type="button" onClick={clearDraft}>Hapus draf</button>
         </div>
@@ -462,7 +236,7 @@ export default function ReportForm({
               <span>1</span>
               <div>
                 <h2>Kegiatan</h2>
-                <p>Tanggal, project, cluster, kategori, dan jenis pekerjaan.</p>
+                <p>Tanggal, lokasi, dan jenis pekerjaan.</p>
               </div>
             </div>
             <div className="field-grid">
@@ -495,168 +269,123 @@ export default function ReportForm({
                 )}
               </label>
             </div>
-
-            <div className="field-grid">
-              <label htmlFor="report-project">
-                Desa / Project <b aria-hidden="true">*</b>
-                <select
-                  id="report-project"
-                  aria-label="Desa / Project"
-                  value={form.projectId}
-                  onChange={(event) => {
-                    clearFieldError('projectId')
-                    clearFieldError('desaId')
-                    setField('projectId', event.target.value)
-                  }}
-                  required
-                  aria-invalid={Boolean(fieldErrors.projectId || fieldErrors.desaId)}
-                  aria-describedby={(fieldErrors.projectId || fieldErrors.desaId) ? 'report-project-error' : undefined}
-                >
-                  <option value="">Pilih Project</option>
-                  {projects.map((project) => (
-                    <option key={project.id} value={project.id}>
-                      {project.name || project.namaDesa}
-                    </option>
-                  ))}
-                </select>
-                {(fieldErrors.projectId || fieldErrors.desaId) && (
-                  <small id="report-project-error" className="field-error" role="alert">
-                    {fieldErrors.projectId || fieldErrors.desaId}
-                  </small>
-                )}
-              </label>
-
-              <label htmlFor="report-cluster">
-                Cluster / RW <b aria-hidden="true">*</b>
-                <select
-                  id="report-cluster"
-                  aria-label="Cluster / RW"
-                  value={form.clusterId}
-                  onChange={(event) => {
-                    clearFieldError('clusterId')
-                    setField('clusterId', event.target.value)
-                  }}
-                  required
-                  disabled={!form.projectId}
-                  aria-invalid={Boolean(fieldErrors.clusterId)}
-                  aria-describedby={fieldErrors.clusterId ? 'report-cluster-error' : undefined}
-                >
-                  <option value="">Pilih Cluster</option>
-                  {(Array.isArray(clusters) ? clusters : []).map((cluster) => (
-                    <option key={cluster.id} value={cluster.id}>
-                      {cluster.name || cluster.clusterName}
-                    </option>
-                  ))}
-                </select>
-                {fieldErrors.clusterId && (
-                  <small id="report-cluster-error" className="field-error" role="alert">
-                    {fieldErrors.clusterId}
-                  </small>
-                )}
-              </label>
-            </div>
-
+            <LocationFields
+              value={form}
+              onChange={(location) => {
+                Object.keys(location).forEach(clearFieldError)
+                setForm((current) => ({ ...current, ...location }))
+              }}
+              desaOptions={villages}
+              errors={fieldErrors}
+            />
             <div className="field-grid">
               <label htmlFor="report-category">
                 Kategori pekerjaan <b aria-hidden="true">*</b>
                 <select
                   id="report-category"
                   aria-label="Kategori pekerjaan"
-                  value={form.categoryId}
+                  value={form.kategoriId}
                   onChange={(event) => {
-                    clearFieldError('categoryId')
                     clearFieldError('kategoriId')
-                    setField('categoryId', event.target.value)
+                    clearFieldError('pekerjaanId')
+                    setForm((current) => ({
+                      ...current,
+                      kategoriId: event.target.value,
+                      pekerjaanId: '',
+                    }))
                   }}
                   required
-                  aria-invalid={Boolean(fieldErrors.categoryId || fieldErrors.kategoriId)}
-                  aria-describedby={(fieldErrors.categoryId || fieldErrors.kategoriId) ? 'report-category-error' : undefined}
+                  aria-invalid={Boolean(fieldErrors.kategoriId)}
                 >
                   <option value="">Pilih Kategori</option>
-                  {categories.map((category) => (
-                    <option key={category.id} value={category.id}>
-                      {category.name || category.namaKategori}
-                    </option>
-                  ))}
+                  {availableCategories
+                    .filter((category) => category.isActive !== false)
+                    .map((category) => (
+                      <option key={category.id} value={category.id}>
+                        {category.namaKategori}
+                      </option>
+                    ))}
                 </select>
-                {(fieldErrors.categoryId || fieldErrors.kategoriId) && (
+                {fieldErrors.kategoriId && (
                   <small id="report-category-error" className="field-error" role="alert">
-                    {fieldErrors.categoryId || fieldErrors.kategoriId}
+                    {fieldErrors.kategoriId}
                   </small>
                 )}
               </label>
-
-              <label htmlFor="report-process">
+              <label htmlFor="report-job">
                 Pekerjaan <b aria-hidden="true">*</b>
                 <select
-                  id="report-process"
+                  id="report-job"
                   aria-label="Pekerjaan"
-                  value={form.processId}
+                  value={form.pekerjaanId}
+                  disabled={!form.kategoriId}
                   onChange={(event) => {
-                    clearFieldError('processId')
                     clearFieldError('pekerjaanId')
                     clearFieldError('nomorPerangkat')
                     setForm((current) => ({
                       ...current,
-                      processId: event.target.value,
+                      pekerjaanId: event.target.value,
                     }))
                   }}
                   required
-                  disabled={!form.categoryId}
-                  aria-invalid={Boolean(fieldErrors.processId || fieldErrors.pekerjaanId)}
-                  aria-describedby={(fieldErrors.processId || fieldErrors.pekerjaanId) ? 'report-process-error' : undefined}
+                  aria-invalid={Boolean(fieldErrors.pekerjaanId)}
+                  aria-describedby={
+                    fieldErrors.pekerjaanId ? 'report-job-error' : undefined
+                  }
                 >
-                  <option value="">Pilih Pekerjaan</option>
-                  {processes
-                    .filter((p) => p.is_active !== false)
-                    .map((process) => (
-                      <option key={process.id} value={process.id}>
-                        {process.name || process.namaPekerjaan}
+                  <option value="">{form.kategoriId ? 'Pilih Pekerjaan' : 'Pilih kategori terlebih dahulu'}</option>
+                  {visibleJobs
+                    .filter((job) => job.isActive !== false)
+                    .map((job) => (
+                      <option key={job.id} value={job.id}>
+                        {job.namaPekerjaan}
                       </option>
                     ))}
                 </select>
-                {(fieldErrors.processId || fieldErrors.pekerjaanId) && (
-                  <small id="report-process-error" className="field-error" role="alert">
-                    {fieldErrors.processId || fieldErrors.pekerjaanId}
+                {fieldErrors.pekerjaanId && (
+                  <small
+                    id="report-job-error"
+                    className="field-error"
+                    role="alert"
+                  >
+                    {fieldErrors.pekerjaanId}
+                  </small>
+                )}
+              </label>
+              <label htmlFor="report-device">
+                Nomor perangkat <small className="optional-tag">(Opsional)</small>
+                <input
+                  id="report-device"
+                  aria-label="Nomor Perangkat"
+                  placeholder="Opsional / Kosongkan jika tidak ada"
+                  value={form.nomorPerangkat}
+                  onChange={(event) =>
+                    setField('nomorPerangkat', event.target.value)
+                  }
+                  aria-invalid={Boolean(fieldErrors.nomorPerangkat)}
+                  aria-describedby={
+                    fieldErrors.nomorPerangkat
+                      ? 'report-device-error'
+                      : undefined
+                  }
+                />
+                {fieldErrors.nomorPerangkat && (
+                  <small
+                    id="report-device-error"
+                    className="field-error"
+                    role="alert"
+                  >
+                    {fieldErrors.nomorPerangkat}
                   </small>
                 )}
               </label>
             </div>
-
-            <label htmlFor="report-device">
-              Nomor perangkat <small className="optional-tag">(Opsional)</small>
-              <input
-                id="report-device"
-                aria-label="Nomor Perangkat"
-                placeholder="Opsional: ODP-001, Tiang-002, WO-003, PO-004"
-                value={form.nomorPerangkat}
-                onChange={(event) =>
-                  setField('nomorPerangkat', event.target.value)
-                }
-                aria-invalid={Boolean(fieldErrors.nomorPerangkat)}
-                aria-describedby={
-                  fieldErrors.nomorPerangkat
-                    ? 'report-device-error'
-                    : undefined
-                }
-              />
-              {fieldErrors.nomorPerangkat && (
-                <small
-                  id="report-device-error"
-                  className="field-error"
-                  role="alert"
-                >
-                  {fieldErrors.nomorPerangkat}
-                </small>
-              )}
-            </label>
-
-            {(selectedProcess?.input_instruction || selectedProcess?.instruksiDokumentasi) && (
+            {selectedJob?.instruksiDokumentasi && (
               <div className="stage-guidance" role="status">
                 <Icon name="photo" />
                 <div>
-                  <strong>Panduan dokumentasi untuk pekerjaan ini</strong>
-                  <p>{selectedProcess.input_instruction || selectedProcess.instruksiDokumentasi}</p>
+                  <strong>Panduan foto untuk pekerjaan ini</strong>
+                  <p>{selectedJob.instruksiDokumentasi}</p>
                 </div>
               </div>
             )}
@@ -675,7 +404,7 @@ export default function ReportForm({
                 className="resize-none"
                 id="report-description"
                 aria-label="Keterangan"
-                placeholder="Contoh: Pemasangan ODP di RW 05 sebanyak 12 titik. Kondisi lokasi aman."
+                placeholder="Contoh: Penanaman tiang di RW 01 sebanyak 12 titik. Kondisi lokasi aman."
                 value={form.keterangan}
                 onChange={(event) => setField('keterangan', event.target.value)}
                 maxLength="2000"
@@ -706,11 +435,7 @@ export default function ReportForm({
               <span>3</span>
               <div>
                 <h2>Dokumentasi</h2>
-                <p>
-                  {isSitac
-                    ? 'Unggah file dokumen SITAC (PDF, KMZ, KML, Excel) atau foto.'
-                    : 'Unggah 1–10 foto yang menunjukkan kegiatan dan lokasi.'}
-                </p>
+                <p>Unggah 1–5 foto yang menunjukkan kegiatan dan lokasi.</p>
               </div>
             </div>
             <FilePicker
@@ -719,7 +444,6 @@ export default function ReportForm({
                 clearFieldError('dokumentasi')
                 setFiles(nextFiles)
               }}
-              acceptTypes={isSitac ? 'all' : 'image'}
             />
             {fieldErrors.dokumentasi && (
               <p className="field-error" role="alert">
@@ -744,11 +468,7 @@ export default function ReportForm({
           <ul>
             <li>
               <Icon name="check" />
-              <span>Pastikan tanggal, project, dan cluster sudah benar.</span>
-            </li>
-            <li>
-              <Icon name="check" />
-              <span>Pilih kategori dan pekerjaan yang sesuai.</span>
+              <span>Pastikan tanggal dan lokasi kegiatan sudah benar.</span>
             </li>
             <li>
               <Icon name="check" />
@@ -756,11 +476,7 @@ export default function ReportForm({
             </li>
             <li>
               <Icon name="check" />
-              <span>
-                {isSitac
-                  ? 'Pilih file dokumen atau foto yang jelas.'
-                  : 'Pilih foto yang jelas dan sesuai kegiatan.'}
-              </span>
+              <span>Pilih foto yang jelas dan sesuai kegiatan.</span>
             </li>
           </ul>
         </aside>

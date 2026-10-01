@@ -10,30 +10,32 @@ const documentationResponse = {
       storagePath: 'path/to/img.png',
       signedUrl: 'https://example.com/img.png',
       originalName: 'foto1.png',
-      mimeType: 'image/png',
       laporanId: 'rep-1',
       tanggalKegiatan: '2026-08-22',
       keterangan: 'Foto pengerjaan ODN',
-      project: { id: 'p1', name: 'Project Rancamanyar' },
-      cluster: { id: 'c1', name: 'RW 02' },
-      process: { id: 'proc1', name: 'IKR' },
+      desa: { id: 'd1', namaDesa: 'Handapherang' },
+      cluster: { id: 'c1', clusterName: 'RW 02', desa: { id: 'd1', namaDesa: 'Handapherang' } },
+      pekerjaan: { id: 'p1', namaPekerjaan: 'Pemasangan ODN' },
     }],
     total: 1,
   },
 }
 
 describe('DokumentasiPage', () => {
-  it('filters by Project, Cluster, and Kategori and renders folder view', async () => {
+  it('filters by Desa, RW, and Pekerjaan and renders an A4-style preview', async () => {
     const fetchMock = vi.fn().mockImplementation((url) => {
       const requestUrl = String(url)
-      if (requestUrl.endsWith('/api/master/project')) {
-        return Promise.resolve({ ok: true, json: async () => [{ id: 'p1', name: 'Project Rancamanyar' }] })
+      if (requestUrl.endsWith('/api/master/desa')) {
+        return Promise.resolve({ ok: true, json: async () => [{ id: 'd1', namaDesa: 'Handapherang' }] })
       }
-      if (requestUrl.endsWith('/api/master/category')) {
-        return Promise.resolve({ ok: true, json: async () => [{ id: 'proc1', name: 'IKR' }] })
+      if (requestUrl.endsWith('/api/master/kategori')) {
+        return Promise.resolve({ ok: true, json: async () => [{ id: 'k1', namaKategori: 'Implementasi' }] })
       }
-      if (requestUrl.includes('/api/master/project/p1/cluster')) {
-        return Promise.resolve({ ok: true, json: async () => [{ id: 'c1', name: 'RW 02' }] })
+      if (requestUrl.endsWith('/api/master/pekerjaan')) {
+        return Promise.resolve({ ok: true, json: async () => [{ id: 'p1', namaPekerjaan: 'Pemasangan ODN', kategoriId: 'k1' }] })
+      }
+      if (requestUrl.includes('/api/master/desa/d1/cluster')) {
+        return Promise.resolve({ ok: true, json: async () => [{ id: 'c1', clusterName: 'RW 02' }] })
       }
       return Promise.resolve({ ok: true, json: async () => documentationResponse })
     })
@@ -41,42 +43,23 @@ describe('DokumentasiPage', () => {
 
     render(<MemoryRouter><DokumentasiPage /></MemoryRouter>)
 
-    await waitFor(() => expect(screen.getByText('Dokumentasi Kegiatan')).toBeInTheDocument())
-    fireEvent.change(screen.getByLabelText(/project/i), { target: { value: 'p1' } })
+    await waitFor(() => expect(screen.getByText('PHOTO DOCUMENTATION')).toBeInTheDocument())
+    fireEvent.change(screen.getByLabelText('Desa'), { target: { value: 'd1' } })
     await waitFor(() => expect(screen.getByRole('option', { name: 'RW 02' })).toBeInTheDocument())
-    fireEvent.change(screen.getByLabelText(/cluster/i), { target: { value: 'c1' } })
-    fireEvent.change(screen.getByLabelText(/kategori/i), { target: { value: 'proc1' } })
+    fireEvent.change(screen.getByLabelText('RW / Cluster'), { target: { value: 'c1' } })
+    fireEvent.change(screen.getByLabelText('Kategori Pekerjaan'), { target: { value: 'k1' } })
+    fireEvent.change(screen.getByLabelText('Pekerjaan'), { target: { value: 'p1' } })
     fireEvent.click(screen.getByRole('button', { name: /tampilkan/i }))
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining('/api/admin/dokumentasi?projectId=p1&clusterId=c1'),
+      expect.stringContaining('/api/admin/dokumentasi?desaId=d1&clusterId=c1&kategoriId=k1&pekerjaanId=p1'),
       expect.any(Object),
     ))
-  })
+    expect(screen.getByText('Foto pengerjaan ODN')).toBeInTheDocument()
+    expect(screen.getByText('Halaman 1 dari 1')).toBeInTheDocument()
 
-  it('switches between Folder View and PDF Sheet View and allows printing', async () => {
-    const printSpy = vi.spyOn(window, 'print').mockImplementation(() => {})
-    const fetchMock = vi.fn().mockImplementation(() => Promise.resolve({ ok: true, json: async () => documentationResponse }))
-    vi.stubGlobal('fetch', fetchMock)
-
-    render(<MemoryRouter><DokumentasiPage /></MemoryRouter>)
-
-    await waitFor(() => expect(screen.getByText('📄 Format PDF / Cetak')).toBeInTheDocument())
-    expect(screen.getByRole('tab', { name: /format pdf \/ cetak/i })).toHaveAttribute('aria-selected', 'true')
-    expect(screen.getByText('PHOTO DOCUMENTATION')).toBeInTheDocument()
-    expect(screen.getByText('Cetak / Simpan PDF')).toBeInTheDocument()
-
-    // Switch to Folder view
-    fireEvent.click(screen.getByRole('tab', { name: /tampilan folder/i }))
-    expect(screen.getByRole('tab', { name: /tampilan folder/i })).toHaveAttribute('aria-selected', 'true')
-
-    // Switch back to PDF format view
-    fireEvent.click(screen.getByRole('tab', { name: /format pdf \/ cetak/i }))
-
-    // Trigger Print
-    fireEvent.click(screen.getByText('Cetak / Simpan PDF'))
-    expect(printSpy).toHaveBeenCalled()
-
-    printSpy.mockRestore()
+    fireEvent.click(screen.getByRole('button', { name: 'Tampilan folder' }))
+    expect(screen.getByRole('region', { name: 'Folder dokumentasi' })).toBeInTheDocument()
+    expect(screen.getByText('Unduh Semua File (Struktur Folder)')).toBeInTheDocument()
   })
 })

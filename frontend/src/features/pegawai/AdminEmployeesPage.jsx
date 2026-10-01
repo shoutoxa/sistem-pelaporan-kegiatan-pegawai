@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { http } from '../../api/http.js'
 import PageHeader from '../../components/PageHeader.jsx'
 import Notice from '../../components/Notice.jsx'
 import PageState from '../../components/PageState.jsx'
+import FtthDialog from '../integration/FtthDialog.jsx'
+import ClusterReportingStatus from '../integration/ClusterReportingStatus.jsx'
 
 const emptyForm = {
   nama: '',
@@ -13,7 +15,20 @@ const emptyForm = {
   isActive: true,
 }
 
+function ProfilePhotoButton({ row, disabled, uploading, onUpload }) {
+  const inputId = useId()
+  const input = useRef(null)
+  return <>
+    <label className="sr-only" htmlFor={inputId}>Upload foto {row.nama}</label>
+    <input className="sr-only" tabIndex={-1} ref={input} id={inputId} type="file" accept="image/jpeg,image/png,image/webp" disabled={disabled}
+      onChange={event => { onUpload(row, event.target.files?.[0]); event.target.value = '' }} />
+    <button type="button" className="secondary-button" aria-label={`Ubah foto ${row.nama}`} disabled={disabled} onClick={() => input.current?.click()}>{uploading ? 'Mengunggah…' : 'Ubah foto'}</button>
+  </>
+}
+
 export default function AdminEmployeesPage() {
+  const [source, setSource] = useState('local')
+  const [clusterUser, setClusterUser] = useState(null)
   const [rows, setRows] = useState([])
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
@@ -25,18 +40,17 @@ export default function AdminEmployeesPage() {
   const [fieldErrors, setFieldErrors] = useState({})
   const [showPassword, setShowPassword] = useState(false)
   const [uploadingPhotoId, setUploadingPhotoId] = useState('')
-  const [selectedUserClusters, setSelectedUserClusters] = useState(null)
-  const [loadingClustersUser, setLoadingClustersUser] = useState(null)
   const activeCount = rows.filter((row) => row.isActive).length
   const wajibLaporCount = rows.filter((row) => row.wajibLapor).length
 
   const load = () => {
     setState('loading')
+    setError('')
     return http
       .request('/api/admin/pegawai')
       .then((body) => {
-        const list = Array.isArray(body.data) ? body.data : []
-        setRows(list.filter((u) => u.role !== 'SUPERADMIN' && u.role !== 'administrator'))
+        setSource(body.source || 'local')
+        setRows(body.data || [])
         setState('ready')
       })
       .catch((requestError) => {
@@ -140,24 +154,26 @@ export default function AdminEmployeesPage() {
     }
   }
 
-  async function viewUserClusters(user) {
-    setLoadingClustersUser(user.id)
-    try {
-      const [clustersRes, statusRes] = await Promise.all([
-        http.request(`/api/admin/pegawai/${user.id}/clusters`).catch(() => ({ data: [] })),
-        http.request(`/api/admin/pegawai/${user.id}/laporan-status`).catch(() => ({ data: null })),
-      ])
-      setSelectedUserClusters({
-        user,
-        clusters: Array.isArray(clustersRes.data) ? clustersRes.data : [],
-        status: statusRes.data,
-      })
-    } catch {
-      setError('Gagal memuat data cluster pegawai.')
-    } finally {
-      setLoadingClustersUser(null)
-    }
-  }
+  if (state === 'loading') return <section className="page"><PageState title="Memuat pegawai" message="Mengambil data akun." /></section>
+  if (state === 'error') return <section className="page"><Notice tone="error">{error}</Notice><button onClick={load}>Coba lagi</button></section>
+  if (source === 'ftth') return <section className="page employee-page">
+    <PageHeader title="Pegawai" description="Akun tim, kewajiban pelaporan, dan penugasan cluster." action={<button className="secondary-button" onClick={load}>Muat ulang</button>} />
+    <Notice>Data akun dan penugasan cluster berasal dari FTTH. Pengaturan dikelola melalui sistem perusahaan.</Notice>
+    {error && <Notice tone="error">{error}</Notice>}
+    {message && <Notice tone="success">{message}</Notice>}
+    <section className="data-section employee-directory"><div className="section-heading"><div><h2>Anggota tim</h2><p>{rows.length} akun · {activeCount} aktif · {wajibLaporCount} wajib lapor</p></div></div>
+    <div className="table-wrap"><table className="responsive-records"><caption className="sr-only">Akun FTTH</caption>
+      <thead><tr>{['Nama / Username', 'Peran', 'Nomor HP', 'Status', 'Wajib lapor', 'Aksi'].map(label => <th key={label}>{label}</th>)}</tr></thead>
+      <tbody>{rows.map(row => <tr key={row.id}>
+        <td className="record-identity"><div className="employee-identity"><span className="employee-initial" aria-hidden="true">{row.nama?.slice(0, 1).toUpperCase() || '?'}</span><div><strong>{row.nama}</strong><small className="table-subline">{row.username}</small></div></div></td>
+        <td data-label="Peran"><span>{({ administrator: 'Superadmin', user: 'Pegawai', teknisi: 'Teknisi' })[row.role] || row.role}</span><small className="table-subline">{row.role}</small></td><td className="date-cell" data-label="Nomor HP">{row.nomorHp || '—'}</td>
+        <td data-label="Status"><span className={`status-badge ${row.isActive ? 'active' : 'inactive'}`}>{row.isActive ? 'Aktif' : 'Nonaktif'}</span></td><td data-label="Wajib lapor">{row.wajibLapor == null ? 'Belum tersedia' : row.wajibLapor ? 'Ya' : 'Tidak'}</td>
+        <td className="record-actions"><div className="employee-row-actions"><button className="secondary-button" aria-label={`Lihat cluster ${row.nama}`} onClick={() => setClusterUser(row)}>Lihat cluster</button>
+        <ProfilePhotoButton row={row} disabled={Boolean(uploadingPhotoId)} uploading={uploadingPhotoId === row.id} onUpload={handlePhotoUpload} /></div></td>
+      </tr>)}{!rows.length && <tr><td colSpan={6}>Belum ada akun di FTTH.</td></tr>}</tbody>
+    </table></div></section>
+    {clusterUser && <FtthDialog title={`Cluster — ${clusterUser.nama}`} onClose={() => setClusterUser(null)}><ClusterReportingStatus key={clusterUser.id} userId={clusterUser.id} /></FtthDialog>}
+  </section>
 
   return (
     <section className="page employee-page">
@@ -395,14 +411,6 @@ export default function AdminEmployeesPage() {
                       <div className="table-actions">
                         <button
                           className="secondary-button"
-                          disabled={loadingClustersUser === row.id}
-                          onClick={() => viewUserClusters(row)}
-                          title="Lihat cluster yang ditangani dan status lapor"
-                        >
-                          {loadingClustersUser === row.id ? 'Memuat...' : 'Cluster'}
-                        </button>
-                        <button
-                          className="secondary-button"
                           onClick={() => openEdit(row)}
                         >
                           Edit
@@ -442,140 +450,6 @@ export default function AdminEmployeesPage() {
             </table>
           </div>
         </section>
-      )}
-
-      {selectedUserClusters && (
-        <div
-          className="modal-backdrop"
-          role="dialog"
-          aria-modal="true"
-          aria-label={`Cluster untuk ${selectedUserClusters.user.nama}`}
-          style={{
-            position: 'fixed',
-            inset: 0,
-            backgroundColor: 'rgba(15, 23, 42, 0.65)',
-            backdropFilter: 'blur(4px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 9999,
-            padding: '1.25rem',
-          }}
-        >
-          <div
-            className="modal-card"
-            style={{
-              background: '#ffffff',
-              borderRadius: '16px',
-              padding: '1.75rem',
-              maxWidth: '650px',
-              width: '100%',
-              maxHeight: '90vh',
-              overflowY: 'auto',
-              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2)',
-            }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-              <div>
-                <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700, color: '#0f172a' }}>
-                  Cluster: {selectedUserClusters.user.nama}
-                </h2>
-                <p style={{ margin: '0.25rem 0 0', fontSize: '0.875rem', color: '#64748b' }}>
-                  @{selectedUserClusters.user.username} · Wajib Lapor: <strong>{selectedUserClusters.user.wajibLapor ? 'Ya' : 'Tidak'}</strong>
-                </p>
-              </div>
-              <button
-                type="button"
-                className="secondary-button"
-                style={{ padding: '0.35rem 0.75rem' }}
-                onClick={() => setSelectedUserClusters(null)}
-              >
-                ✕ Tutup
-              </button>
-            </div>
-
-            {selectedUserClusters.status?.tanggal && (
-              <div
-                style={{
-                  background: '#f1f5f9',
-                  borderRadius: '8px',
-                  padding: '0.75rem 1rem',
-                  marginBottom: '1rem',
-                  fontSize: '0.875rem',
-                  color: '#334155',
-                }}
-              >
-                📅 <strong>Tanggal Evaluasi (WIB):</strong> {selectedUserClusters.status.tanggal}
-              </div>
-            )}
-
-            {selectedUserClusters.clusters.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '2rem 1rem', color: '#64748b' }}>
-                <p style={{ margin: 0 }}>Belum ada cluster yang ditugaskan ke pegawai ini sebagai PIC.</p>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-                {selectedUserClusters.clusters.map((cl) => {
-                  const statusItem = selectedUserClusters.status?.clusters?.find(
-                    (item) => item.cluster_id === cl.id,
-                  )
-                  return (
-                    <div
-                      key={cl.id}
-                      style={{
-                        border: '1px solid #e2e8f0',
-                        borderRadius: '10px',
-                        padding: '1rem',
-                        background: '#f8fafc',
-                      }}
-                    >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.75rem' }}>
-                        <div>
-                          <strong style={{ fontSize: '0.95rem', color: '#0f172a' }}>{cl.name}</strong>
-                          <p style={{ margin: '0.25rem 0 0', fontSize: '0.85rem', color: '#64748b' }}>
-                            {cl.Project?.name || cl.project?.name || 'FTTH Project'} · Status: <strong>{cl.status || 'running'}</strong>
-                          </p>
-                        </div>
-                        {statusItem ? (
-                          <span
-                            style={{
-                              fontSize: '0.75rem',
-                              fontWeight: 700,
-                              padding: '0.25rem 0.6rem',
-                              borderRadius: '4px',
-                              whiteSpace: 'nowrap',
-                              background: statusItem.sudah_lapor ? '#dcfce7' : '#fee2e2',
-                              color: statusItem.sudah_lapor ? '#166534' : '#991b1b',
-                            }}
-                          >
-                            {statusItem.sudah_lapor ? '✓ Sudah Lapor' : '⚠ Belum Lapor'}
-                          </span>
-                        ) : null}
-                      </div>
-                      <div
-                        style={{
-                          marginTop: '0.75rem',
-                          paddingTop: '0.75rem',
-                          borderTop: '1px solid #e2e8f0',
-                          fontSize: '0.8rem',
-                          color: '#64748b',
-                          display: 'flex',
-                          flexWrap: 'wrap',
-                          gap: '1.25rem',
-                        }}
-                      >
-                        <span>Target HP: <strong>{cl.homepass_target || 0}</strong></span>
-                        <span>Capaian HP: <strong>{cl.homepass_achieved || 0}</strong></span>
-                        <span>Progress: <strong>{cl.overall_progress || 0}%</strong></span>
-                        <span>Proses: <strong>{cl.completed_processes || 0}/{cl.total_processes || 0}</strong></span>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-        </div>
       )}
     </section>
   )

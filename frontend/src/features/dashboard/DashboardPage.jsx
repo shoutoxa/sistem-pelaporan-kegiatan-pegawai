@@ -4,11 +4,13 @@ import { dashboardApi } from '../../api/dashboard.js'
 import PageHeader from '../../components/PageHeader.jsx'
 import PageState from '../../components/PageState.jsx'
 import Icon from '../../components/Icon.jsx'
+import FtthReportPanel from '../integration/FtthReportPanel.jsx'
 
 const POLL_MS = 30_000
 
 export default function DashboardPage() {
   const [data, setData] = useState(null)
+  const [selected, setSelected] = useState(null)
   const [state, setState] = useState('loading')
   const refresh = useCallback(() => {
     setState((current) => (current === 'ready' ? 'refreshing' : 'loading'))
@@ -53,9 +55,9 @@ export default function DashboardPage() {
       </section>
     )
 
-  const highestProject = Math.max(
+  const highestVillage = Math.max(
     1,
-    ...(data?.distribusiProject || []).map((item) => item.jumlah),
+    ...(data?.distribusiDesa || []).map((item) => item.jumlah),
   )
   const highestJob = Math.max(
     1,
@@ -68,7 +70,7 @@ export default function DashboardPage() {
     <section className="page dashboard-page">
       <PageHeader
         title="Dashboard"
-        description="Ringkasan dan pemantauan progres kegiatan lapangan secara menyeluruh."
+        description="Pantau pelaporan hari ini dan aktivitas seluruh project."
         action={
           <div className="dashboard-controls">
             <button
@@ -83,21 +85,26 @@ export default function DashboardPage() {
         }
       />
 
+      {data?.complianceAvailable === false && <p role="status">Data wajib lapor dari perusahaan belum lengkap. Angka kepatuhan belum dapat dihitung.</p>}
+      {data?.kepatuhanCluster && <div className="dashboard-daily-note"><strong>{data.kepatuhanCluster.sudah} / {data.kepatuhanCluster.total} cluster sudah dilaporkan hari ini</strong><span>Pegawai dihitung sudah melapor jika seluruh cluster tugasnya terpenuhi.{data.kepatuhanCluster.tanpaPenugasan > 0 && ` ${data.kepatuhanCluster.tanpaPenugasan} pegawai wajib lapor belum memiliki penugasan.`}</span></div>}
+      {state === 'error' && data && <p role="alert">Pembaruan gagal. Data di bawah adalah hasil terakhir yang berhasil dimuat.</p>}
+      {selected && <FtthReportPanel key={selected} id={selected} onClose={() => setSelected(null)} onChanged={refresh} />}
+
       <div className="dashboard-content">
         <section className="metric-band" aria-label="Ringkasan pegawai lapor">
           <article>
             <span>Pegawai wajib lapor</span>
-            <strong>{data?.wajibLapor ?? 0}</strong>
+            <strong>{data?.wajibLapor ?? '—'}</strong>
             <small>pegawai aktif</small>
           </article>
           <article>
             <span>Sudah melapor</span>
-            <strong className="success-value">{data?.sudahMelapor ?? 0}</strong>
+            <strong className="success-value">{data?.sudahMelapor ?? '—'}</strong>
             <small>tanggal {labelDate}</small>
           </article>
           <article>
             <span>Belum melapor</span>
-            <strong className="signal-value">{data?.belumMelapor ?? 0}</strong>
+            <strong className="signal-value">{data?.belumMelapor ?? '—'}</strong>
             <small>tanggal {labelDate}</small>
           </article>
         </section>
@@ -113,13 +120,13 @@ export default function DashboardPage() {
             </Link>
           </div>
           <div className="table-wrap">
-            <table>
+            <table className="responsive-records">
               <caption className="sr-only">Laporan terbaru</caption>
               <thead>
                 <tr>
                   <th>Pegawai</th>
                   <th>Pekerjaan</th>
-                  <th>Project / Cluster</th>
+                  <th>Lokasi</th>
                   <th>Keterangan</th>
                   <th>Aksi</th>
                 </tr>
@@ -127,22 +134,22 @@ export default function DashboardPage() {
               <tbody>
                 {(data?.terbaru || []).slice(0, 5).map((item) => (
                   <tr key={item.id}>
-                    <td>{item.user?.nama || item.user?.name || '-'}</td>
-                    <td>{item.process?.name || item.master_process?.name || '-'}</td>
-                    <td>
-                      {item.project?.name || item.project_name || '-'} ·{' '}
-                      {item.cluster?.name || item.cluster_name || '-'}
+                    <td data-label="Pegawai">{item.user?.nama || '-'}</td>
+                    <td data-label="Pekerjaan">{item.pekerjaan?.namaPekerjaan || '-'}</td>
+                    <td className="location-cell" data-label="Lokasi">
+                      <span>{item.cluster?.desa?.namaDesa || '-'}</span>
+                      <small className="table-subline">{item.cluster?.clusterName || '-'}</small>
                     </td>
-                    <td className="description-cell">
+                    <td className="description-cell" data-label="Keterangan">
                       {item.keterangan || '-'}
                     </td>
-                    <td>
-                      <Link
+                    <td className="record-actions">
+                      {data?.source === 'ftth' ? <button className="secondary-button" onClick={() => setSelected(item.id)}>Detail</button> : <Link
                         className="table-link"
                         to={`/admin/laporan/${item.id}`}
                       >
                         Detail
-                      </Link>
+                      </Link>}
                     </td>
                   </tr>
                 ))}
@@ -162,19 +169,19 @@ export default function DashboardPage() {
           <article className="data-section">
             <div className="section-heading">
               <div>
-                <h2>Progres per Project</h2>
-                <p>Ringkasan akumulasi laporan harian per project.</p>
+                <h2>{data?.source === 'ftth' ? 'Data berdasarkan Project' : 'Progres per Cluster / Desa'}</h2>
+                <p>Ringkasan akumulasi laporan harian per wilayah.</p>
               </div>
             </div>
             <ul className="distribution-list">
-              {(data?.distribusiProject || []).map((item, index) => (
-                <li key={item.name || `project-${index}`}>
+              {(data?.distribusiDesa || []).map((item) => (
+                <li key={item.id || item.namaDesa}>
                   <div>
-                    <span>{item.name}</span>
+                    <span>{item.namaDesa}</span>
                     <span className="distribution-track">
                       <i
                         style={{
-                          width: `${Math.max(item.jumlah > 0 ? 8 : 0, (item.jumlah / highestProject) * 100)}%`,
+                          width: `${Math.max(item.jumlah > 0 ? 8 : 0, (item.jumlah / highestVillage) * 100)}%`,
                         }}
                       />
                     </span>
@@ -182,9 +189,9 @@ export default function DashboardPage() {
                   <strong>{item.jumlah}</strong>
                 </li>
               ))}
-              {!data?.distribusiProject?.length && (
-                <li key="empty-project" className="empty-state">
-                  Belum ada data progres project.
+              {!data?.distribusiDesa?.length && (
+                <li className="empty-state">
+                  Belum ada data progres wilayah.
                 </li>
               )}
             </ul>
@@ -193,15 +200,15 @@ export default function DashboardPage() {
           <article className="data-section">
             <div className="section-heading">
               <div>
-                <h2>Progres per Pekerjaan</h2>
-                <p>Aktivitas pengerjaan berdasarkan jenis pekerjaan proyek.</p>
+                <h2>Laporan per Pekerjaan</h2>
+                <p>Akumulasi seluruh tanggal, bukan persentase penyelesaian.</p>
               </div>
             </div>
-            <ul className="distribution-list">
-              {(data?.distribusiPekerjaan || []).map((item, index) => (
-                <li key={item.name || `job-${index}`}>
+            <ul className="distribution-list jobs-distribution" tabIndex={0} aria-label="Distribusi seluruh pekerjaan">
+              {(data?.distribusiPekerjaan || []).map((item) => (
+                <li key={item.id || item.namaPekerjaan}>
                   <div>
-                    <span>{item.name}</span>
+                    <span>{item.namaPekerjaan}</span>
                     <span className="distribution-track">
                       <i
                         style={{
@@ -214,7 +221,7 @@ export default function DashboardPage() {
                 </li>
               ))}
               {!data?.distribusiPekerjaan?.length && (
-                <li key="empty-job" className="empty-state">
+                <li className="empty-state">
                   Belum ada data pekerjaan pengerjaan.
                 </li>
               )}

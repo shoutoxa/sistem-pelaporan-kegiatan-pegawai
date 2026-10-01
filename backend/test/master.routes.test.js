@@ -43,6 +43,15 @@ describe('master data routes', () => {
     expect(response.status).toBe(403)
   })
 
+  it('reports migration sources without changing the default local mode', async () => {
+    const service = { integrationStatus: async () => ({ configured: true, categories: 2, processes: 4, lastSyncedAt: null }) }
+    const response = await request(createApp({ masterRouter: createMasterRouter({ service, migration: { master: 'ftth', users: 'local' } }) }))
+      .get('/api/admin/integration/ftth/status')
+
+    expect(response.status).toBe(200)
+    expect(response.body.migration).toEqual({ master: 'ftth', users: 'local' })
+  })
+
   it('returns the canonical conflict response for duplicate master data', async () => {
     const service = { create: async () => { const error = new Error('Nama Desa sudah digunakan.'); error.code = 'DUPLICATE'; error.errors = { namaDesa: 'Nama Desa sudah digunakan.' }; throw error } }
     const response = await request(createApp({ masterRouter: createMasterRouter({ service }) }))

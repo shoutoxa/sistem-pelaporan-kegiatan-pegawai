@@ -1,0 +1,168 @@
+import { render, screen, fireEvent, cleanup, waitFor, within } from '@testing-library/react'
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest'
+import FtthPage from './FtthPage.jsx'
+import { ftthApi } from '../../api/ftth.js'
+import { reportDraftKey, newReportFields } from './reportDraft.js'
+const auth = vi.hoisted(() => ({ user: { role: 'PEGAWAI' } }))
+vi.mock('../auth/AuthProvider.jsx', () => ({ useAuth: () => auth }))
+vi.mock('../../api/ftth.js', () => ({ ftthApi: { detail: vi.fn(), status: vi.fn(), references: vi.fn(), list: vi.fn(), create: vi.fn(), userClusters: vi.fn(), userReportStatus: vi.fn() } }))
+beforeEach(() => {
+  vi.clearAllMocks()
+  localStorage.clear()
+  ftthApi.userClusters.mockResolvedValue([])
+  ftthApi.userReportStatus.mockResolvedValue(null)
+  auth.user = { role: 'PEGAWAI' }
+  ftthApi.status.mockResolvedValue({ enabled: true })
+  ftthApi.references.mockResolvedValue({ projects: [{ id: 'p1', name: 'Project A' }, { id: 'p2', name: 'Project B' }],
+    clusters: [{ id: 'c1', name: 'Cluster A', project_id: 'p1' }, { id: 'c2', name: 'Cluster B', project_id: 'p2' }],
+    categories: [{ id: 'cat1', name: 'Implementasi' }, { id: 'cat2', name: 'Sitac' }],
+    processes: [{ id: 'job1', name: 'Pasang tiang', master_category_id: 'cat1' }, { id: 'job2', name: 'Izin lahan', master_category_id: 'cat2' }] })
+  ftthApi.list.mockResolvedValue([])
+})
+afterEach(() => cleanup())
+describe('FTTH development page', () => {
+  it('opens detail immediately, previews within one dialog and returns focus when closed', async () => {
+    ftthApi.list.mockResolvedValue([{ id: 'r1', process_name: 'Pasang tiang', status: 'PENDING' }])
+    let resolveDetail
+    ftthApi.detail.mockReturnValue(new Promise((resolve) => { resolveDetail = resolve }))
+    render(<FtthPage mode="history" />)
+    const trigger = await screen.findByRole('button', { name: 'Lihat lampiran' })
+    trigger.focus()
+    fireEvent.click(trigger)
+    const dialog = screen.getByRole('dialog', { name: 'Detail laporan' })
+    expect(within(dialog).getByRole('status')).toHaveTextContent('Memuat lampiran')
+    expect(document.body.style.overflow).toBe('hidden')
+    resolveDetail({ id: 'r1', dokumentasi: [{ id: 'a1', original_name: 'foto.png', mime_type: 'image/png', downloadUrl: '/api/ftth/reports/r1/attachments/a1/download' }] })
+    fireEvent.click(await within(dialog).findByRole('button', { name: 'Pratinjau foto.png' }))
+    expect(screen.getAllByRole('dialog')).toHaveLength(1)
+    expect(within(dialog).getByRole('img', { name: 'foto.png' })).toBeInTheDocument()
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Kembali ke detail' }))
+    expect(within(dialog).getByRole('button', { name: 'Pratinjau foto.png' })).toBeVisible()
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Tutup' }))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(trigger).toHaveFocus()
+    expect(document.body.style.overflow).toBe('')
+  })
+  it('keeps loading errors inside the dialog and allows retry', async () => {
+    ftthApi.list.mockResolvedValue([{ id: 'r1' }])
+    ftthApi.detail.mockRejectedValueOnce(new Error('Koneksi terputus')).mockResolvedValueOnce({ dokumentasi: [] })
+    render(<FtthPage mode="history" />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Lihat lampiran' }))
+    const dialog = screen.getByRole('dialog')
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('Koneksi terputus')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Coba lagi' }))
+    expect(await within(dialog).findByText('Tidak ada lampiran.')).toBeInTheDocument()
+    fireEvent(dialog, new Event('cancel', { bubbles: true, cancelable: true }))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+  it('restores text without files, preserves it after failure, and clears after success', async () => {
+    auth.user = { id: 'employee', role: 'PEGAWAI', authSource: 'ftth' }
+    const key = reportDraftKey(auth.user)
+    localStorage.setItem(key, JSON.stringify({ ...newReportFields(), project_id: 'p1', cluster_id: 'c1', category_id: 'cat1', process_id: 'job1', keterangan: 'Saved draft text' }))
+    ftthApi.create.mockRejectedValueOnce(new Error('Test offline')).mockResolvedValueOnce({ id: 'r1' })
+    render(<FtthPage mode="form" />)
+    expect(await screen.findByLabelText(/Kendala Laporan|Keterangan/)).toHaveValue('Saved draft text')
+    expect(screen.getByText(/0 dari 5 lampiran/)).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText(/Lampiran \(1/), { target: { files: [new File(['png'], 'a.png', { type: 'image/png' })] } })
+    const form = screen.getByRole('button', { name: 'Kirim laporan' }).closest('form')
+    fireEvent.submit(form)
+    await screen.findByText('Test offline')
+    expect(JSON.parse(localStorage.getItem(key)).keterangan).toBe('Saved draft text')
+    fireEvent.submit(form)
+    await waitFor(() => expect(localStorage.getItem(key)).toBeNull())
+    expect(ftthApi.create).toHaveBeenCalledTimes(2)
+  })
+  it('resets form state when the authenticated account changes', async () => {
+    auth.user = { id: 'a', role: 'PEGAWAI' }
+    const view = render(<FtthPage mode="form" />)
+    fireEvent.change(await screen.findByLabelText(/Kendala Laporan|Keterangan/), { target: { value: 'Account A text' } })
+    auth.user = { id: 'b', role: 'PEGAWAI' }
+    view.rerender(<FtthPage mode="form" />)
+    expect(await screen.findByLabelText(/Kendala Laporan|Keterangan/)).toHaveValue('')
+  })
+  it('uses task-focused copy on the employee history page', async () => {
+    auth.user.authSource = 'ftth'
+    render(<FtthPage mode="history" />)
+    expect(await screen.findByText(/Pantau status dan buka kembali dokumentasi/)).toBeInTheDocument()
+    expect(screen.queryByText(/Login lokal •/)).not.toBeInTheDocument()
+  })
+  it('loads history independently from active form references and hides write controls', async () => {
+    ftthApi.list.mockResolvedValue([{ id: 'r1', project_name: 'Project A', status: 'APPROVED', tanggal_kegiatan: '2026-09-07' }])
+    render(<FtthPage mode="history" />)
+    expect(await screen.findByText('Diterima')).toBeInTheDocument()
+    expect(screen.getByText('2026-09-07')).toHaveAttribute('datetime', '2026-09-07')
+    expect(ftthApi.references).not.toHaveBeenCalled()
+    expect(screen.queryByLabelText('Project')).not.toBeInTheDocument()
+    expect(screen.queryByText('Atur status')).not.toBeInTheDocument()
+    expect(screen.queryByText('Koreksi')).not.toBeInTheDocument()
+    expect(screen.queryByText('Hapus')).not.toBeInTheDocument()
+  })
+  it('submits company form as multipart with status and kendala_lapangan fields', async () => {
+    ftthApi.create.mockResolvedValue({ id: 'r1', warnings: [] })
+    render(<FtthPage mode="form" />)
+    fireEvent.change(await screen.findByLabelText('Project'), { target: { value: 'p1' } })
+    fireEvent.change(screen.getByLabelText('Cluster'), { target: { value: 'c1' } })
+    fireEvent.change(screen.getByLabelText('Kategori'), { target: { value: 'cat1' } })
+    fireEvent.change(screen.getByLabelText('Pekerjaan'), { target: { value: 'job1' } })
+    fireEvent.change(screen.getByLabelText(/Kendala Laporan|Keterangan/), { target: { value: 'Pemasangan selesai' } })
+    fireEvent.change(screen.getByLabelText(/Lampiran \(1/), { target: { files: [new File(['test'], 'foto.png', { type: 'image/png' })] } })
+    fireEvent.submit(screen.getByRole('button', { name: 'Kirim laporan' }).closest('form'))
+    await waitFor(() => expect(ftthApi.create).toHaveBeenCalledTimes(1))
+    const body = ftthApi.create.mock.calls[0][0]
+    expect(body.get('project_id')).toBe('p1')
+    expect(body.get('dokumentasi').name).toBe('foto.png')
+    expect(body.get('status')).toBe('ON_PROGRESS')
+    expect(body.has('user_id')).toBe(false)
+    expect(body.has('category_id')).toBe(false)
+    expect(ftthApi.list).not.toHaveBeenCalled()
+    expect(await screen.findByRole('status')).toHaveTextContent('tersimpan')
+  })
+  it('validates mandatory kendala_lapangan when status is KENDALA', async () => {
+    ftthApi.create.mockResolvedValue({ id: 'r1', warnings: [] })
+    render(<FtthPage mode="form" />)
+    fireEvent.change(await screen.findByLabelText('Project'), { target: { value: 'p1' } })
+    fireEvent.change(screen.getByLabelText('Cluster'), { target: { value: 'c1' } })
+    fireEvent.change(screen.getByLabelText('Kategori'), { target: { value: 'cat1' } })
+    fireEvent.change(screen.getByLabelText('Pekerjaan'), { target: { value: 'job1' } })
+    
+    // Choose status KENDALA
+    const kendalaRadio = screen.getByRole('radio', { name: /Kendala/i })
+    fireEvent.click(kendalaRadio)
+
+    fireEvent.change(screen.getByLabelText(/Lampiran \(1/), { target: { files: [new File(['test'], 'foto.png', { type: 'image/png' })] } })
+    
+    // Leave kendala_lapangan empty or short
+    fireEvent.change(screen.getByLabelText(/Kendala Laporan|Keterangan/), { target: { value: '' } })
+    fireEvent.submit(screen.getByRole('button', { name: 'Kirim laporan' }).closest('form'))
+    
+    expect(await screen.findByRole('alert')).toHaveTextContent('Kendala Lapangan wajib diisi minimal 5 karakter ketika status Kendala.')
+    expect(ftthApi.create).not.toHaveBeenCalled()
+  })
+  it('shows disabled state without loading reports', async () => {
+    ftthApi.status.mockResolvedValue({ enabled: false })
+    render(<FtthPage />)
+    expect(await screen.findByRole('alert')).toHaveTextContent('FTTH_REPORTS_ENABLED')
+    expect(ftthApi.references).not.toHaveBeenCalled()
+  })
+  it('cascades cluster/process and hides employee admin controls', async () => {
+    render(<FtthPage />)
+    const project = await screen.findByLabelText('Project')
+    expect(screen.getByLabelText('Cluster')).toBeDisabled()
+    expect(screen.getByLabelText('Pekerjaan')).toBeDisabled()
+    fireEvent.change(project, { target: { value: 'p1' } })
+    expect(screen.getByLabelText('Cluster')).toBeEnabled()
+    expect(screen.getByRole('option', { name: 'Cluster A' })).toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: 'Cluster B' })).not.toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Cluster'), { target: { value: 'c1' } })
+    fireEvent.change(project, { target: { value: 'p2' } })
+    expect(screen.getByLabelText('Cluster')).toHaveValue('')
+    fireEvent.change(screen.getByLabelText('Kategori'), { target: { value: 'cat1' } })
+    expect(screen.getByLabelText('Pekerjaan')).toBeEnabled()
+    fireEvent.change(screen.getByLabelText('Pekerjaan'), { target: { value: 'job1' } })
+    fireEvent.change(screen.getByLabelText('Kategori'), { target: { value: 'cat2' } })
+    expect(screen.getByLabelText('Pekerjaan')).toHaveValue('')
+    expect(screen.queryByRole('option', { name: 'Pasang tiang' })).not.toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Izin lahan' })).toBeInTheDocument()
+    expect(screen.queryByText('Pemetaan akun')).not.toBeInTheDocument()
+  })
+})

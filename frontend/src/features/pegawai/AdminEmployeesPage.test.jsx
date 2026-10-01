@@ -4,6 +4,17 @@ import AdminEmployeesPage from './AdminEmployeesPage.jsx'
 
 describe('AdminEmployeesPage', () => {
   afterEach(() => cleanup())
+  it('shows FTTH roles without local account management controls', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ source: 'ftth', data: [{ id: 'u1', nama: 'Administrator FTTH', username: 'admin', role: 'administrator', isActive: true, wajibLapor: null }] }) }))
+    render(<AdminEmployeesPage />)
+    expect(await screen.findByText('Administrator FTTH')).toBeInTheDocument()
+    expect(screen.getByText('administrator')).toBeInTheDocument()
+    expect(screen.getByText('Belum tersedia')).toBeInTheDocument()
+    expect(screen.getByText(/penugasan cluster berasal dari FTTH/)).toBeInTheDocument()
+    expect(screen.queryByText(/Login aplikasi tetap menggunakan akun lokal/)).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /tambah pegawai/i })).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Upload foto Administrator FTTH')).toBeInTheDocument()
+  })
   it('renders employee status from the admin API', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ data: [{ id: 'u1', nama: 'Ayu', username: 'ayu', isActive: true }] }) }))
     render(<AdminEmployeesPage />)

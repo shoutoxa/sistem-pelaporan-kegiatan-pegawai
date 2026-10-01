@@ -12,9 +12,15 @@ import HistoryPage from './features/laporan/HistoryPage.jsx'
 import ReportDetailPage from './features/laporan/ReportDetailPage.jsx'
 import DashboardPage from './features/dashboard/DashboardPage.jsx'
 import AdminReportsPage from './features/dashboard/AdminReportsPage.jsx'
-import DokumentasiPage from './features/dashboard/DokumentasiPage.jsx'
+import DocumentationRoute from './features/integration/FtthDocumentationPage.jsx'
 import AdminEmployeesPage from './features/pegawai/AdminEmployeesPage.jsx'
 import EditReportPage from './features/laporan/EditReportPage.jsx'
+import EmployeeReportSource from './features/integration/EmployeeReportSource.jsx'
+import EmployeeDashboardPage from './features/pegawai/EmployeeDashboardPage.jsx'
+import EmployeeProjectsPage from './features/pegawai/EmployeeProjectsPage.jsx'
+import EmployeeClustersPage from './features/pegawai/EmployeeClustersPage.jsx'
+import EmployeeClusterDetailPage from './features/pegawai/EmployeeClusterDetailPage.jsx'
+import EmployeeHomepassPage from './features/pegawai/EmployeeHomepassPage.jsx'
 
 export default function App() {
   return (
@@ -26,9 +32,14 @@ export default function App() {
           <Route path="/403" element={<ForbiddenPage />} />
           <Route element={<ProtectedRoute role="PEGAWAI" />}>
             <Route path="/pegawai" element={<EmployeeLayout />}>
-              <Route index element={<Navigate to="laporan/new" replace />} />
+              <Route index element={<Navigate to="dashboard" replace />} />
+              <Route path="dashboard" element={<EmployeeDashboardPage />} />
+              <Route path="projects" element={<EmployeeProjectsPage />} />
+              <Route path="clusters" element={<EmployeeClustersPage />} />
+              <Route path="clusters/:id" element={<EmployeeClusterDetailPage />} />
+              <Route path="homepass" element={<EmployeeHomepassPage />} />
               <Route path="laporan/new" element={<EmployeeReportRoute />} />
-              <Route path="histori" element={<HistoryPage />} />
+              <Route path="histori" element={<EmployeeReportSource mode="history"><HistoryPage /></EmployeeReportSource>} />
               <Route path="laporan/:id" element={<ReportDetailPage />} />
               <Route path="laporan/:id/edit" element={<EditReportPage />} />
             </Route>
@@ -40,7 +51,7 @@ export default function App() {
               <Route path="laporan" element={<AdminReportsPage />} />
               <Route path="laporan/:id" element={<ReportDetailPage />} />
               <Route path="laporan/:id/edit" element={<EditReportPage />} />
-              <Route path="dokumentasi" element={<DokumentasiPage />} />
+              <Route path="dokumentasi" element={<DocumentationRoute />} />
               <Route path="pegawai" element={<AdminEmployeesPage />} />
               <Route path="master" element={<AdminMasterPage />} />
             </Route>
@@ -54,5 +65,5 @@ export default function App() {
 
 function EmployeeReportRoute() {
   const { user } = useAuth()
-  return <ReportForm user={user} showLaporanStatus />
+  return <EmployeeReportSource mode="form"><ReportForm user={user} /></EmployeeReportSource>
 }

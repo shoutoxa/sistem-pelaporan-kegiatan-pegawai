@@ -3,8 +3,27 @@ import { describe, expect, it, vi } from 'vitest'
 import AdminMasterPage from './AdminMasterPage.jsx'
 
 describe('AdminMasterPage', () => {
+  it('reads company master without requesting local lists or showing local write controls', async () => {
+    const fetchMock = vi.fn(async url => {
+      if (String(url).endsWith('/api/admin/master-source')) return { ok: true, json: async () => ({ source: 'ftth' }) }
+      if (String(url).endsWith('/api/admin/master-ftth')) return { ok: true, json: async () => ({ projects: [{ id: 'p1', name: 'Project Perusahaan', isActive: true }], clusters: [], categories: [], processes: [] }) }
+      throw new Error('Unexpected local request')
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    render(<AdminMasterPage />)
+    expect(await screen.findByText('Project Perusahaan')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Tambah Desa' })).not.toBeInTheDocument()
+    expect(fetchMock.mock.calls.every(([url]) => String(url).includes('/api/admin/master-'))).toBe(true)
+    fireEvent.click(screen.getByRole('button', { name: /^Cluster/ }))
+    expect(screen.getByRole('button', { name: /^Cluster/ })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.queryByText('Project Perusahaan')).not.toBeInTheDocument()
+    expect(screen.getByText('Belum ada data cluster yang tersedia.')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /^Project/ }))
+    expect(screen.getByText('Project Perusahaan')).toBeInTheDocument()
+  })
   it('loads every master resource and submits a new village', async () => {
     const fetchMock = vi.fn(async (url, options = {}) => {
+      if (String(url).endsWith('/api/admin/master-source')) return { ok: true, json: async () => ({ source: 'local' }) }
       if (options.method === 'POST') return { ok: true, json: async () => ({ id: 'd2', namaDesa: 'Pamalayan', isActive: true }) }
       if (String(url).endsWith('/api/admin/desa')) return { ok: true, json: async () => [{ id: 'd1', namaDesa: 'Dewasari', isActive: true }] }
       if (String(url).endsWith('/api/admin/cluster')) return { ok: true, json: async () => [] }
@@ -23,28 +42,4 @@ describe('AdminMasterPage', () => {
 
     await waitFor(() => expect(fetchMock.mock.calls.some(([url, options]) => String(url).endsWith('/api/admin/desa') && options.method === 'POST' && options.body.includes('Pamalayan'))).toBe(true))
   })
-
-  it('displays category name for pekerjaan instead of "Belum dikategorikan"', async () => {
-    const fetchMock = vi.fn(async (url) => {
-      if (String(url).endsWith('/api/admin/desa')) return { ok: true, json: async () => [] }
-      if (String(url).endsWith('/api/admin/cluster')) return { ok: true, json: async () => [] }
-      if (String(url).endsWith('/api/admin/kategori')) return { ok: true, json: async () => [{ id: 'cat-1', namaKategori: 'IKR & Distribusi' }] }
-      if (String(url).endsWith('/api/admin/pekerjaan')) return {
-        ok: true,
-        json: async () => [{ id: 'proc-1', namaPekerjaan: 'Penarikan Dropcore', master_category_id: 'cat-1', kategoriId: 'cat-1' }]
-      }
-      if (String(url).endsWith('/api/admin/integration/ftth/status')) return { ok: true, json: async () => ({ configured: true }) }
-      return { ok: true, json: async () => [] }
-    })
-    vi.stubGlobal('fetch', fetchMock)
-
-    render(<AdminMasterPage />)
-
-    await waitFor(() => {
-      expect(screen.getByText('Penarikan Dropcore')).toBeInTheDocument()
-      expect(screen.getAllByText('IKR & Distribusi')).toHaveLength(2)
-      expect(screen.queryByText('Belum dikategorikan')).not.toBeInTheDocument()
-    })
-  })
 })
-

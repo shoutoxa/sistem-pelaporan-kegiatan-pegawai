@@ -45,9 +45,9 @@ export default function MasterTable({
                 ))}
                 <td>
                   <span
-                    className={`status-badge ${(row.isActive ?? row.is_active ?? true) ? "active" : "inactive"}`}
+                    className={`status-badge ${row.isActive ? "active" : "inactive"}`}
                   >
-                    {(row.isActive ?? row.is_active ?? true) ? "Aktif" : "Nonaktif"}
+                    {row.isActive ? "Aktif" : "Nonaktif"}
                   </span>
                 </td>
                 {(onEdit || onToggleActive) && (
@@ -84,7 +84,7 @@ export default function MasterTable({
             {rows.length === 0 && (
               <tr>
                 <td className="empty-cell" colSpan={columns.length + 1 + (onEdit || onToggleActive ? 1 : 0)}>
-                  Belum ada data. Tambahkan {title.toLowerCase()} pertama.
+                  {onCreate ? `Belum ada data. Tambahkan ${title.toLowerCase()} pertama.` : `Belum ada data ${title.toLowerCase()} yang tersedia.`}
                 </td>
               </tr>
             )}

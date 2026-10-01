@@ -3,8 +3,7 @@ import { http } from './http.js'
 export const historyApi = {
   listMine: (params = {}) => {
     const query = new URLSearchParams(Object.entries(params).filter(([, value]) => value !== undefined && value !== ''))
-    const queryString = query.toString()
-    return http.request('/api/laporan/saya' + (queryString ? '?' + queryString : ''))
+    return http.request(`/api/laporan/saya${query.toString() ? `?${query}` : ''}`)
   },
-  getDetail: (id) => http.request('/api/laporan/' + id),
+  getDetail: (id) => http.request(`/api/laporan/${id}`),
 }

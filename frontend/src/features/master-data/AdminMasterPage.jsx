@@ -5,6 +5,7 @@ import JobFields from './JobFields.jsx'
 import PageHeader from '../../components/PageHeader.jsx'
 import Notice from '../../components/Notice.jsx'
 import PageState from '../../components/PageState.jsx'
+import { http } from '../../api/http.js'
 
 const emptyForms = {
   desa: { namaDesa: '' },
@@ -19,8 +20,10 @@ const emptyForms = {
 const labels = { desa: 'Desa', cluster: 'RW', pekerjaan: 'Pekerjaan' }
 
 export default function AdminMasterPage() {
+  const [resourceView, setResourceView] = useState('projects')
+  const [remote, setRemote] = useState(null)
   const [data, setData] = useState({ desa: [], cluster: [], kategori: [], pekerjaan: [] })
-  const [integration, setIntegration] = useState({ configured: false, categories: 0, processes: 0, lastSyncedAt: null })
+  const [integration, setIntegration] = useState({ configured: false, categories: 0, processes: 0, lastSyncedAt: null, migration: { master: 'local', users: 'local', reports: 'local', documentation: 'local' } })
   const [syncing, setSyncing] = useState(false)
   const [editor, setEditor] = useState(null)
   const [form, setForm] = useState(emptyForms.desa)
@@ -31,9 +34,17 @@ export default function AdminMasterPage() {
   const load = useCallback(async () => {
     setState('loading')
     try {
+      const { source } = await http.request('/api/admin/master-source')
+      if (source === 'ftth') {
+        setRemote(await http.request('/api/admin/master-ftth'))
+        setError('')
+        setState('ready')
+        return
+      }
+      setRemote(null)
       const [desa, cluster, kategori, pekerjaan, integrationStatus] = await Promise.all([
         ...['desa', 'cluster', 'kategori', 'pekerjaan'].map(masterApi.fetchAdmin),
-        masterApi.getFtthIntegrationStatus().catch(() => ({ configured: false, categories: 0, processes: 0, lastSyncedAt: null })),
+        masterApi.getFtthIntegrationStatus().catch(() => ({ configured: false, categories: 0, processes: 0, lastSyncedAt: null, migration: { master: 'local', users: 'local', reports: 'local', documentation: 'local' } })),
       ])
       setData({ desa, cluster, kategori, pekerjaan })
       setIntegration(integrationStatus)
@@ -53,14 +64,6 @@ export default function AdminMasterPage() {
     [data.desa],
   )
 
-  const categoryNames = useMemo(
-    () =>
-      Object.fromEntries(
-        data.kategori.map((item) => [item.id, item.namaKategori || item.name]),
-      ),
-    [data.kategori],
-  )
-
   function openCreate(resource) {
     setEditor({ resource, id: null })
     setForm({ ...emptyForms[resource] })
@@ -70,13 +73,13 @@ export default function AdminMasterPage() {
 
   function openEdit(resource, row) {
     setEditor({ resource, id: row.id })
-    if (resource === 'desa') setForm({ namaDesa: row.namaDesa || row.name })
+    if (resource === 'desa') setForm({ namaDesa: row.namaDesa })
     if (resource === 'cluster')
-      setForm({ desaId: row.desaId, clusterName: row.clusterName || row.name })
+      setForm({ desaId: row.desaId, clusterName: row.clusterName })
     if (resource === 'pekerjaan')
       setForm({
-        namaPekerjaan: row.namaPekerjaan || row.name,
-        kategoriId: row.kategoriId || row.master_category_id || row.categoryId || '',
+        namaPekerjaan: row.namaPekerjaan,
+        kategoriId: row.kategoriId || '',
         instruksiDokumentasi: row.instruksiDokumentasi || '',
       })
     setError('')
@@ -138,6 +141,22 @@ export default function AdminMasterPage() {
     }
   }
 
+  if (state === 'loading') return <section className="page"><PageState title="Menyiapkan master data" message="Memuat sumber data yang dikonfigurasi." /></section>
+  if (remote) return <section className="page master-data-page">
+    <PageHeader title="Master Data" description="Referensi project, cluster, kategori, dan pekerjaan." action={<button className="secondary-button" onClick={load}>Muat ulang</button>} />
+    <Notice>Data dikelola melalui FTTH. Perubahan master dilakukan pada sistem perusahaan.</Notice>
+    {error && <Notice tone="error">{error}</Notice>}
+    <div className="resource-switch" role="group" aria-label="Jenis master data">{Object.entries({ projects: 'Project', clusters: 'Cluster', categories: 'Kategori', processes: 'Pekerjaan' }).map(([key, label]) => <button key={key} type="button" aria-pressed={resourceView === key} onClick={() => setResourceView(key)}>{label}<span>{remote[key].length}</span></button>)}</div>
+    <div className="master-stack">
+      {resourceView === 'projects' && <MasterTable title="Project" columns={[{ key: 'name', label: 'Nama Project' }, { key: 'id', label: 'ID Project', render: row => <details className="record-id"><summary>Lihat ID</summary><code>{row.id}</code></details> }]} rows={remote.projects} />}
+      {resourceView === 'clusters' && <MasterTable title="Cluster" columns={[{ key: 'name', label: 'Nama Cluster' }, { key: 'projectName', label: 'Project' }, { key: 'id', label: 'ID Cluster', render: row => <details className="record-id"><summary>Lihat ID</summary><code>{row.id}</code></details> }]} rows={remote.clusters} />}
+      {resourceView === 'categories' && <MasterTable title="Kategori" columns={[{ key: 'name', label: 'Nama Kategori' }]} rows={remote.categories} />}
+      {resourceView === 'processes' && <MasterTable title="Pekerjaan" columns={[{ key: 'name', label: 'Nama Pekerjaan' }, { key: 'categoryName', label: 'Kategori' }]} rows={remote.processes} />}
+    </div>
+  </section>
+
+  if (state === 'error') return <section className="page"><PageHeader title="Master Data" /><Notice tone="error">{error}</Notice><button onClick={load}>Coba lagi</button></section>
+
   return (
     <section className="page">
       <PageHeader
@@ -158,6 +177,7 @@ export default function AdminMasterPage() {
             {integration.lastSyncedAt && (
               <small>Sinkron terakhir: {new Date(integration.lastSyncedAt).toLocaleString('id-ID')}</small>
             )}
+            <small>Sumber tahap migrasi: Master {integration.migration?.master || 'local'} · Pegawai {integration.migration?.users || 'local'} · Laporan {integration.migration?.reports || 'local'} · Dokumentasi {integration.migration?.documentation || 'local'}</small>
           </div>
           <button className="primary-button" type="button" disabled={!integration.configured || syncing} onClick={syncFtth}>
             {syncing ? 'Menyinkronkan...' : 'Sinkronkan API FTTH'}
@@ -254,9 +274,9 @@ export default function AdminMasterPage() {
           <MasterTable
             title="Kategori Pekerjaan (FTTH)"
             columns={[
-              { key: 'namaKategori', label: 'Nama Kategori', render: (row) => row.namaKategori || row.name || '-' },
-              { key: 'deskripsi', label: 'Deskripsi', render: (row) => row.deskripsi || row.description || '-' },
-              { key: 'sumber', label: 'Sumber', render: (row) => row.sumber || 'FTTH Core' },
+              { key: 'namaKategori', label: 'Nama Kategori' },
+              { key: 'deskripsi', label: 'Deskripsi', render: (row) => row.deskripsi || '-' },
+              { key: 'sumber', label: 'Sumber' },
             ]}
             rows={data.kategori}
           />
@@ -286,22 +306,11 @@ export default function AdminMasterPage() {
           <MasterTable
             title="Pekerjaan"
             columns={[
-              { key: 'namaPekerjaan', label: 'Nama Pekerjaan', render: (row) => row.namaPekerjaan || row.name },
+              { key: 'namaPekerjaan', label: 'Nama Pekerjaan' },
               {
                 key: 'kategoriId',
                 label: 'Kategori',
-                render: (row) => {
-                  const catId = row.kategoriId || row.master_category_id || row.categoryId
-                  return (
-                    row.kategori?.namaKategori ||
-                    row.kategori?.name ||
-                    row.category?.name ||
-                    row.category?.namaKategori ||
-                    row.namaKategori ||
-                    (catId && categoryNames[catId]) ||
-                    'Belum dikategorikan'
-                  )
-                },
+                render: (row) => row.kategori?.namaKategori || 'Belum dikategorikan',
               },
               {
                 key: 'instruksiDokumentasi',

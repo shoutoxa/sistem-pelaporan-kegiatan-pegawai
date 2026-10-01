@@ -17,12 +17,16 @@ export default function LoginPage() {
   }, []);
 
   if (!loading && user) {
-    if (user.role === "SUPERADMIN") {
-      return <Navigate to="/admin/dashboard" replace />;
-    }
-    if (user.role === "PEGAWAI") {
-      return <Navigate to="/pegawai/laporan/new" replace />;
-    }
+    return (
+      <Navigate
+        to={
+          user.role === "SUPERADMIN"
+            ? "/admin/dashboard"
+            : "/pegawai/laporan/new"
+        }
+        replace
+      />
+    );
   }
 
   async function handleSubmit(event) {

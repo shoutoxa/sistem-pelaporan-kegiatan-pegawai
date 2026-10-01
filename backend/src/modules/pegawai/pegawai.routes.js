@@ -1,165 +1,69 @@
 import { Router } from 'express'
 import multer from 'multer'
 import { fileTypeFromBuffer } from 'file-type'
-import { ftthApi } from '../../services/ftthApi.js'
 
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10_000_000 } })
-const ALLOWED_PHOTO_MIME = new Set(['image/jpeg', 'image/png', 'image/webp'])
+const photoUpload = multer({ storage: multer.memoryStorage(), limits: { files: 1, fileSize: 5_000_000 } })
 
 function sendError(error, response) {
-  const statuses = { VALIDATION: 400, DUPLICATE: 409, NOT_FOUND: 404, FORBIDDEN: 403 }
+  const statuses = { VALIDATION: 400, DUPLICATE: 409, NOT_FOUND: 404, FORBIDDEN: 403, INTEGRATION_NOT_CONFIGURED: 503, INTEGRATION_UNAVAILABLE: 502, INTEGRATION_UNAUTHORIZED: 502, INTEGRATION_INVALID_RESPONSE: 502 }
   const message = error.message || 'Terjadi kesalahan pada server.'
-  return response.status(statuses[error.code] || 500).json({ message })
+  return response.status(statuses[error.code] || 500).json({ message, ...(error.errors ? { errors: error.errors } : {}) })
 }
 
-export function createPegawaiRouter({ service, requireAuth, requireSuperadmin } = {}) {
+export function createPegawaiRouter({ service, requireAuth, requireSuperadmin, source = 'local' } = {}) {
   const router = Router()
   const guard = [requireAuth, requireSuperadmin].filter(Boolean)
-  const authGuard = [requireAuth].filter(Boolean)
+  const authGuard = requireAuth ? [requireAuth] : []
 
   router.get('/admin/pegawai', ...guard, async (_request, response) => {
-    try {
-      const result = await ftthApi.getUsers()
-      const users = Array.isArray(result) ? result : (result.data || [])
-      const formattedUsers = users
-        .filter(u => u.role !== 'administrator' && u.role !== 'SUPERADMIN')
-        .map(u => ({
-          id: u.id,
-          username: u.username,
-          nama: u.full_name || u.username,
-          email: u.email,
-          nomorHp: u.phone,
-          role: 'PEGAWAI',
-          isActive: u.is_active !== false,
-          wajibLapor: Boolean(u.wajib_lapor),
-          fotoProfil: u.foto,
-          fotoProfilUrl: u.foto ? (u.foto.startsWith('http') ? u.foto : `https://ftth.digitak.id${u.foto}`) : null,
-        }))
-      return response.json({ data: formattedUsers })
-    } catch (error) {
-      console.error('Error fetching users from FTTH:', error.message)
-      return sendError({ code: 'NOT_FOUND', message: 'Gagal mengambil data pegawai dari FTTH.' }, response)
-    }
+    try { return response.json({ data: await service.list(), source }) } catch (error) { return sendError(error, response) }
+  })
+  router.post('/admin/pegawai', ...guard, async (request, response) => {
+    try { return response.status(201).json({ message: 'Pegawai berhasil ditambahkan.', data: await service.create(request.body) }) } catch (error) { return sendError(error, response) }
+  })
+  router.put('/admin/pegawai/:id', ...guard, async (request, response) => {
+    try { return response.json({ message: 'Pegawai berhasil diperbarui.', data: await service.update(request.params.id, request.body) }) } catch (error) { return sendError(error, response) }
+  })
+  router.patch('/admin/pegawai/:id/status', ...guard, async (request, response) => {
+    if (typeof request.body.isActive !== 'boolean') return response.status(400).json({ message: 'Status aktif harus boolean.', errors: { isActive: 'Status aktif harus boolean.' } })
+    try { return response.json({ data: await service.setActive(request.params.id, request.body.isActive) }) } catch (error) { return sendError(error, response) }
   })
 
-  router.get('/admin/pegawai/:id/clusters', ...guard, async (request, response) => {
+  // Profile photo upload - ONLY SUPERADMIN (enforced by route guard and service logic)
+  router.post('/admin/pegawai/:id/foto', ...guard, (request, response, next) => photoUpload.single('fotoProfil')(request, response, (error) => {
+    if (error) return sendError({ code: 'VALIDATION', message: 'Ukuran foto profil maksimal 5 MB.' }, response)
+    return next()
+  }), async (request, response) => {
     try {
-      const clusters = await ftthApi.getUserClusters(request.params.id)
-      return response.json({ data: Array.isArray(clusters) ? clusters : (clusters?.data || []) })
-    } catch (error) {
-      return sendError({ code: 'NOT_FOUND', message: 'Gagal mengambil cluster pegawai.' }, response)
-    }
-  })
-
-  router.get('/admin/pegawai/:id/laporan-status', ...guard, async (request, response) => {
-    try {
-      const status = await ftthApi.getUserLaporanStatus(request.params.id)
-      return response.json({ data: status?.data || status })
-    } catch (error) {
-      return sendError({ code: 'NOT_FOUND', message: 'Gagal mengambil status laporan pegawai.' }, response)
-    }
-  })
-
-  router.post('/admin/pegawai/:id/foto', ...guard, upload.single('fotoProfil'), async (request, response) => {
-    try {
-      if (!request.file) {
-        return response.status(400).json({ message: 'File foto tidak ditemukan.' })
+      const file = request.file
+      if (!file) return response.status(400).json({ message: 'Foto profil wajib diunggah.' })
+      const detected = await fileTypeFromBuffer(file.buffer)
+      if (!detected || !['image/jpeg', 'image/png', 'image/webp'].includes(detected.mime)) {
+        return response.status(400).json({ message: 'Format foto harus JPG, PNG, atau WEBP.' })
       }
-      const detected = await fileTypeFromBuffer(request.file.buffer)
-      if (!detected || !ALLOWED_PHOTO_MIME.has(detected.mime)) {
-        return response.status(400).json({ message: 'Format foto harus JPG, PNG, atau WEBP.', errors: { fotoProfil: 'Format foto harus JPG, PNG, atau WEBP.' } })
-      }
-      const result = await ftthApi.uploadUserPhoto(
-        request.params.id,
-        request.file.buffer,
-        request.file.originalname,
-        detected.mime,
-      )
-      return response.json({ message: 'Foto profil pegawai berhasil diperbarui.', data: result })
-    } catch (error) {
-      console.error('Error uploading employee photo:', error.message)
-      return sendError({ code: 'NOT_FOUND', message: 'Gagal mengunggah foto.' }, response)
-    }
+      const data = await service.updatePhoto({ actor: request.user, targetUserId: request.params.id, file: { ...file, mimetype: detected.mime } })
+      return response.json({ message: 'Foto profil berhasil diperbarui.', data })
+    } catch (error) { return sendError(error, response) }
   })
 
-  router.put('/admin/clusters/:id/pic', ...guard, async (request, response) => {
-    try {
-      const picId = request.body.picId || request.body.pic_id
-      const result = await ftthApi.updateCluster(request.params.id, { pic_id: picId })
-      return response.json({ message: 'PIC cluster berhasil diperbarui.', data: result })
-    } catch (error) {
-      return sendError({ code: 'NOT_FOUND', message: 'Gagal memperbarui PIC cluster: ' + error.message }, response)
-    }
-  })
-
-  router.get('/pegawai/clusters', ...authGuard, async (request, response) => {
-    try {
-      const userId = request.user?.id
-      if (!userId) return response.status(401).json({ message: 'Tidak terautentikasi' })
-      const clusters = await ftthApi.getUserClusters(userId)
-      return response.json({ data: Array.isArray(clusters) ? clusters : (clusters?.data || []) })
-    } catch (error) {
-      return sendError({ code: 'NOT_FOUND', message: 'Gagal mengambil data cluster pegawai.' }, response)
-    }
-  })
-
-  router.get('/pegawai/laporan-status', ...authGuard, async (request, response) => {
-    try {
-      const userId = request.user?.id
-      if (!userId) return response.status(401).json({ message: 'Tidak terautentikasi' })
-      const status = await ftthApi.getUserLaporanStatus(userId)
-      return response.json({ data: status?.data || status })
-    } catch {
-      return response.json({ data: { user_id: request.user?.id, wajib_lapor: false, clusters: [] } })
-    }
-  })
-
-  router.post('/pegawai/foto', ...authGuard, upload.single('fotoProfil'), async (request, response) => {
-    try {
-      const userId = request.user?.id
-      if (!userId) return response.status(401).json({ message: 'Tidak terautentikasi' })
-      if (!request.file) {
-        return response.status(400).json({ message: 'File foto tidak ditemukan.' })
-      }
-      const detected = await fileTypeFromBuffer(request.file.buffer)
-      if (!detected || !ALLOWED_PHOTO_MIME.has(detected.mime)) {
-        return response.status(400).json({ message: 'Format foto harus JPG, PNG, atau WEBP.', errors: { fotoProfil: 'Format foto harus JPG, PNG, atau WEBP.' } })
-      }
-      const result = await ftthApi.uploadUserPhoto(
-        userId,
-        request.file.buffer,
-        request.file.originalname,
-        detected.mime,
-      )
-      return response.json({ message: 'Foto profil berhasil diperbarui.', data: result })
-    } catch (error) {
-      console.error('Error uploading user photo:', error.message)
-      return sendError({ code: 'NOT_FOUND', message: 'Gagal mengunggah foto.' }, response)
-    }
-  })
-
-  router.post('/admin/pegawai', ...guard, async (_request, response) => {
-    return response.status(403).json({ message: 'Penambahan pegawai harus dikelola melalui FTTH Core.' })
-  })
-
-  router.put('/admin/pegawai/:id', ...guard, async (_request, response) => {
-    return response.status(403).json({ message: 'Perubahan data pegawai harus dikelola melalui FTTH Core.' })
-  })
-
-  router.patch('/admin/pegawai/:id/status', ...guard, async (_request, response) => {
-    return response.status(403).json({ message: 'Perubahan status pegawai harus dikelola melalui FTTH Core.' })
+  // Explicit route for PEGAWAI attempts to change photo -> MUST BE FORBIDDEN (403)
+  router.post('/pegawai/foto', ...authGuard, (_request, response) => {
+    return response.status(403).json({ message: 'Anda tidak memiliki akses untuk mengubah foto profil.' })
   })
 
   return router
 }
 
-
-export async function createProductionPegawaiRouter() {
-  const { requireAuth, requireRole } = await import('../auth/auth.middleware.js')
-  const { createProductionAuthService } = await import('../auth/auth.routes.js')
-  const sessionService = await createProductionAuthService()
-  return createPegawaiRouter({
-    requireAuth: requireAuth({ authService: sessionService }),
-    requireSuperadmin: requireRole('SUPERADMIN'),
-  })
+export async function createProductionPegawaiRouter({ authService } = {}) {
+  const [{ prisma }, { requireAuth, requireRole }, { createPegawaiService }, bcrypt] = await Promise.all([import('../../config/prisma.js'), import('../auth/auth.middleware.js'), import('./pegawai.service.js'), import('bcryptjs')])
+  const sessionService = authService || await (await import('../auth/auth.routes.js')).createProductionAuthService()
+  const { runtimeConfig } = await import('../../config/env.js')
+  if (runtimeConfig.migration.users === 'ftth') {
+    const { createFtthUsersService } = await import('../integration/ftth-users.service.js')
+    const { createFtthClient } = await import('../integration/ftth.client.js')
+    const usersService = createFtthUsersService(createFtthClient())
+    return createPegawaiRouter({ source: 'ftth', service: usersService, requireAuth: requireAuth({ authService: sessionService }), requireSuperadmin: requireRole('SUPERADMIN') })
+  }
+  const storage = (await import('../../config/supabase.js')).createSupabaseStorage()
+  return createPegawaiRouter({ service: createPegawaiService({ prisma, passwordHasher: { hash: bcrypt.default.hash }, storage }), requireAuth: requireAuth({ authService: sessionService }), requireSuperadmin: requireRole('SUPERADMIN') })
 }
