@@ -25,7 +25,7 @@ export const fieldsSchema = z.object({
   path: ['kendala_lapangan'],
 })
 export const statusSchema = z.object({
-  status: z.enum(['ON_PROGRESS', 'SELESAI', 'KENDALA', 'PENDING', 'APPROVED', 'REJECTED']),
+  status: z.enum(['PENDING', 'APPROVED', 'REJECTED']),
   catatan_revisi: z.string().trim().max(2000).default(''),
 }).strict().refine((value) => value.status !== 'REJECTED' || value.catatan_revisi.length > 0)
 export const pageSchema = z.object({

@@ -8,7 +8,9 @@ Frontend React/Vite berkomunikasi dengan backend Express. Backend mengakses API 
 
 Integrasi utama tersedia untuk login, Master Data, Pegawai, Laporan, Dashboard, dan Dokumentasi. Sumber data dipilih melalui feature flag. Penugasan cluster dan kewajiban lapor menggunakan endpoint resmi perusahaan.
 
-**Aplikasi lokal masih membutuhkan Supabase lokal/Docker.** Laporan dan lampiran baru disimpan di FTTH, tetapi catatan proses upload (`ftthUpload`) masih memakai PostgreSQL lokal melalui Prisma. Catatan ini melacak pengiriman file dan metadata sampai `SYNCED`; bukan salinan laporan pegawai dan bukan mekanisme retry otomatis.
+**Catatan branch revisi pegawai:** UI admin tidak dipakai; pekerjaan dibatasi berdasarkan PIC. Pengiriman status pekerjaan revisi masih dinonaktifkan secara default melalui `FTTH_WORK_REPORTS_ENABLED=false` sampai kontrak FTTH dikonfirmasi. Login pengembangan dengan akun FTTH bukan SSO. Lihat [kontrak dan batas revisi](docs/integrations/pegawai-ftth-revision.md).
+
+Untuk jurnal upload yang tahan restart, gunakan PostgreSQL lokal/Supabase seperti panduan berikut. Branch dasar juga menyediakan fallback jurnal dalam memori ketika tidak ada `DATABASE_URL`, tetapi catatannya hilang ketika server berhenti dan **tidak layak untuk deployment**. Laporan dan lampiran baru tetap dimiliki FTTH; jurnal hanya melacak pengiriman file/metadata sampai `SYNCED`, bukan salinan laporan dan bukan retry otomatis.
 
 Pelepasan database lokal masih menunggu mekanisme pengganti, termasuk konfirmasi kemampuan API menangani kegagalan dan pengiriman ulang tanpa duplikasi. Deployment dan validasi produksi belum dilakukan. Data lama Supabase tidak akan dimigrasikan, tetapi belum dihapus secara fisik.
 

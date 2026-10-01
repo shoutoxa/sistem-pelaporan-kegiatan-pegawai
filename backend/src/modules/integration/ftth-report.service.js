@@ -14,13 +14,21 @@ function admin(actor) {
 }
 function active(item) { return item.is_active !== false && !item.deleted_at }
 const label = (item) => item.full_name || item.name || item.nama || item.project_name || item.cluster_name || item.id
+const completed = (item) => ['completed', 'selesai'].includes(String(item.status).toLowerCase())
+const metric = (value) => value != null && value !== '' && Number.isFinite(Number(value)) && Number(value) >= 0 ? Number(value) : null
+const totalMetric = (items, key) => items.some((item) => metric(item[key]) == null) ? null : items.reduce((sum, item) => sum + metric(item[key]), 0)
+const coordinate = (value, max) => value != null && value !== '' && Number.isFinite(Number(value)) && Math.abs(Number(value)) <= max ? Number(value) : null
+const clusterFields = (c) => ({ id: c.id, project_id: c.project_id, name: label(c), description: c.description,
+  status: c.status, pic_id: c.pic_id, kmz_file: c.kmz_file,
+  homepass_target: c.homepass_target, homepass_achieved: c.homepass_achieved,
+  latitude: coordinate(c.latitude, 90), longitude: coordinate(c.longitude, 180) })
 function summary(item) {
   const desc = item.kendala_lapangan ?? item.keterangan ?? ''
   return {
     id: item.id, user_id: item.user_id, project_id: item.project_id, cluster_id: item.cluster_id,
     process_id: item.process_id, tanggal_kegiatan: item.tanggal_kegiatan,
     keterangan: desc,
-    kendala_lapangan: desc,
+    kendala_lapangan: item.kendala_lapangan ?? '',
     nomor_perangkat: item.nomor_perangkat,
     status: item.status, catatan_revisi: item.catatan_revisi,
     created_at: item.created_at, project_name: item.project ? label(item.project) : item.project_id,
@@ -30,19 +38,13 @@ function summary(item) {
   }
 }
 
-export function createFtthReportService({ client, repository, storage, clock = () => new Date() }) {
+export function createFtthReportService({ client, repository, storage, clock = () => new Date(), workReportsEnabled = false }) {
   async function identity(actor) {
     if (!actor || !['SUPERADMIN', 'PEGAWAI'].includes(actor.role)) throw fail('FORBIDDEN', 'Akses tidak diizinkan.')
     const mapping = actor.authSource === 'ftth' && actor.identitySource === 'ftth'
       ? { externalUserId: parse(idSchema, actor.id) } : await repository.identity(actor.id)
     if (!mapping) throw fail('MAPPING_REQUIRED', 'Akun belum dipetakan ke FTTH. Hubungi admin.')
-    let user
-    try {
-      user = row(await client.getUser(mapping.externalUserId))
-    } catch {
-      const users = await (client.listUsers ? client.listUsers().then(rows).catch(() => []) : [])
-      user = users.find((u) => u.id === mapping.externalUserId)
-    }
+    const user = row(await client.getUser(mapping.externalUserId))
     if (!user || user.id !== mapping.externalUserId || !active(user)) throw fail('FORBIDDEN', 'Akun FTTH tidak aktif atau tidak cocok.')
     return mapping
   }
@@ -62,32 +64,28 @@ export function createFtthReportService({ client, repository, storage, clock = (
   }
   async function references(actor) {
     const mapping = actor.role === 'SUPERADMIN' ? null : await identity(actor)
-    const [projects, clusters, categories, processes, clusterProcesses, userReports] = await Promise.all([
+    const [projects, clusters, categories, processes, clusterProcesses] = await Promise.all([
       all(client.listProjects),
       mapping ? assignedClusters(mapping.externalUserId) : all(client.listClusters),
       client.listCategories().then(rows),
       client.listProcesses().then(rows),
-      client.listClusterProcesses ? client.listClusterProcesses().then(rows).catch(() => []) : Promise.resolve([]),
-      mapping ? all((query) => client.listReports({ ...query, user_id: mapping.externalUserId })) : Promise.resolve([]),
+      assignedProcesses(mapping?.externalUserId),
     ])
     const visibleClusters = clusters.filter(active)
 
     if (mapping) {
       // Find cluster processes assigned to this user as PIC
-      const userAssignedCP = clusterProcesses.filter((cp) => cp.pic_id === mapping.externalUserId && active(cp))
+      const userAssignedCP = clusterProcesses.filter((cp) => cp.pic_id === mapping.externalUserId && active(cp) && visibleClusters.some((c) => c.id === cp.cluster_id))
 
-      // Determine which jobs are completed (either status in cp is completed/selesai, or user submitted a SELESAI report)
+      // Only authoritative cluster-process completion removes a job.
       const completedJobKeys = new Set()
       userAssignedCP.forEach((cp) => {
-        if (cp.status === 'completed' || cp.status === 'selesai') {
+        if (completed(cp)) {
           completedJobKeys.add(`${cp.cluster_id}:${cp.master_process_id}`)
         }
       })
-      userReports.forEach((rep) => {
-        if (rep.status === 'SELESAI' || rep.status === 'completed' || rep.status === 'APPROVED') {
-          completedJobKeys.add(`${rep.cluster_id}:${rep.process_id}`)
-        }
-      })
+      // Approval of evidence is not completion of the assigned work. FTTH
+      // cluster_processes is authoritative until completion sync is agreed.
 
       // Active assigned jobs: assigned to this user AND not completed yet
       const activeAssignments = userAssignedCP.filter(
@@ -96,13 +94,12 @@ export function createFtthReportService({ client, repository, storage, clock = (
 
       // Only clusters that have assigned jobs or assigned to user
       const assignedClusterIds = new Set(userAssignedCP.map((cp) => cp.cluster_id))
-      visibleClusters.forEach((c) => assignedClusterIds.add(c.id))
       const userClusters = visibleClusters.filter((c) => assignedClusterIds.has(c.id))
 
       // Only processes that are assigned to this employee and not completed
       const activeProcessIds = new Set(activeAssignments.map((cp) => cp.master_process_id))
       const userProcesses = processes
-        .filter((item) => active(item) && (activeProcessIds.size === 0 || activeProcessIds.has(item.id)))
+        .filter((item) => active(item) && activeProcessIds.has(item.id) && categories.some((cat) => cat.id === item.master_category_id && active(cat)))
         .map((item) => {
           const forClusters = activeAssignments
             .filter((cp) => cp.master_process_id === item.id)
@@ -179,18 +176,19 @@ export function createFtthReportService({ client, repository, storage, clock = (
     }
     if (actor.role !== 'SUPERADMIN') {
       const assigned = await assignedClusters(mapping.externalUserId)
-      const clusterProcesses = client.listClusterProcesses ? await client.listClusterProcesses().then(rows).catch(() => []) : []
+      const clusterProcesses = await assignedProcesses(mapping.externalUserId)
       const userAssignedCP = clusterProcesses.filter((cp) => cp.pic_id === mapping.externalUserId && active(cp))
 
-      const hasJobAssignment = userAssignedCP.some((cp) => cp.cluster_id === cluster.id && cp.master_process_id === process.id)
+      const jobs = userAssignedCP.filter((cp) => cp.cluster_id === cluster.id && cp.master_process_id === process.id)
       const hasClusterAssignment = assigned.some((item) => item.id === cluster.id && item.project_id === project.id)
 
-      if (userAssignedCP.length > 0 && !hasJobAssignment) {
+      if (!jobs.length) {
         throw fail('FORBIDDEN', 'Pekerjaan ini tidak di-assign kepada Anda.')
       }
-      if (!hasClusterAssignment && !hasJobAssignment) {
+      if (!hasClusterAssignment) {
         throw fail('FORBIDDEN', 'Cluster ini belum ditugaskan kepada Anda.')
       }
+      if (jobs.some(completed)) throw fail('LOCKED', 'Pekerjaan sudah selesai di FTTH dan tidak perlu dilaporkan lagi.')
     }
     return process
   }
@@ -198,6 +196,7 @@ export function createFtthReportService({ client, repository, storage, clock = (
     const data = parse(fieldsSchema, fields)
     const mapping = await identity(actor)
     const process = await validateReferences(data, actor, mapping)
+    if (!workReportsEnabled) throw fail('INTEGRATION_NOT_CONFIGURED', 'Pengiriman status pekerjaan menunggu konfirmasi kontrak FTTH. Laporan belum dikirim.')
     if (actor.role !== 'SUPERADMIN' && ![jakartaDate(clock()), jakartaDate(new Date(clock().getTime() - 86400000))].includes(data.tanggal_kegiatan)) {
       throw fail('VALIDATION', 'Tanggal kegiatan hanya boleh hari ini atau kemarin.')
     }
@@ -225,6 +224,10 @@ export function createFtthReportService({ client, repository, storage, clock = (
         verified_at: null,
       }
       report = row(await client.createReport(payload))
+      if (report.user_id !== payload.user_id || report.project_id !== payload.project_id || report.cluster_id !== payload.cluster_id ||
+          report.process_id !== payload.process_id || report.status !== payload.status) {
+        throw fail('INTEGRATION_INVALID_RESPONSE', 'FTTH belum mengonfirmasi identitas dan status pekerjaan yang dikirim.')
+      }
     } catch {
       throw fail('WRITE_UNCONFIRMED', 'Pengiriman laporan belum terkonfirmasi. Muat ulang daftar laporan dan periksa FTTH sebelum mencoba lagi agar tidak membuat duplikat.')
     }
@@ -471,6 +474,7 @@ export function createFtthReportService({ client, repository, storage, clock = (
     admin(actor) // employees fill reports only, no edits/deletes in the temporary FTTH mode
     const data = parse(fieldsSchema, fields)
     const { report, mapping } = await authorizedReport(actor, id)
+    if (!workReportsEnabled) throw fail('INTEGRATION_NOT_CONFIGURED', 'Koreksi status pekerjaan menunggu konfirmasi kontrak FTTH.')
     if (report.status === 'APPROVED') throw fail('LOCKED', 'Buka kembali laporan sebelum mengoreksi.')
     await validateReferences(data, actor, mapping)
     return summary(row(await client.updateReport(id, data)))
@@ -498,6 +502,25 @@ export function createFtthReportService({ client, repository, storage, clock = (
     }
     return clusters.filter(active).map((item) => ({ id: item.id, name: label(item), project_id: item.project_id }))
   }
+  async function assignedProcesses(userId) {
+    if (!client.listClusterProcesses) throw fail('INTEGRATION_UNAVAILABLE', 'Data penugasan pekerjaan FTTH belum tersedia.')
+    const items = await all(client.listClusterProcesses)
+    const assigned = items.filter((item) => active(item) && (!userId || item.pic_id === userId))
+    if (assigned.some((item) => !idSchema.safeParse(item.cluster_id).success || !idSchema.safeParse(item.master_process_id).success)) {
+      throw fail('INTEGRATION_INVALID_RESPONSE', 'Relasi penugasan pekerjaan FTTH tidak valid.')
+    }
+    return assigned
+  }
+  async function employeeScope(actor) {
+    const mapping = await identity(actor)
+    const [rawClusters, clusterProcesses, assigned] = await Promise.all([
+      all(client.listClusters), assignedProcesses(actor.role === 'SUPERADMIN' ? null : mapping.externalUserId),
+      actor.role === 'SUPERADMIN' ? Promise.resolve(null) : assignedClusters(mapping.externalUserId),
+    ])
+    const clusters = rawClusters.filter((c) => active(c) && (!assigned ||
+      (assigned.some((a) => a.id === c.id && a.project_id === c.project_id) && clusterProcesses.some((cp) => cp.cluster_id === c.id))))
+    return { mapping, clusters, clusterProcesses: clusterProcesses.filter((cp) => clusters.some((c) => c.id === cp.cluster_id)) }
+  }
   async function authorizeUser(actor, userId) {
     parse(idSchema, userId)
     const mapping = await identity(actor)
@@ -524,26 +547,29 @@ export function createFtthReportService({ client, repository, storage, clock = (
     const user = row(await client.getUser(userId))
     if (user.id !== userId || typeof user.wajib_lapor !== 'boolean') throw fail('INTEGRATION_INVALID_RESPONSE', 'Data wajib lapor FTTH belum tersedia.')
     if (!user.wajib_lapor) return { user_id: userId, wajib_lapor: false, tanggal: jakartaDate(clock()), clusters: [] }
-    return dailyStatus(userId)
+    const status = await dailyStatus(userId)
+    if (actor.role === 'SUPERADMIN') return status
+    const { clusters, clusterProcesses } = await employeeScope(actor)
+    const pendingIds = new Set(clusterProcesses.filter((cp) => !completed(cp)).map((cp) => cp.cluster_id))
+    return { ...status, wajib_lapor: pendingIds.size > 0,
+      clusters: status.clusters.filter((c) => pendingIds.has(c.cluster_id) && clusters.some((item) => item.id === c.cluster_id)) }
   }
   async function employeeDashboard(actor) {
-    await identity(actor)
-    const [projects, clusters, processes, clusterProcesses, reports] = await Promise.all([
+    const { mapping, clusters, clusterProcesses } = await employeeScope(actor)
+    const [allProjects, processes, reports] = await Promise.all([
       all(client.listProjects),
-      all(client.listClusters),
       client.listProcesses().then(rows),
-      client.listClusterProcesses().then(rows),
-      all(client.listReports),
+      all((query) => client.listReports({ ...query, user_id: mapping.externalUserId })),
     ])
-
+    const projects = allProjects.filter((p) => clusters.some((c) => c.project_id === p.id))
     const activeProjects = projects.filter(active)
     const activeClusters = clusters.filter(active)
     const activeCP = clusterProcesses.filter(active)
 
     const totalProjects = activeProjects.length
     const totalClusters = activeClusters.length
-    const homepassTarget = activeClusters.reduce((sum, c) => sum + (Number(c.homepass_target) || 0), 0)
-    const homepassAchieved = activeClusters.reduce((sum, c) => sum + (Number(c.homepass_achieved) || 0), 0)
+    const homepassTarget = totalMetric(activeClusters, 'homepass_target')
+    const homepassAchieved = totalMetric(activeClusters, 'homepass_achieved')
 
     // Calculate overall progress from cluster processes
     const completedCP = activeCP.filter((cp) => cp.status === 'completed' || cp.status === 'selesai').length
@@ -571,19 +597,20 @@ export function createFtthReportService({ client, repository, storage, clock = (
       project_id: c.project_id,
       project_name: projectMap.get(c.project_id) ? label(projectMap.get(c.project_id)) : c.project_id,
       status: c.status || 'open',
-      latitude: Number(c.latitude) || null,
-      longitude: Number(c.longitude) || null,
-      homepass_target: Number(c.homepass_target) || 0,
-      homepass_achieved: Number(c.homepass_achieved) || 0,
+      latitude: coordinate(c.latitude, 90),
+      longitude: coordinate(c.longitude, 180),
+      homepass_target: metric(c.homepass_target),
+      homepass_achieved: metric(c.homepass_achieved),
     }))
 
     // Report stats for this employee
-    const userReports = reports.filter((r) => r.user_id === actor.externalUserId || r.user_id === actor.id)
+    const userReports = reports.filter((r) => r.user_id === mapping.externalUserId)
     const reportStats = {
-      onProgress: userReports.filter((r) => r.status === 'ON_PROGRESS' || r.status === 'PENDING').length,
-      selesai: userReports.filter((r) => r.status === 'SELESAI' || r.status === 'APPROVED').length,
-      kendala: userReports.filter((r) => r.status === 'KENDALA' || r.status === 'REJECTED').length,
-      total: userReports.length,
+      onProgress: activeCP.filter((cp) => ['on_progress', 'ON_PROGRESS'].includes(cp.status)).length,
+      selesai: activeCP.filter(completed).length,
+      kendala: activeCP.filter((cp) => ['kendala', 'KENDALA'].includes(cp.status)).length,
+      total: activeCP.length,
+      reportTotal: userReports.length,
     }
 
     return {
@@ -599,24 +626,21 @@ export function createFtthReportService({ client, repository, storage, clock = (
   }
 
   async function listProjects(actor) {
-    await identity(actor)
-    const [projects, clusters] = await Promise.all([
-      all(client.listProjects),
-      all(client.listClusters),
-    ])
-    const activeProjects = projects.filter(active)
+    const { clusters } = await employeeScope(actor)
+    const projects = await all(client.listProjects)
+    const activeProjects = projects.filter((p) => active(p) && clusters.some((c) => c.project_id === p.id))
     const activeClusters = clusters.filter(active)
 
     return activeProjects.map((p) => {
       const pClusters = activeClusters.filter((c) => c.project_id === p.id)
-      const target = pClusters.reduce((sum, c) => sum + (Number(c.homepass_target) || 0), 0)
-      const achieved = pClusters.reduce((sum, c) => sum + (Number(c.homepass_achieved) || 0), 0)
+      const target = totalMetric(pClusters, 'homepass_target')
+      const achieved = totalMetric(pClusters, 'homepass_achieved')
       return {
         id: p.id,
         name: label(p),
         spk_number: p.spk_number || '-',
         spk_date: p.spk_date || '-',
-        estimated_homepass: Number(p.estimated_homepass) || target,
+        estimated_homepass: p.estimated_homepass == null ? null : Number(p.estimated_homepass),
         homepass_target: target,
         homepass_achieved: achieved,
         status: p.status || 'open',
@@ -626,15 +650,15 @@ export function createFtthReportService({ client, repository, storage, clock = (
   }
 
   async function projectDetail(actor, id) {
-    await identity(actor)
     parse(idSchema, id)
-    const [project, clusters] = await Promise.all([
-      client.getProject(id).then(row),
-      all(client.listClusters),
-    ])
+    const { clusters } = await employeeScope(actor)
+    if (!clusters.some((c) => c.project_id === id)) throw fail('NOT_FOUND', 'Project tidak ditemukan dalam penugasan Anda.')
+    const project = row(await client.getProject(id))
+    if (project.id !== id || !active(project)) throw fail('NOT_FOUND', 'Project tidak ditemukan.')
     const pClusters = clusters.filter(active).filter((c) => c.project_id === id)
     return {
-      ...project,
+      id: project.id, name: label(project), description: project.description, status: project.status,
+      spk_number: project.spk_number, spk_date: project.spk_date, estimated_homepass: project.estimated_homepass,
       clusters: pClusters.map((c) => ({
         id: c.id,
         name: label(c),
@@ -648,17 +672,13 @@ export function createFtthReportService({ client, repository, storage, clock = (
   }
 
   async function listClusters(actor) {
-    await identity(actor)
-    const [clusters, projects, users, clusterProcesses, processes, categories] = await Promise.all([
-      all(client.listClusters),
+    const { clusters, clusterProcesses } = await employeeScope(actor)
+    const [projects, processes, categories] = await Promise.all([
       all(client.listProjects),
-      all(client.listUsers),
-      all(client.listClusterProcesses),
       all(client.listProcesses),
       all(client.listCategories),
     ])
     const projectMap = new Map(projects.map((p) => [p.id, p]))
-    const userMap = new Map(users.map((u) => [u.id, u]))
     const processMap = new Map(processes.map((p) => [p.id, p]))
     const activeCP = clusterProcesses.filter(active)
 
@@ -706,12 +726,12 @@ export function createFtthReportService({ client, repository, storage, clock = (
         project_id: c.project_id,
         project_name: projectMap.get(c.project_id) ? label(projectMap.get(c.project_id)) : c.project_id,
         status: c.status || 'open',
-        homepass_target: Number(c.homepass_target) || 0,
-        homepass_achieved: Number(c.homepass_achieved) || 0,
-        latitude: Number(c.latitude) || null,
-        longitude: Number(c.longitude) || null,
+        homepass_target: metric(c.homepass_target),
+        homepass_achieved: metric(c.homepass_achieved),
+        latitude: coordinate(c.latitude, 90),
+        longitude: coordinate(c.longitude, 180),
         pic_id: c.pic_id,
-        pic_name: userMap.get(c.pic_id) ? label(userMap.get(c.pic_id)) : '-',
+        pic_name: actor.nama || actor.username || '-',
         overall_progress: overallProgress,
         categories_summary: categoriesSummary,
       }
@@ -719,19 +739,20 @@ export function createFtthReportService({ client, repository, storage, clock = (
   }
 
   async function clusterDetail(actor, id) {
-    await identity(actor)
     parse(idSchema, id)
-    const [cluster, clusterProcesses, processes, categories, users, projects, reports] = await Promise.all([
+    const { mapping, clusters, clusterProcesses } = await employeeScope(actor)
+    if (!clusters.some((c) => c.id === id)) throw fail('NOT_FOUND', 'Cluster tidak ditemukan dalam penugasan Anda.')
+    const [cluster, processes, categories, projects, rawReports] = await Promise.all([
       client.getCluster(id).then(row),
-      all(client.listClusterProcesses),
       all(client.listProcesses),
       all(client.listCategories),
-      all(client.listUsers),
       all(client.listProjects),
-      all(client.listReports),
+      all((query) => client.listReports({ ...query, user_id: mapping.externalUserId })),
     ])
+    if (cluster.id !== id || !active(cluster)) throw fail('NOT_FOUND', 'Cluster tidak ditemukan.')
+    const reports = rawReports.filter((r) => r.user_id === mapping.externalUserId)
+      .sort((a, b) => String(b.created_at || b.tanggal_kegiatan).localeCompare(String(a.created_at || a.tanggal_kegiatan)))
     const processMap = new Map(processes.map((p) => [p.id, p]))
-    const userMap = new Map(users.map((u) => [u.id, u]))
     const projectMap = new Map(projects.map((p) => [p.id, p]))
     const activeCP = clusterProcesses.filter(active)
     const cpForCluster = activeCP.filter((cp) => cp.cluster_id === id)
@@ -761,7 +782,7 @@ export function createFtthReportService({ client, repository, storage, clock = (
           target_date: cp.target_date,
           completed_date: cp.completed_date,
           pic_id: cp.pic_id,
-          pic_name: userMap.get(cp.pic_id) ? label(userMap.get(cp.pic_id)) : '-',
+          pic_name: actor.nama || actor.username || '-',
           notes: cp.notes,
           reportCount: itemReports.length,
           latestReport: itemReports[0] ? summary(itemReports[0]) : null,
@@ -779,16 +800,16 @@ export function createFtthReportService({ client, repository, storage, clock = (
     }).filter((cat) => cat.total > 0 || cat.items.length > 0)
 
     return {
-      ...cluster,
+      ...clusterFields(cluster),
       name: label(cluster),
       description: cluster.description || (projectMap.get(cluster.project_id) ? label(projectMap.get(cluster.project_id)) : ''),
       project_name: projectMap.get(cluster.project_id) ? label(projectMap.get(cluster.project_id)) : cluster.project_id,
       overall_progress: overallProgress,
       categories_summary: categoriesSummary,
-      homepass_target: Number(cluster.homepass_target) || 0,
-      homepass_achieved: Number(cluster.homepass_achieved) || 0,
-      latitude: Number(cluster.latitude) || null,
-      longitude: Number(cluster.longitude) || null,
+      homepass_target: metric(cluster.homepass_target),
+      homepass_achieved: metric(cluster.homepass_achieved),
+      latitude: coordinate(cluster.latitude, 90),
+      longitude: coordinate(cluster.longitude, 180),
       processes: cpForCluster.map((cp) => ({
         id: cp.id,
         process_id: cp.master_process_id,
@@ -797,7 +818,7 @@ export function createFtthReportService({ client, repository, storage, clock = (
         target_date: cp.target_date,
         completed_date: cp.completed_date,
         pic_id: cp.pic_id,
-        pic_name: userMap.get(cp.pic_id) ? label(userMap.get(cp.pic_id)) : '-',
+        pic_name: actor.nama || actor.username || '-',
         notes: cp.notes,
       })),
     }

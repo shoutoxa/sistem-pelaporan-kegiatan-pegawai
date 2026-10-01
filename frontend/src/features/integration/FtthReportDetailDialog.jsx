@@ -7,9 +7,9 @@ const labels = {
   ON_PROGRESS: 'On Progress',
   SELESAI: 'Selesai',
   KENDALA: 'Kendala',
-  PENDING: 'On Progress',
-  APPROVED: 'Selesai',
-  REJECTED: 'Kendala',
+  PENDING: 'Menunggu verifikasi',
+  APPROVED: 'Diterima',
+  REJECTED: 'Perlu revisi',
 }
 
 export default function FtthReportDetailDialog({ report, onClose, children }) {
@@ -31,8 +31,8 @@ export default function FtthReportDetailDialog({ report, onClose, children }) {
       <div className="ftth-detail-location"><strong>{item.project_name}</strong><span>{item.cluster_name}</span></div>
       {item.nomor_perangkat && <p>Nomor perangkat: {item.nomor_perangkat}</p>}
       <p className="ftth-detail-description">
-        <strong>Kendala Lapangan: </strong>
-        {item.kendala_lapangan || item.keterangan || 'Tidak ada kendala'}
+        <strong>{item.kendala_lapangan || ['ON_PROGRESS', 'SELESAI', 'KENDALA'].includes(item.status) ? 'Kendala Laporan: ' : 'Keterangan: '}</strong>
+        {item.kendala_lapangan || item.keterangan || 'Tidak ada catatan'}
       </p>
       {item.catatan_revisi && <p>Catatan revisi: {item.catatan_revisi}</p>}
     </section>

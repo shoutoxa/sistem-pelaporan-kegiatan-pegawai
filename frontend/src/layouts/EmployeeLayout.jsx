@@ -12,16 +12,16 @@ export default function EmployeeLayout() {
       navSections={[
         { to: '/pegawai/dashboard', label: 'Dashboard', icon: 'dashboard' },
         {
-          title: 'Projects',
+          title: 'Management Project',
           icon: 'folder',
           items: [
-            { to: '/pegawai/projects', label: 'All Projects', icon: 'folder' },
+            { to: '/pegawai/projects', label: 'Project saya', icon: 'folder' },
             { to: '/pegawai/clusters', label: 'Clusters', icon: 'database' },
             { to: '/pegawai/homepass', label: 'Homepass', icon: 'home' },
           ],
         },
         {
-          title: 'Report',
+          title: 'Laporan Harian',
           icon: 'report',
           items: [
             { to: '/pegawai/laporan/new', label: 'Laporan Harian', icon: 'report' },
@@ -36,7 +36,7 @@ export default function EmployeeLayout() {
       ]}
       navItems={[
         { to: '/pegawai/dashboard', label: 'Dashboard', icon: 'dashboard' },
-        { to: '/pegawai/projects', label: 'Projects', icon: 'folder' },
+        { to: '/pegawai/projects', label: 'Project', icon: 'folder', isActive: (pathname) => pathname.startsWith('/pegawai/clusters') || pathname === '/pegawai/homepass' },
         { to: '/pegawai/laporan/new', label: 'Laporan', icon: 'report' },
         { to: '/pegawai/histori', label: 'Histori', icon: 'history', isActive: (pathname) => pathname.startsWith('/pegawai/laporan/') && pathname !== '/pegawai/laporan/new' },
       ]}

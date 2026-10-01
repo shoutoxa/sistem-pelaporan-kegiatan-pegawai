@@ -1,6 +1,8 @@
-import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
 import { useAuth } from '../features/auth/AuthProvider.jsx'
 import Icon from './Icon.jsx'
+import FtthDialog from '../features/integration/FtthDialog.jsx'
 
 export default function AppShell({
   roleLabel,
@@ -15,11 +17,16 @@ export default function AppShell({
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
+  const [menuOpen, setMenuOpen] = useState(false)
   const initials = (user?.nama || roleLabel).split(/\s+/).slice(0, 2).map((word) => word[0]).join('').toUpperCase()
   const userAvatar = user?.fotoProfilUrl || user?.fotoProfil
+  const pageTitle = `${(navSections ? navSections.flatMap((section) => section.items || [section]) : navItems)
+    .find((item) => location.pathname === item.to)?.label || roleLabel} — ${brandTitle}`
+  useEffect(() => { document.title = pageTitle }, [pageTitle])
 
   async function handleLogout() {
     await logout()
+    setMenuOpen(false)
     navigate('/login')
   }
 
@@ -33,6 +40,8 @@ export default function AppShell({
             {brandSub && <small>{brandSub}</small>}
           </div>
         </div>
+        {mobileFirst && <button type="button" className="employee-menu-trigger" aria-label="Buka menu navigasi"
+          aria-haspopup="dialog" aria-expanded={menuOpen} onClick={() => setMenuOpen(true)}><Icon name="menu" /></button>}
         <nav aria-label={`Navigasi ${roleLabel}`}>
           {navSections ? (
             navSections.map((sec, idx) => (
@@ -97,17 +106,14 @@ export default function AppShell({
         <header className="app-topbar">
           <div className="topbar-search-wrap">
             <Icon name="search" size={16} className="topbar-search-icon" />
-            <input
-              type="search"
-              aria-label="Cari halaman"
-              placeholder="Search pages..."
-              className="topbar-search-input"
-            />
+            <select aria-label="Pindah halaman" className="topbar-search-input" value=""
+              onChange={(event) => { if (event.target.value) navigate(event.target.value) }}>
+              <option value="">Pindah halaman…</option>
+              {(navSections ? navSections.flatMap((section) => section.items || [section]) : navItems).map((item) =>
+                <option key={item.to} value={item.to}>{item.label}</option>)}
+            </select>
           </div>
           <div className="topbar-actions">
-            <button type="button" className="icon-button topbar-notif-btn" aria-label="Notifikasi">
-              <Icon name="bell" size={18} />
-            </button>
             <div className="topbar-user">
               {userAvatar ? (
                 <img
@@ -125,15 +131,29 @@ export default function AppShell({
         <Outlet />
         {mobileFirst && (
           <nav className="employee-bottom-nav" aria-label={`Navigasi bawah ${roleLabel}`}>
-            {navItems.map((item) => (
-              <NavLink key={item.to} to={item.to} className={({ isActive }) => isActive || item.isActive?.(location.pathname) ? 'active' : undefined}>
+            {navItems.map((item) => {
+              const active = location.pathname === item.to || location.pathname.startsWith(`${item.to}/`) || item.isActive?.(location.pathname)
+              return <Link key={item.to} to={item.to} aria-current={active ? 'page' : undefined} className={active ? 'active' : undefined}>
                 <Icon name={item.icon} />
                 <span>{item.label}</span>
-              </NavLink>
-            ))}
+              </Link>
+            })}
           </nav>
         )}
       </div>
+      {mobileFirst && menuOpen && <FtthDialog title="Menu pegawai" responsive onClose={() => setMenuOpen(false)}>
+        <div className="employee-menu-account"><div className="avatar" aria-hidden="true">{initials}</div>
+          <div><strong>{user?.nama}</strong><small>{roleLabel}</small></div></div>
+        <nav className="employee-menu-links" aria-label="Semua halaman pegawai">
+          {(navSections || navItems).map((section) => <div key={section.title || section.to}>
+            {section.items && <h3>{section.title}</h3>}
+            {(section.items || [section]).map((item) => <NavLink key={item.to} to={item.to}
+              className={({ isActive }) => isActive || item.isActive?.(location.pathname) ? 'active' : undefined}
+              onClick={() => setMenuOpen(false)}><Icon name={item.icon} /><span>{item.label}</span><Icon name="chevronRight" size={16} /></NavLink>)}
+          </div>)}
+        </nav>
+        <button className="secondary-button employee-menu-logout" type="button" onClick={handleLogout}><Icon name="logout" />Keluar</button>
+      </FtthDialog>}
     </div>
   )
 }

@@ -14,6 +14,7 @@ export function readMigrationConfig(env = process.env) {
 }
 
 export const runtimeConfig = {
+  ftthWorkReportsEnabled: process.env.FTTH_WORK_REPORTS_ENABLED === 'true',
   ftthReportsEnabled: process.env.FTTH_REPORTS_ENABLED === 'true' && process.env.NODE_ENV !== 'production',
   migration: readMigrationConfig(),
   port: Number(process.env.PORT || 3000),

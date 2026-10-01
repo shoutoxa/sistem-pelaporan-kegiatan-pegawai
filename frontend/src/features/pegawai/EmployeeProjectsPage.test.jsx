@@ -44,7 +44,7 @@ describe('EmployeeProjectsPage', () => {
 
     await waitFor(() => expect(screen.getByText('Project Fiber 1')).toBeInTheDocument())
     expect(screen.getByText('SPK/001/2026')).toBeInTheDocument()
-    expect(screen.getByText('2 cluster')).toBeInTheDocument()
+    expect(screen.getAllByText('2 cluster')).toHaveLength(2)
 
     // Ensure no add or edit buttons exist
     expect(screen.queryByRole('button', { name: /tambah/i })).not.toBeInTheDocument()
@@ -55,7 +55,8 @@ describe('EmployeeProjectsPage', () => {
     const detailBtn = screen.getByRole('button', { name: 'Detail' })
     fireEvent.click(detailBtn)
 
-    await waitFor(() => expect(screen.getByText(/Detail Project: Project Fiber 1/)).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole('dialog', { name: 'Detail project' })).toBeInTheDocument())
+    expect(screen.getByRole('heading', { name: 'Project Fiber 1' })).toBeInTheDocument()
     expect(screen.getByText('Cluster Alpha')).toBeInTheDocument()
     expect(screen.getByText('Pemasangan kabel fiber optik')).toBeInTheDocument()
   })

@@ -7,8 +7,8 @@
 .ftth-page label { display: grid; gap: var(--space-2); margin-bottom: var(--space-4); font-weight: 600; }
 .ftth-page input, .ftth-page select, .ftth-page textarea { padding: var(--space-3); min-width: 0; width: 100%; box-sizing: border-box; border: 1px solid #a7bcb2; border-radius: 8px; background: #fff; color: #142b2c; font: inherit; }
 .ftth-page textarea { min-height: 100px; resize: vertical; }
-.ftth-page button { min-height: 44px; border: 1px solid #196b46; border-radius: 8px; background: #fff; color: #155d3c; padding: var(--space-3) var(--space-4); font: inherit; cursor: pointer; }
-.ftth-page button[type=submit] { background: #196b46; color: white; }
+.ftth-page button { min-height: 44px; border: 1px solid var(--brand); border-radius: 8px; background: #fff; color: var(--brand-hover); padding: var(--space-3) var(--space-4); font: inherit; cursor: pointer; }
+.ftth-page button[type=submit] { background: var(--brand); color: white; }
 .ftth-page button:disabled { opacity: .55; cursor: not-allowed; }
 .ftth-page :focus-visible { outline: 3px solid #d98118; outline-offset: 3px; }
 .ftth-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); margin: var(--space-4) 0; }
@@ -148,7 +148,8 @@
 .ftth-status-label { font-weight: 600; margin-bottom: var(--space-2); display: block; color: var(--text, #142b2c); }
 .ftth-status-group { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: var(--space-3); }
 .ftth-status-card { display: flex; flex-direction: column; padding: var(--space-3) var(--space-4); border: 2px solid var(--border, #c8d7ce); border-radius: 10px; cursor: pointer; transition: all 0.2s ease; background: var(--surface, #fff); position: relative; }
-.ftth-status-card input[type="radio"] { position: absolute; opacity: 0; width: 0; height: 0; }
+.ftth-status-card input[type="radio"] { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.ftth-status-card:focus-within { outline: 2px solid var(--brand); outline-offset: 3px; }
 .ftth-status-card-title { font-weight: 700; font-size: 0.95rem; margin-bottom: 2px; }
 .ftth-status-card-desc { font-size: 0.8rem; color: var(--text-muted, #5a7164); }
 .ftth-status-card:hover { border-color: #8da497; background: var(--surface-muted, #f8faf8); }

@@ -17,6 +17,7 @@ vi.mock('leaflet', () => {
     eachLayer: vi.fn(),
     fitBounds: vi.fn(),
     invalidateSize: vi.fn(),
+    remove: vi.fn(),
   }
   return {
     default: {

@@ -14,6 +14,15 @@ function app(role, enabled = true) {
   return { instance, service }
 }
 describe('FTTH route guards', () => {
+  it('accepts the revised eight-field multipart form', async () => {
+    const { instance, service } = app('PEGAWAI')
+    service.create = vi.fn().mockResolvedValue({ id: 'report' })
+    let submission = request(instance).post('/api/ftth/reports')
+    for (const key of ['project_id', 'cluster_id', 'process_id', 'tanggal_kegiatan', 'nomor_perangkat', 'status', 'kendala_lapangan', 'keterangan']) submission = submission.field(key, 'test')
+    const response = await submission.attach('dokumentasi', Buffer.from('test'), 'photo.png')
+    expect(response.status).toBe(201)
+    expect(Object.keys(service.create.mock.calls[0][1])).toHaveLength(8)
+  })
   it('requires local authentication', async () => {
     expect((await request(app(null).instance).get('/api/ftth/reports')).status).toBe(401)
   })

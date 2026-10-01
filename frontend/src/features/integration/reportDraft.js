@@ -14,9 +14,8 @@ export function readReportDraft(key) {
     for (const name of Object.keys(fields)) {
       if (typeof value[name] === 'string') fields[name] = value[name].slice(0, name === 'keterangan' || name === 'kendala_lapangan' ? 2000 : 100)
     }
-    if (value.status && ['ON_PROGRESS', 'SELESAI', 'KENDALA'].includes(value.status)) fields.status = value.status
-    if (value.kendala_lapangan) fields.kendala_lapangan = value.kendala_lapangan
-    else if (value.keterangan) fields.kendala_lapangan = value.keterangan
+    fields.status = ['ON_PROGRESS', 'SELESAI', 'KENDALA'].includes(value.status) ? value.status : 'ON_PROGRESS'
+    if (!fields.kendala_lapangan) fields.kendala_lapangan = fields.keterangan
     return fields
   } catch { return null }
 }
@@ -38,6 +37,7 @@ export function reconcileReportFields(fields, refs) {
   if (!refs.projects.some((p) => p.id === next.project_id)) next.project_id = ''
   if (!refs.clusters.some((c) => c.id === next.cluster_id && c.project_id === next.project_id)) next.cluster_id = ''
   if (!refs.categories.some((c) => c.id === next.category_id)) next.category_id = ''
-  if (!refs.processes.some((p) => p.id === next.process_id && p.master_category_id === next.category_id)) next.process_id = ''
+  if (!refs.processes.some((p) => p.id === next.process_id && p.master_category_id === next.category_id &&
+    (!p.cluster_ids || p.cluster_ids.includes(next.cluster_id)))) next.process_id = ''
   return next
 }

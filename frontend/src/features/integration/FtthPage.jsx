@@ -44,6 +44,7 @@ function FtthPageContent({ user, mode }) {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [ready, setReady] = useState(false)
+  const [workReportsEnabled, setWorkReportsEnabled] = useState(false)
   const [revision, setRevision] = useState('')
   const [attempt, setAttempt] = useState(0)
   const selectedProcess = references.processes.find((p) => p.id === fields.process_id)
@@ -64,9 +65,17 @@ function FtthPageContent({ user, mode }) {
         if (!status.enabled) throw new Error('Mode development belum aktif. Isi FTTH_API_KEY, terapkan migration pada database development, lalu aktifkan FTTH_REPORTS_ENABLED=true di backend.')
         const refs = showForm ? await ftthApi.references() : null
         if (ignore) return
+        setWorkReportsEnabled(status.workReportsEnabled === true)
         if (refs) {
           setReferences(refs)
-          setFields((current) => reconcileReportFields(current, refs))
+          setFields((current) => {
+            const params = new URLSearchParams(window.location.search)
+            const cluster = refs.clusters.find((c) => c.id === params.get('cluster_id'))
+            const process = refs.processes.find((p) => p.id === params.get('process_id') && p.cluster_ids?.includes(cluster?.id))
+            const linked = cluster && process ? { ...current, project_id: cluster.project_id, cluster_id: cluster.id,
+              category_id: process.master_category_id, process_id: process.id } : current
+            return reconcileReportFields(linked, refs)
+          })
         }
         if (isAdmin) {
           const data = await ftthApi.mappings()
@@ -103,7 +112,7 @@ function FtthPageContent({ user, mode }) {
       if (name === 'category_id') {
         next.process_id = ''
       }
-      return next
+      return reconcileReportFields(next, references)
     })
   }
   async function submit(event) {
@@ -114,6 +123,7 @@ function FtthPageContent({ user, mode }) {
         await ftthApi.update(editing, data)
         setMessage('Koreksi laporan tersimpan.'); setEditing(null)
       } else {
+        if (!workReportsEnabled) throw new Error('Pengiriman status pekerjaan menunggu konfirmasi kontrak FTTH. Laporan belum dikirim.')
         if (data.status === 'KENDALA') {
           const kendalaText = (data.kendala_lapangan || data.keterangan || '').trim()
           if (kendalaText.length < 5) throw new Error('Kendala Lapangan wajib diisi minimal 5 karakter ketika status Kendala.')
@@ -122,6 +132,7 @@ function FtthPageContent({ user, mode }) {
         const problem = fileSelectionError(files)
         if (problem) throw new Error(problem)
         if (!references.clusters.some((c) => c.id === data.cluster_id && c.project_id === data.project_id)) throw new Error('Pilih cluster dari penugasan yang tersedia.')
+        if (!references.processes.some((p) => p.id === data.process_id && (isAdmin || p.cluster_ids?.includes(data.cluster_id)))) throw new Error('Pilih pekerjaan yang ditugaskan kepada Anda pada cluster ini.')
         const body = new FormData()
         if (!data.status) data.status = 'ON_PROGRESS'
         data.kendala_lapangan = data.kendala_lapangan || data.keterangan || ''
@@ -169,6 +180,10 @@ function FtthPageContent({ user, mode }) {
     {error && <p role="alert" className="ftth-error">{error}</p>}
     {!ready && (error ? <button onClick={() => { setError(''); setAttempt((value) => value + 1) }}>Coba lagi</button> : <p role="status">Memuat data…</p>)}
     {message && <p role="status" className="ftth-note">{message}</p>}
+    {ready && showForm && !workReportsEnabled && <aside role="status" className="ftth-contract-notice">
+      <strong>Mode uji — pengiriman belum aktif.</strong><p>Isian dapat disimpan sebagai draf di perangkat ini.</p>
+      <details><summary>Informasi pengiriman</summary><p>Pengiriman On Progress / Selesai / Kendala menunggu konfirmasi kontrak FTTH, termasuk sinkronisasi pekerjaan selesai dan geotag. Belum ada laporan yang dikirim dari formulir ini.</p></details>
+    </aside>}
     {ready && <>
       {isAdmin && user.identitySource === 'ftth' && mappings.pendingUploads.length > 0 && <section className="ftth-panel"><h2>Lampiran perlu diperiksa</h2><p>Periksa metadata FTTH sebelum mencoba ulang pengiriman.</p><ul>{mappings.pendingUploads.map((item) => <li key={item.id}>{item.originalName} — {item.state}<br /><code>{item.reportId} / {item.remotePath || item.storagePath}</code></li>)}</ul></section>}
       {isAdmin && user.identitySource !== 'ftth' && <section className="ftth-panel"><h2>Pemetaan akun</h2>
@@ -207,7 +222,7 @@ function FtthPageContent({ user, mode }) {
         </div>{!fields.project_id && <p className="ftth-helper">Pilih project untuk melihat cluster yang tersedia.</p>}</div>
         <div className="ftth-form-section"><h3><span aria-hidden="true">2</span> Rincian pekerjaan</h3><div className="ftth-grid">
           {select('category_id', 'Kategori', references.categories)}
-          {select('process_id', 'Pekerjaan', references.processes.filter((item) => item.master_category_id === fields.category_id))}
+          {select('process_id', 'Pekerjaan', references.processes.filter((item) => item.master_category_id === fields.category_id && (isAdmin || item.cluster_ids?.includes(fields.cluster_id))))}
           <label>Tanggal kegiatan<input type="date" required value={fields.tanggal_kegiatan} onChange={(e) => change('tanggal_kegiatan', e.target.value)} /></label>
           <label>Nomor perangkat (opsional)<input maxLength={100} value={fields.nomor_perangkat} onChange={(e) => change('nomor_perangkat', e.target.value)} /></label>
         </div>
@@ -255,7 +270,7 @@ function FtthPageContent({ user, mode }) {
         {!editing && <div className="ftth-form-section"><h3><span aria-hidden="true">3</span> Lampiran</h3>
           <FtthFilePicker key={fileKey} files={files} onChange={setFiles} disabled={busy} />
         </div>}
-        <div className="ftth-actions ftth-submit"><button type="submit" disabled={!references.clusters.length || (!editing && selectedProcess?.allow_file === false)}>{busy ? 'Memproses…' : editing ? 'Simpan koreksi' : mode === 'dev' ? 'Kirim ke FTTH development' : 'Kirim laporan'}</button>
+        <div className="ftth-actions ftth-submit"><button type="submit" disabled={!workReportsEnabled || !fields.process_id || !references.clusters.length || (!editing && selectedProcess?.allow_file === false)}>{busy ? 'Memproses…' : editing ? 'Simpan koreksi' : mode === 'dev' ? 'Kirim ke FTTH development' : 'Kirim laporan'}</button>
           {editing && <button type="button" onClick={() => { setEditing(null); setFields(empty()) }}>Batal koreksi</button>}</div>
         <p className="ftth-helper">Periksa kembali data sebelum mengirim.</p>
         </fieldset></form>
@@ -287,7 +302,7 @@ function FtthPageContent({ user, mode }) {
       </section>}
       {selected && <FtthReportDetailDialog key={selected.id} report={selected} onClose={() => setSelected(null)}>
         {isAdmin && <><label>Catatan revisi (wajib saat menolak)<textarea value={revision} maxLength={2000} onChange={(e) => setRevision(e.target.value)} /></label>
-          <div className="ftth-actions">{Object.entries(labels).map(([status, title]) => <button key={status} disabled={busy || (status === 'REJECTED' && !revision.trim())} onClick={() => action(async () => {
+          <div className="ftth-actions">{Object.entries(labels).filter(([status]) => ['PENDING', 'APPROVED', 'REJECTED'].includes(status)).map(([status, title]) => <button key={status} disabled={busy || (status === 'REJECTED' && !revision.trim())} onClick={() => action(async () => {
             await ftthApi.setStatus(selected.id, { status, catatan_revisi: revision }); setSelected(null); setMessage('Status laporan diperbarui.'); await refresh()
           })}>{status === 'PENDING' ? 'Buka kembali' : title}</button>)}</div></>}
       </FtthReportDetailDialog>}

@@ -2,6 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import EmployeeClusterDetailPage from './EmployeeClusterDetailPage.jsx'
+import L from 'leaflet'
 import { ftthApi } from '../../api/ftth.js'
 
 vi.mock('../../api/ftth.js', () => ({
@@ -18,6 +19,7 @@ vi.mock('leaflet', () => {
     eachLayer: vi.fn(),
     fitBounds: vi.fn(),
     invalidateSize: vi.fn(),
+    remove: vi.fn(),
   }
   return {
     default: {
@@ -39,6 +41,23 @@ vi.mock('leaflet', () => {
 })
 
 describe('EmployeeClusterDetailPage', () => {
+  it('preserves zero values, does not invent boundaries, and hides reporting for completed jobs', async () => {
+    ftthApi.clusterDetail.mockResolvedValue({ id: 'c1', name: '<img src=x onerror=alert(1)>', project_name: 'Project',
+      latitude: 0, longitude: 0, homepass_target: 0, homepass_achieved: 0, overall_progress: 0,
+      categories_summary: [{ id: 'cat', name: 'Kategori', total: 1, completed: 1,
+        items: [{ id: 'job', name: 'Selesai job', status: 'completed' }] }] })
+    const view = render(<MemoryRouter><EmployeeClusterDetailPage /></MemoryRouter>)
+    await screen.findByRole('heading', { name: '<img src=x onerror=alert(1)>' })
+    expect(screen.getAllByText('0')).toHaveLength(2)
+    expect(screen.queryByText('555')).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /isi laporan/i })).not.toBeInTheDocument()
+    expect(L.polygon).not.toHaveBeenCalled()
+    const popup = L.marker.mock.results.at(-1).value.bindPopup.mock.calls[0][0]
+    expect(popup.textContent).toBe('<img src=x onerror=alert(1)>')
+    expect(popup.querySelector('img')).toBeNull()
+    view.unmount()
+    expect(L.map.mock.results.at(-1).value.remove).toHaveBeenCalled()
+  })
   beforeEach(() => {
     vi.clearAllMocks()
   })
@@ -98,17 +117,17 @@ describe('EmployeeClusterDetailPage', () => {
     // Homepass section
     expect(screen.getByText('Homepass')).toBeInTheDocument()
     expect(screen.getByText('Target')).toBeInTheDocument()
-    expect(screen.getByText('Achieved')).toBeInTheDocument()
+    expect(screen.getByText('Tercapai')).toBeInTheDocument()
     expect(screen.getAllByText('555')).toHaveLength(2)
 
     // KMZ File section
-    expect(screen.getByText('KMZ/KML File')).toBeInTheDocument()
-    expect(screen.getByText('KMZ file uploaded and shown on map')).toBeInTheDocument()
+    expect(screen.getByText('Peta cluster')).toBeInTheDocument()
+    expect(screen.queryByText('KMZ file uploaded and shown on map')).not.toBeInTheDocument()
 
     // Process progress
-    expect(screen.getByText('Process Progress')).toBeInTheDocument()
+    expect(screen.getByText('Progres pekerjaan saya')).toBeInTheDocument()
     expect(screen.getByText('4%')).toBeInTheDocument()
-    expect(screen.getByText('1/8 completed')).toBeInTheDocument()
+    expect(screen.getByText('1/8 selesai')).toBeInTheDocument()
 
     // Tabs
     expect(screen.getByRole('button', { name: 'Sitac' })).toBeInTheDocument()
@@ -117,8 +136,8 @@ describe('EmployeeClusterDetailPage', () => {
     // Process items
     expect(screen.getByText('Sosialisasi')).toBeInTheDocument()
     expect(screen.getByText('Sosialisasi ke masyarakat')).toBeInTheDocument()
-    expect(screen.getByText(/1 laporan telah dibuat/)).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /input hasil pekerjaan/i })).toHaveAttribute(
+    expect(screen.getByText(/1 laporan Anda/)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /isi laporan pekerjaan/i })).toHaveAttribute(
       'href',
       '/pegawai/laporan/new?cluster_id=cls-101&process_id=p-1'
     )

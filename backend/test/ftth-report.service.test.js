@@ -8,6 +8,7 @@ const report = { ...fields, id: id(6), user_id: id(7), status: 'PENDING' }
 const file = { originalname: 'foto.png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aN1kAAAAASUVORK5CYII=', 'base64') }
 function setup() {
   const client = {
+    listClusterProcesses: vi.fn().mockResolvedValue([{ id: id(10), cluster_id: id(4), master_process_id: id(5), pic_id: id(7), status: 'on_progress' }]),
     listUserClusters: vi.fn().mockResolvedValue([{ id: id(4), project_id: id(3), pic_id: id(7) }]),
     getUserReportStatus: vi.fn().mockImplementation(async (userId) => ({ user_id: userId, wajib_lapor: true, tanggal: '2026-09-07', clusters: [{ cluster_id: id(4), sudah_lapor: userId === id(7), laporan_id: userId === id(7) ? id(6) : null, laporan_status: userId === id(7) ? 'PENDING' : null }] })),
     uploadAttachment: vi.fn().mockImplementation(async (file) => ({ file_url: '/uploads/test-file.png', mime_type: file.mimetype, file_size: file.size })),
@@ -19,7 +20,7 @@ function setup() {
     listProjects: vi.fn().mockResolvedValue([{ id: id(3) }]),
     listClusters: vi.fn().mockResolvedValue([{ id: id(4), project_id: id(3) }]),
     listProcesses: vi.fn().mockResolvedValue([{ id: id(5), master_category_id: id(8) }]),
-    createReport: vi.fn().mockResolvedValue(report), getReport: vi.fn().mockResolvedValue(report),
+    createReport: vi.fn().mockImplementation(async (payload) => ({ ...report, ...payload })), getReport: vi.fn().mockResolvedValue(report),
     listReports: vi.fn().mockResolvedValue([report]), createAttachment: vi.fn().mockResolvedValue({ id: id(9) }),
     listAttachments: vi.fn().mockResolvedValue([]), downloadAttachment: vi.fn(), updateReport: vi.fn().mockResolvedValue(report), deleteReport: vi.fn(),
   }
@@ -29,9 +30,72 @@ function setup() {
     prepareUpload: vi.fn(), markUpload: vi.fn(), recordRemoteUpload: vi.fn(), mappings: vi.fn(), pendingUploads: vi.fn(),
   }
   const storage = { upload: vi.fn(), createSignedUrl: vi.fn().mockResolvedValue('https://storage.test/signed'), remove: vi.fn() }
-  return { client, repository, storage, service: createFtthReportService({ client, repository, storage, clock: () => new Date('2026-09-07T10:00:00Z') }) }
+  return { client, repository, storage, service: createFtthReportService({ client, repository, storage, workReportsEnabled: true, clock: () => new Date('2026-09-07T10:00:00Z') }) }
 }
 describe('FTTH report flow', () => {
+  it('does not claim success or upload evidence when FTTH ignores the revised status', async () => {
+    const { service, client } = setup()
+    client.createReport.mockResolvedValue(report)
+    await expect(service.create(employee, fields, [file])).rejects.toMatchObject({ code: 'WRITE_UNCONFIRMED' })
+    expect(client.createReport).toHaveBeenCalledTimes(1)
+    expect(client.uploadAttachment).not.toHaveBeenCalled()
+  })
+  it('scans assignments beyond the first page instead of granting master access', async () => {
+    const { client, service } = setup()
+    const first = Array.from({ length: 1000 }, (_, n) => ({ id: id(n + 100), pic_id: id(99) }))
+    client.listClusterProcesses.mockResolvedValueOnce(first).mockResolvedValueOnce([
+      { id: id(1400), cluster_id: id(4), master_process_id: id(5), pic_id: id(7), status: 'on_progress' },
+    ])
+    expect((await service.references(employee)).assignedJobs).toHaveLength(1)
+    expect(client.listClusterProcesses).toHaveBeenCalledWith({ limit: 1000, offset: 1000 })
+  })
+  it('fails closed for missing, foreign or unavailable PIC assignments', async () => {
+    for (const assignments of [[], [{ id: id(10), cluster_id: id(4), master_process_id: id(5), pic_id: id(99) }]]) {
+      const { service, client } = setup()
+      client.listClusterProcesses.mockResolvedValue(assignments)
+      expect((await service.references(employee)).processes).toEqual([])
+      await expect(service.create(employee, fields, [file])).rejects.toMatchObject({ code: 'FORBIDDEN' })
+      expect(client.createReport).not.toHaveBeenCalled()
+    }
+    const { service, client } = setup()
+    client.listClusterProcesses.mockRejectedValue(new Error('unavailable'))
+    await expect(service.references(employee)).rejects.toThrow('unavailable')
+    await expect(service.create(employee, fields, [file])).rejects.toThrow('unavailable')
+    expect(client.createReport).not.toHaveBeenCalled()
+  })
+  it('locks completed jobs server-side and does not confuse approval with completion', async () => {
+    const { service, client } = setup()
+    client.listReports.mockResolvedValue([{ ...report, status: 'APPROVED' }])
+    expect((await service.references(employee)).processes).toHaveLength(1)
+    client.listClusterProcesses.mockResolvedValue([{ id: id(10), cluster_id: id(4), master_process_id: id(5), pic_id: id(7), status: 'completed' }])
+    expect((await service.references(employee)).processes).toEqual([])
+    await expect(service.create(employee, fields, [file])).rejects.toMatchObject({ code: 'LOCKED' })
+    expect(client.createReport).not.toHaveBeenCalled()
+    client.getUser.mockResolvedValue({ id: id(7), wajib_lapor: true })
+    expect(await service.userReportStatus(employee, id(7))).toMatchObject({ wajib_lapor: false, clusters: [] })
+  })
+  it('scopes project/cluster reads, hides foreign reports and strips raw fields', async () => {
+    const { service, client } = setup()
+    client.listClusters.mockResolvedValue([{ id: id(4), project_id: id(3), latitude: 0, longitude: 0 }, { id: id(99), project_id: id(98) }])
+    client.listProjects.mockResolvedValue([{ id: id(3) }, { id: id(98) }])
+    expect((await service.listProjects(employee)).map((p) => p.id)).toEqual([id(3)])
+    expect((await service.listClusters(employee)).map((c) => c.id)).toEqual([id(4)])
+    await expect(service.clusterDetail(employee, id(99))).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    await expect(service.projectDetail(employee, id(98))).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    client.getCluster.mockResolvedValue({ id: id(4), project_id: id(3), latitude: 0, longitude: 0, secret: 'private' })
+    client.listReports.mockResolvedValue([{ ...report, user_id: id(99) }])
+    const detail = await service.clusterDetail(employee, id(4))
+    expect(detail).not.toHaveProperty('secret')
+    expect(detail.latitude).toBe(0)
+    expect(detail.categories_summary[0].items[0].reportCount).toBe(0)
+    expect((await service.employeeDashboard(employee)).reportStats).toMatchObject({ selesai: 0, reportTotal: 0 })
+  })
+  it('blocks unconfirmed work-status writes by default', async () => {
+    const { client, repository } = setup()
+    const service = createFtthReportService({ client, repository })
+    await expect(service.create(employee, fields, [file])).rejects.toMatchObject({ code: 'INTEGRATION_NOT_CONFIGURED' })
+    expect(client.createReport).not.toHaveBeenCalled()
+  })
   it('uses company identity for ownership and creation without querying local mappings', async () => {
     const { service, client, repository } = setup()
     repository.identity.mockRejectedValue(new Error('no local database'))

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ftthApi } from '../../api/ftth.js'
-import Icon from '../../components/Icon.jsx'
+import FtthDialog from '../integration/FtthDialog.jsx'
 import './employee-dashboard.css'
 
 export default function EmployeeProjectsPage() {
@@ -43,8 +43,8 @@ export default function EmployeeProjectsPage() {
   return (
     <div className="employee-view-page">
       <div className="dashboard-header">
-        <h1>All Projects</h1>
-        <p>Daftar seluruh project FTTH aktif (Mode Tinjau)</p>
+        <h1>Project saya</h1>
+        <p>Project yang memuat pekerjaan penugasan Anda.</p>
       </div>
 
       {error && <p className="ftth-error" role="alert">{error}</p>}
@@ -52,15 +52,15 @@ export default function EmployeeProjectsPage() {
 
       {!loading && !error && (
         <div className="table-responsive">
-          <table>
+          <table className="employee-project-table">
             <thead>
               <tr>
                 <th>Nama Project</th>
-                <th>No. SPK</th>
-                <th>Tgl SPK</th>
-                <th>Jumlah Cluster</th>
-                <th>Target Homepass</th>
-                <th>Homepass Tercapai</th>
+                <th className="record-secondary">No. SPK</th>
+                <th className="record-secondary">Tgl SPK</th>
+                <th className="record-secondary">Jumlah Cluster</th>
+                <th className="record-secondary">Target Homepass</th>
+                <th className="record-secondary">Homepass Tercapai</th>
                 <th>Status</th>
                 <th>Aksi</th>
               </tr>
@@ -75,12 +75,12 @@ export default function EmployeeProjectsPage() {
               ) : (
                 projects.map((p) => (
                   <tr key={p.id}>
-                    <td><strong>{p.name}</strong></td>
-                    <td>{p.spk_number}</td>
-                    <td>{p.spk_date}</td>
-                    <td>{p.cluster_count} cluster</td>
-                    <td>{p.homepass_target.toLocaleString()}</td>
-                    <td>{p.homepass_achieved.toLocaleString()}</td>
+                    <td><strong>{p.name}</strong><small className="mobile-record-meta">{p.cluster_count} cluster</small></td>
+                    <td className="record-secondary">{p.spk_number}</td>
+                    <td className="record-secondary">{p.spk_date}</td>
+                    <td className="record-secondary">{p.cluster_count} cluster</td>
+                    <td className="record-secondary">{p.homepass_target?.toLocaleString() ?? '—'}</td>
+                    <td className="record-secondary">{p.homepass_achieved?.toLocaleString() ?? '—'}</td>
                     <td>
                       <span className={`status-badge is-${p.status || 'open'}`}>
                         {p.status || 'open'}
@@ -90,6 +90,7 @@ export default function EmployeeProjectsPage() {
                       <button
                         type="button"
                         className="view-detail-btn"
+                        disabled={detailLoading}
                         onClick={() => openDetail(p.id)}
                       >
                         Detail
@@ -105,29 +106,19 @@ export default function EmployeeProjectsPage() {
 
       {/* Modal Detail Project */}
       {selectedProject && (
-        <div className="employee-modal-overlay" onClick={() => setSelectedProject(null)}>
-          <div className="employee-modal-content" onClick={(e) => e.stopPropagation()}>
-            <div className="employee-modal-header">
-              <h3>Detail Project: {selectedProject.name || selectedProject.project_name}</h3>
-              <button
-                type="button"
-                className="view-detail-btn"
-                onClick={() => setSelectedProject(null)}
-              >
-                <Icon name="close" size={16} />
-              </button>
-            </div>
+        <FtthDialog responsive title="Detail project" onClose={() => setSelectedProject(null)}>
             <div className="employee-modal-body">
+              <h3>{selectedProject.name}</h3>
               <p><strong>Nomor SPK:</strong> {selectedProject.spk_number || '-'}</p>
               <p><strong>Tanggal SPK:</strong> {selectedProject.spk_date || '-'}</p>
-              <p><strong>Estimasi Homepass:</strong> {selectedProject.estimated_homepass || '-'}</p>
+              <p><strong>Estimasi Homepass:</strong> {selectedProject.estimated_homepass ?? '—'}</p>
               <p><strong>Deskripsi:</strong> {selectedProject.description || '-'}</p>
 
-              <h4 style={{ margin: '20px 0 10px', fontSize: '1rem', color: '#0f172a' }}>
+              <h4>
                 Cluster dalam Project ({selectedProject.clusters?.length || 0})
               </h4>
               <div className="table-responsive">
-                <table>
+                <table className="employee-project-clusters-table">
                   <thead>
                     <tr>
                       <th>Nama Cluster</th>
@@ -145,8 +136,8 @@ export default function EmployeeProjectsPage() {
                       selectedProject.clusters.map((c) => (
                         <tr key={c.id}>
                           <td>{c.name}</td>
-                          <td>{c.homepass_target || 0}</td>
-                          <td>{c.homepass_achieved || 0}</td>
+                          <td>{c.homepass_target ?? '—'}</td>
+                          <td>{c.homepass_achieved ?? '—'}</td>
                           <td>
                             <span className={`status-badge is-${c.status || 'open'}`}>
                               {c.status || 'open'}
@@ -159,17 +150,7 @@ export default function EmployeeProjectsPage() {
                 </table>
               </div>
             </div>
-            <div className="employee-modal-footer">
-              <button
-                type="button"
-                className="view-detail-btn"
-                onClick={() => setSelectedProject(null)}
-              >
-                Tutup
-              </button>
-            </div>
-          </div>
-        </div>
+        </FtthDialog>
       )}
     </div>
   )

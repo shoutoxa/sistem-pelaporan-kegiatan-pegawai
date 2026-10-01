@@ -12,15 +12,46 @@ beforeEach(() => {
   ftthApi.userClusters.mockResolvedValue([])
   ftthApi.userReportStatus.mockResolvedValue(null)
   auth.user = { role: 'PEGAWAI' }
-  ftthApi.status.mockResolvedValue({ enabled: true })
+  ftthApi.status.mockResolvedValue({ enabled: true, workReportsEnabled: true })
   ftthApi.references.mockResolvedValue({ projects: [{ id: 'p1', name: 'Project A' }, { id: 'p2', name: 'Project B' }],
     clusters: [{ id: 'c1', name: 'Cluster A', project_id: 'p1' }, { id: 'c2', name: 'Cluster B', project_id: 'p2' }],
     categories: [{ id: 'cat1', name: 'Implementasi' }, { id: 'cat2', name: 'Sitac' }],
-    processes: [{ id: 'job1', name: 'Pasang tiang', master_category_id: 'cat1' }, { id: 'job2', name: 'Izin lahan', master_category_id: 'cat2' }] })
+    processes: [{ id: 'job1', name: 'Pasang tiang', master_category_id: 'cat1', cluster_ids: ['c1'] }, { id: 'job2', name: 'Izin lahan', master_category_id: 'cat2', cluster_ids: ['c2'] }] })
   ftthApi.list.mockResolvedValue([])
 })
 afterEach(() => cleanup())
 describe('FTTH development page', () => {
+  it.each([['PENDING', 'Menunggu verifikasi'], ['APPROVED', 'Diterima'], ['REJECTED', 'Perlu revisi']])('keeps legacy verification %s separate from work completion', async (status, label) => {
+    ftthApi.list.mockResolvedValue([{ id: 'r1', status, keterangan: 'Catatan lama' }])
+    ftthApi.detail.mockResolvedValue({ id: 'r1', status, keterangan: 'Catatan lama', dokumentasi: [] })
+    render(<FtthPage mode="history" />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Lihat lampiran' }))
+    const dialog = screen.getByRole('dialog', { name: 'Detail laporan' })
+    expect(within(dialog).getByText(label)).toBeInTheDocument()
+    expect(within(dialog).getByText('Keterangan:')).toBeInTheDocument()
+    expect(within(dialog).queryByText('Selesai')).not.toBeInTheDocument()
+    await within(dialog).findByText('Tidak ada lampiran.')
+  })
+  it('blocks revised writes when the contract flag is off', async () => {
+    ftthApi.status.mockResolvedValue({ enabled: true, workReportsEnabled: false })
+    render(<FtthPage mode="form" />)
+    expect(await screen.findByText(/Pengiriman On Progress/)).toBeInTheDocument()
+    const button = screen.getByRole('button', { name: 'Kirim laporan' })
+    expect(button).toBeDisabled()
+    fireEvent.submit(button.closest('form'))
+    await screen.findByRole('alert')
+    expect(ftthApi.create).not.toHaveBeenCalled()
+  })
+  it('prefills only a valid assigned job link and clears stale work on cluster change', async () => {
+    window.history.replaceState({}, '', '/pegawai/laporan/new?cluster_id=c1&process_id=job1')
+    render(<FtthPage mode="form" />)
+    await waitFor(() => expect(screen.getByLabelText('Pekerjaan')).toHaveValue('job1'))
+    expect(screen.getByLabelText('Project')).toHaveValue('p1')
+    fireEvent.change(screen.getByLabelText('Project'), { target: { value: 'p2' } })
+    expect(screen.getByLabelText('Pekerjaan')).toHaveValue('')
+    expect(screen.queryByRole('option', { name: 'Pasang tiang' })).not.toBeInTheDocument()
+    window.history.replaceState({}, '', '/')
+  })
   it('opens detail immediately, previews within one dialog and returns focus when closed', async () => {
     ftthApi.list.mockResolvedValue([{ id: 'r1', process_name: 'Pasang tiang', status: 'PENDING' }])
     let resolveDetail
@@ -156,6 +187,7 @@ describe('FTTH development page', () => {
     fireEvent.change(screen.getByLabelText('Cluster'), { target: { value: 'c1' } })
     fireEvent.change(project, { target: { value: 'p2' } })
     expect(screen.getByLabelText('Cluster')).toHaveValue('')
+    fireEvent.change(screen.getByLabelText('Cluster'), { target: { value: 'c2' } })
     fireEvent.change(screen.getByLabelText('Kategori'), { target: { value: 'cat1' } })
     expect(screen.getByLabelText('Pekerjaan')).toBeEnabled()
     fireEvent.change(screen.getByLabelText('Pekerjaan'), { target: { value: 'job1' } })

@@ -9,16 +9,16 @@ function sendError(error, response) {
   return response.status(status || 500).json({ message: status ? error.message : 'Integrasi belum siap atau terjadi kesalahan penyimpanan. Periksa konfigurasi dan migration development.' })
 }
 
-export function createFtthReportRouter({ service, requireAuth, requireSuperadmin, enabled = false, reportsSource = 'local', documentationSource = 'local' }) {
+export function createFtthReportRouter({ service, requireAuth, requireSuperadmin, enabled = false, workReportsEnabled = false, reportsSource = 'local', documentationSource = 'local' }) {
   const router = Router()
-  const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10000000, files: 5, fields: 6, fieldSize: 10000 } })
+  const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10000000, files: 5, fields: 8, fieldSize: 10000 } })
   const profileUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5000000, files: 1, fields: 2 } })
   const run = (fn, status = 200) => async (request, response) => {
     try { return response.status(status).json({ data: await fn(request) }) }
     catch (error) { return sendError(error, response) }
   }
   router.use('/ftth', requireAuth)
-  router.get('/ftth/status', (_request, response) => response.json({ data: { enabled, reportsSource, documentationSource } }))
+  router.get('/ftth/status', (_request, response) => response.json({ data: { enabled, workReportsEnabled, reportsSource, documentationSource } }))
   router.use('/ftth', (_request, response, next) => enabled ? next() : response.status(503).json({ message: 'Mode FTTH development belum diaktifkan pada backend.' }))
   router.get('/ftth/references', run((r) => service.references(r.user)))
   router.get('/ftth/dashboard', run((r) => service.employeeDashboard(r.user)))
@@ -71,10 +71,11 @@ export async function createProductionFtthReportRouter({ authService }) {
   return createFtthReportRouter({
     // FTTH owns attachment bytes; this app journals writes and proxies the
     // authenticated company download endpoint.
-    service: createFtthReportService({ client: createFtthClient(), repository: createFtthRepository(prisma) }),
+    service: createFtthReportService({ client: createFtthClient(), repository: createFtthRepository(prisma), workReportsEnabled: runtimeConfig.ftthWorkReportsEnabled }),
     requireAuth: requireAuth({ authService }), requireSuperadmin: requireRole('SUPERADMIN'),
     enabled: runtimeConfig.ftthReportsEnabled || runtimeConfig.migration.reports === 'ftth' || runtimeConfig.migration.documentation === 'ftth',
     reportsSource: runtimeConfig.migration.reports,
+    workReportsEnabled: runtimeConfig.ftthWorkReportsEnabled,
     documentationSource: runtimeConfig.migration.documentation,
   })
 }

@@ -52,13 +52,7 @@ export default function EmployeeClustersPage() {
           ) : (
             clusters.map((c, index) => {
               const isRunning = c.status === 'running' || c.overall_progress > 0
-              const categories = c.categories_summary && c.categories_summary.length > 0
-                ? c.categories_summary
-                : [
-                    { id: 'sitac', name: 'Sitac', percentage: 0, completed: 0, total: 8, items: [] },
-                    { id: 'impl', name: 'Implementasi', percentage: 0, completed: 0, total: 6, items: [] },
-                    { id: 'ikr', name: 'IKR', percentage: 0, completed: 0, total: 5, items: [] },
-                  ]
+              const categories = c.categories_summary || []
 
               return (
                 <div
@@ -72,11 +66,7 @@ export default function EmployeeClustersPage() {
                   <div className="cluster-card-top">
                     <h3 className="cluster-card-title">{c.name}</h3>
                     <div className="cluster-badges">
-                      {index > 0 && (
-                        <span className="cluster-badge is-readonly">
-                          <Icon name="eye" size={12} /> Read only
-                        </span>
-                      )}
+                      <span className="cluster-badge is-readonly"><Icon name="eye" size={12} /> Penugasan saya</span>
                       <span className={`cluster-badge ${isRunning ? 'is-running' : 'is-open'}`}>
                         {isRunning ? 'running' : (c.status || 'open')}
                       </span>
@@ -146,7 +136,7 @@ export default function EmployeeClustersPage() {
                   {/* Footer HP */}
                   <div className="cluster-card-footer">
                     <Icon name="home" size={15} />
-                    <span>HP: {c.homepass_achieved || 0} / {c.homepass_target || 0}</span>
+                    <span>HP: {c.homepass_achieved ?? '—'} / {c.homepass_target ?? '—'}</span>
                   </div>
                 </div>
               )

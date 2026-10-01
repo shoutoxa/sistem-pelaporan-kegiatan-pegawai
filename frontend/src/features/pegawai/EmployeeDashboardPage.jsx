@@ -74,16 +74,11 @@ export default function EmployeeDashboardPage() {
       data.clusters.forEach((cluster) => {
         const lat = Number(cluster.latitude)
         const lng = Number(cluster.longitude)
-        if (!isNaN(lat) && !isNaN(lng) && (lat !== 0 || lng !== 0)) {
+        if (cluster.latitude != null && cluster.longitude != null && Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180) {
           const marker = L.marker([lat, lng], { icon: pinIcon }).addTo(map)
-          marker.bindPopup(`
-            <div style="font-family: inherit; font-size: 13px; line-height: 1.4;">
-              <strong style="color: #0f172a; font-size: 14px;">${cluster.name}</strong><br/>
-              <span style="color: #64748b;">Proyek: ${cluster.project_name || '-'}</span><br/>
-              <span>Target HP: <strong>${cluster.homepass_target || 0}</strong></span><br/>
-              <span>Status: <strong style="text-transform: capitalize;">${cluster.status || 'open'}</strong></span>
-            </div>
-          `)
+          const popup = document.createElement('div')
+          popup.textContent = `${cluster.name} — ${cluster.project_name || '-'} — Target HP: ${cluster.homepass_target ?? '—'} — Status: ${cluster.status || 'open'}`
+          marker.bindPopup(popup)
           bounds.push([lat, lng])
         }
       })
@@ -94,10 +89,12 @@ export default function EmployeeDashboardPage() {
     }
 
     // Leaflet needs resize invalidation
-    setTimeout(() => map.invalidateSize(), 200)
+    const timer = setTimeout(() => map.invalidateSize(), 200)
 
     return () => {
-      // Don't destroy immediately on every render to keep smooth transitions
+      clearTimeout(timer)
+      map.remove()
+      mapInstance.current = null
     }
   }, [data, fullMap])
 
@@ -130,7 +127,7 @@ export default function EmployeeDashboardPage() {
     <div className="employee-dashboard-layout">
       <div className="dashboard-header">
         <h1>Dashboard</h1>
-        <p>Overview of all projects and progress</p>
+        <p>Ringkasan project dan progres pekerjaan yang ditugaskan kepada Anda.</p>
       </div>
 
       {/* 4 Stat Cards */}
@@ -158,7 +155,7 @@ export default function EmployeeDashboardPage() {
         <div className="dashboard-stat-card">
           <div className="stat-card-info">
             <span className="stat-card-label">Homepass Target</span>
-            <span className="stat-card-value">{homepassTarget.toLocaleString()}</span>
+            <span className="stat-card-value">{homepassTarget?.toLocaleString() ?? '—'}</span>
           </div>
           <div className="stat-card-icon-wrap is-cyan">
             <Icon name="home" size={24} />
@@ -188,7 +185,7 @@ export default function EmployeeDashboardPage() {
             {fullMap ? 'Collapse map' : 'Open full map →'}
           </button>
         </div>
-        <div className="leaflet-map-wrapper" style={{ height: fullMap ? '580px' : '380px' }}>
+        <div className={`leaflet-map-wrapper${fullMap ? ' is-expanded' : ''}`}>
           <div ref={mapRef} className="map-container-elem" id="cluster-map-container" />
         </div>
       </div>
@@ -221,7 +218,7 @@ export default function EmployeeDashboardPage() {
       {/* Stat Laporan Harian Pegawai */}
       <div className="dashboard-card">
         <div className="dashboard-card-header">
-          <h2>Statistik Laporan Harian Saya</h2>
+          <h2>Status Pekerjaan Saya</h2>
           <a href="/pegawai/histori" className="card-action-link">Lihat semua laporan →</a>
         </div>
         <div className="daily-report-stats-grid">
@@ -233,7 +230,7 @@ export default function EmployeeDashboardPage() {
           <div className="report-stat-box is-selesai">
             <span className="report-stat-title">Selesai</span>
             <span className="report-stat-count">{reportStats.selesai}</span>
-            <small>Telah masuk Cluster Project</small>
+            <small>Pekerjaan berstatus selesai di FTTH</small>
           </div>
           <div className="report-stat-box is-kendala">
             <span className="report-stat-title">Kendala</span>

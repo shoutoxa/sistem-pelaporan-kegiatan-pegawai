@@ -22,7 +22,7 @@ export default function LoginPage() {
         to={
           user.role === "SUPERADMIN"
             ? "/admin/dashboard"
-            : "/pegawai/laporan/new"
+            : "/pegawai/dashboard"
         }
         replace
       />
@@ -38,7 +38,7 @@ export default function LoginPage() {
       navigate(
         signedInUser.role === "SUPERADMIN"
           ? "/admin/dashboard"
-          : "/pegawai/laporan/new",
+          : "/pegawai/dashboard",
         { replace: true },
       );
     } catch (requestError) {
@@ -131,7 +131,7 @@ export default function LoginPage() {
             </button>
           </form>
           <p className="auth-help">
-            Akun Anda menentukan area kerja yang dapat diakses.
+            Login akun FTTH ini digunakan untuk pengembangan. Masuk otomatis dari portal FTTH (SSO) masih menunggu kontrak sesi perusahaan.
           </p>
         </div>
       </section>
